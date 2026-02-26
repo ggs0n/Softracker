@@ -39,20 +39,19 @@ public class ChangeRequestController : Controller
             .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
-        List<ChangeRequest> crs;
+        if (User.IsInRole("Admin") || User.IsInRole("Tester"))
+            return View(await query.ToListAsync());
+
         if (User.IsInRole("Developer"))
         {
             var userId = _userManager.GetUserId(User);
-            crs = await query
+            var crs = await query
                 .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
                 .ToListAsync();
-        }
-        else
-        {
-            crs = await query.ToListAsync();
+            return View(crs);
         }
 
-        return View(crs);
+        return Forbid();
     }
 
     public async Task<IActionResult> Details(int id)
@@ -65,6 +64,17 @@ public class ChangeRequestController : Controller
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
+
+        if (User.IsInRole("Developer"))
+        {
+            var userId = _userManager.GetUserId(User);
+            if (!cr.Pics.Any(p => p.EmployeeId == userId))
+                return Forbid();
+        }
+        else if (!User.IsInRole("Admin") && !User.IsInRole("Tester"))
+        {
+            return Forbid();
+        }
 
         if (!string.IsNullOrWhiteSpace(cr.GitHubRepoOwner) &&
             !string.IsNullOrWhiteSpace(cr.GitHubRepoName) &&
@@ -105,12 +115,10 @@ public class ChangeRequestController : Controller
         }
 
         var userId = _userManager.GetUserId(User)!;
-        var count = await _db.ChangeRequests.CountAsync();
-        var crNumber = $"CR-{DateTime.UtcNow.Year}-{(count + 1):D4}";
 
         var cr = new ChangeRequest
         {
-            CrNumber = crNumber,
+            CrNumber = await GenerateNextCrNumberAsync(),
             Title = model.Title,
             Description = model.Description,
             Status = model.Status,
@@ -128,7 +136,23 @@ public class ChangeRequestController : Controller
         };
 
         _db.ChangeRequests.Add(cr);
-        await _db.SaveChangesAsync();
+
+        var saved = false;
+        for (var attempt = 0; attempt < 3 && !saved; attempt++)
+        {
+            try
+            {
+                await _db.SaveChangesAsync();
+                saved = true;
+            }
+            catch (DbUpdateException) when (attempt < 2)
+            {
+                _db.Entry(cr).Property(x => x.CrNumber).CurrentValue = await GenerateNextCrNumberAsync();
+            }
+        }
+
+        if (!saved)
+            throw new InvalidOperationException("Could not generate a unique CR number. Please try again.");
 
         foreach (var pic in model.Pics.Where(p => !string.IsNullOrEmpty(p.EmployeeId)))
         {
@@ -141,7 +165,7 @@ public class ChangeRequestController : Controller
         }
         await _db.SaveChangesAsync();
 
-        TempData["Success"] = $"Change Request {crNumber} created.";
+        TempData["Success"] = $"Change Request {cr.CrNumber} created.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
     }
 
@@ -179,6 +203,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Edit(int id, ChangeRequestFormViewModel model)
     {
+        if (id != model.Id) return BadRequest();
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -277,7 +303,9 @@ public class ChangeRequestController : Controller
         }
 
         var fileName = $"{id}_{Guid.NewGuid():N}{ext}";
-        var uploadPath = Path.Combine(env.WebRootPath, "uploads", "archspec", fileName);
+        var uploadDir = Path.Combine(env.WebRootPath, "uploads", "archspec");
+        Directory.CreateDirectory(uploadDir);
+        var uploadPath = Path.Combine(uploadDir, fileName);
 
         using (var stream = System.IO.File.Create(uploadPath))
             await file.CopyToAsync(stream);
@@ -303,6 +331,7 @@ public class ChangeRequestController : Controller
     {
         var img = await _db.ArchSpecImages.FindAsync(imageId);
         if (img == null) return NotFound();
+        if (img.ChangeRequestId != crId) return BadRequest();
 
         DeleteImageFile(img.FileName, env);
         _db.ArchSpecImages.Remove(img);
@@ -373,6 +402,7 @@ public class ChangeRequestController : Controller
     {
         var doc = await _db.ChangeRequestDocuments.FindAsync(documentId);
         if (doc == null) return NotFound();
+        if (doc.ChangeRequestId != crId) return BadRequest();
 
         DeleteDocumentFile(doc.FileName, env);
         _db.ChangeRequestDocuments.Remove(doc);
@@ -380,6 +410,28 @@ public class ChangeRequestController : Controller
 
         TempData["Success"] = "Document deleted.";
         return RedirectToAction(nameof(Details), new { id = crId });
+    }
+
+    private async Task<string> GenerateNextCrNumberAsync()
+    {
+        var year = DateTime.UtcNow.Year;
+        var prefix = $"CR-{year}-";
+
+        var lastForYear = await _db.ChangeRequests
+            .Where(c => c.CrNumber.StartsWith(prefix))
+            .OrderByDescending(c => c.CrNumber)
+            .Select(c => c.CrNumber)
+            .FirstOrDefaultAsync();
+
+        var next = 1;
+        if (!string.IsNullOrWhiteSpace(lastForYear))
+        {
+            var suffix = lastForYear[prefix.Length..];
+            if (int.TryParse(suffix, out var parsed))
+                next = parsed + 1;
+        }
+
+        return $"{prefix}{next:D4}";
     }
 
     private void DeleteImageFile(string fileName, IWebHostEnvironment environment)
