@@ -177,5 +177,25 @@
             $(this).closest('.pic-row').remove();
             reindexPics();
         });
+
+        const startInput = document.getElementById('TimelineStart');
+        const endInput = document.getElementById('TimelineEnd');
+
+        function syncDateConstraints() {
+            if (startInput && endInput) {
+                endInput.min = startInput.value || '';
+                if (endInput.value && startInput.value && endInput.value < startInput.value) {
+                    endInput.value = startInput.value;
+                }
+            }
+        }
+
+        startInput?.addEventListener('change', syncDateConstraints);
+        syncDateConstraints();
+
+        const validationSummary = document.querySelector('[asp-validation-summary], .validation-summary-errors, .alert-danger');
+        if (validationSummary && validationSummary.textContent.trim().length > 0) {
+            validationSummary.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     </script>
 }

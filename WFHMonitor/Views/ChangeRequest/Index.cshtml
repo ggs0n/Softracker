@@ -1,5 +1,13 @@
 @model List<WFHMonitor.Models.ChangeRequest>
+@using System.Text.RegularExpressions
 @{ ViewData["Title"] = "Change Requests"; }
+
+@functions {
+    private static string PrettyEnum(string value)
+    {
+        return Regex.Replace(value, "(?<!^)([A-Z])", " $1");
+    }
+}
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -74,8 +82,8 @@ else
                                     </a>
                                 }
                             </td>
-                            <td><span class="badge bg-@sColor">@cr.Status</span></td>
-                            <td><span class="badge bg-@pColor">@cr.Priority</span></td>
+                            <td><span class="badge bg-@sColor">@PrettyEnum(cr.Status.ToString())</span></td>
+                            <td><span class="badge bg-@pColor">@PrettyEnum(cr.Priority.ToString())</span></td>
                             <td>
                                 @foreach (var pic in cr.Pics.Take(3))
                                 {
@@ -97,18 +105,18 @@ else
                                 }
                             </td>
                             <td class="text-end">
-                                <a asp-action="Details" asp-route-id="@cr.Id" class="btn btn-sm btn-outline-primary me-1">
+                                <a asp-action="Details" asp-route-id="@cr.Id" class="btn btn-sm btn-outline-primary me-1" title="View details" aria-label="View details">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 @if (User.IsInRole("Admin"))
                                 {
-                                    <a asp-action="Edit" asp-route-id="@cr.Id" class="btn btn-sm btn-outline-warning me-1">
+                                    <a asp-action="Edit" asp-route-id="@cr.Id" class="btn btn-sm btn-outline-warning me-1" title="Edit change request" aria-label="Edit change request">
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                     <form asp-action="Delete" asp-route-id="@cr.Id" method="post" class="d-inline"
                                           onsubmit="return confirm('Delete @cr.CrNumber?')">
                                         @Html.AntiForgeryToken()
-                                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                        <button class="btn btn-sm btn-outline-danger" title="Delete change request" aria-label="Delete change request"><i class="bi bi-trash"></i></button>
                                     </form>
                                 }
                             </td>
