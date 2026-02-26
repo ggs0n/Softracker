@@ -1,0 +1,88 @@
+@model AdminEmployeesViewModel
+@{ ViewData["Title"] = "Employees"; }
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h6 class="mb-0"><i class="bi bi-people me-2"></i>Employees</h6>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Employees)
+                        {
+                            <tr>
+                                <td>@item.Employee.FullName</td>
+                                <td class="text-muted">@item.Employee.Email</td>
+                                <td><span class="badge bg-secondary">@item.Role</span></td>
+                            </tr>
+                        }
+                        @if (!Model.Employees.Any())
+                        {
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">No employees registered</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-person-plus me-2"></i>Add Employee</h6>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="AddEmployee" method="post">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+                    <div class="mb-3">
+                        <label asp-for="NewEmployee.FullName" class="form-label fw-semibold">Full Name</label>
+                        <input asp-for="NewEmployee.FullName" class="form-control" placeholder="John Doe" />
+                        <span asp-validation-for="NewEmployee.FullName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NewEmployee.Email" class="form-label fw-semibold">Email</label>
+                        <input asp-for="NewEmployee.Email" class="form-control" placeholder="user@company.com" />
+                        <span asp-validation-for="NewEmployee.Email" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NewEmployee.Role" class="form-label fw-semibold">Role</label>
+                        <select asp-for="NewEmployee.Role" class="form-select">
+                            <option value="Employee">Employee</option>
+                            <option value="Developer">Developer</option>
+                            <option value="Tester">Tester</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NewEmployee.Password" class="form-label fw-semibold">Password</label>
+                        <input asp-for="NewEmployee.Password" class="form-control" />
+                        <span asp-validation-for="NewEmployee.Password" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="NewEmployee.ConfirmPassword" class="form-label fw-semibold">Confirm Password</label>
+                        <input asp-for="NewEmployee.ConfirmPassword" class="form-control" />
+                        <span asp-validation-for="NewEmployee.ConfirmPassword" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-person-check me-2"></i>Register
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

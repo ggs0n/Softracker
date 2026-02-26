@@ -1,0 +1,184 @@
+@model WFHMonitor.ViewModels.DeveloperSummaryViewModel
+@{ ViewData["Title"] = "Developer Summary"; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Developer Summary</h5>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-primary text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-bug fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.AssignedBugCount</h3>
+                <small>Assigned Bugs</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-info text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-file-earmark-diff fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.AssignedChangeRequestCount</h3>
+                <small>Assigned Change Requests</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-dark text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-git fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.LinkedBranchCount</h3>
+                <small>GitHub Branches</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-success text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-git fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.RecentCommitCount</h3>
+                <small>Recent My Commits</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-bug me-2"></i>Assigned Bugs
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.AssignedBugs.Any())
+                {
+                    <p class="text-muted fst-italic p-3 mb-0">No bugs assigned.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var bug in Model.AssignedBugs)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a asp-controller="Bug" asp-action="Details" asp-route-id="@bug.Id" class="fw-semibold text-decoration-none">
+                                        @bug.BugNumber - @bug.Title
+                                    </a>
+                                    <div class="small text-muted">Updated @bug.UpdatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                                </div>
+                                <span class="badge bg-secondary">@bug.Status</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-file-earmark-diff me-2"></i>Assigned Change Requests
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.AssignedChangeRequests.Any())
+                {
+                    <p class="text-muted fst-italic p-3 mb-0">No change requests assigned.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var cr in Model.AssignedChangeRequests)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a asp-controller="ChangeRequest" asp-action="Details" asp-route-id="@cr.Id" class="fw-semibold text-decoration-none">
+                                        @cr.CrNumber - @cr.Title
+                                    </a>
+                                    <div class="small text-muted">Updated @cr.UpdatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                                </div>
+                                <span class="badge bg-secondary">@cr.Status</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-diagram-3 me-2"></i>GitHub Branch Summary</span>
+                <span class="small text-muted">@Model.DeveloperEmail</span>
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.Branches.Any())
+                {
+                    <p class="text-muted fst-italic p-3 mb-0">No linked GitHub branches in your assigned change requests.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var branch in Model.Branches)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">@branch.CrNumber</div>
+                                    <div class="small text-muted">@branch.Repo</div>
+                                </div>
+                                <span class="badge bg-secondary" style="font-family:monospace;">@branch.Branch</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history me-2"></i>Recent GitHub Commits (My Email)</span>
+                <span class="small text-muted">@Model.DeveloperEmail</span>
+            </div>
+            <div class="card-body p-0">
+                @if (!string.IsNullOrWhiteSpace(Model.GitHubError))
+                {
+                    <div class="p-3">
+                        <div class="alert alert-warning mb-0 small">
+                            <i class="bi bi-exclamation-triangle me-2"></i>@Model.GitHubError
+                        </div>
+                    </div>
+                }
+                else if (!Model.RecentCommits.Any())
+                {
+                    <p class="text-muted fst-italic p-3 mb-0">No recent commits found for your login email.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var commit in Model.RecentCommits)
+                        {
+                            <li class="list-group-item">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <div class="flex-grow-1">
+                                        <a href="@commit.Url" target="_blank" class="fw-semibold text-decoration-none">@commit.Message</a>
+                                        <div class="small text-muted">@commit.CrNumber | @commit.Repo | @commit.Branch</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-dark">@commit.Sha</span>
+                                        <div class="small text-muted mt-1">@commit.Date.ToString("MMM dd, yyyy HH:mm")</div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>

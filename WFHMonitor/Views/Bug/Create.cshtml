@@ -1,0 +1,120 @@
+@model WFHMonitor.ViewModels.BugFormViewModel
+@{ ViewData["Title"] = "New Bug"; }
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-bug me-2"></i>New Bug</h5>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="Create" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label fw-semibold">Title</label>
+                        <input asp-for="Title" class="form-control" />
+                        <span asp-validation-for="Title" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Workflow" class="form-label fw-semibold">Workflow</label>
+                        <textarea asp-for="Workflow" class="form-control" rows="3"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="StepsToReproduce" class="form-label fw-semibold">Steps To Reproduce</label>
+                        <textarea asp-for="StepsToReproduce" class="form-control" rows="4"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ModuleImpacted" class="form-label fw-semibold">Module Impacted</label>
+                        <input asp-for="ModuleImpacted" class="form-control" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Change Request</label>
+                        <select asp-for="ChangeRequestId" class="form-select">
+                            <option value="">-- None --</option>
+                            @foreach (var cr in Model.ChangeRequestOptions)
+                            {
+                                <option value="@cr.Value">@cr.Text</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Change Request (Free Text)</label>
+                        <input asp-for="ChangeRequestReferenceText" class="form-control" id="crFreeText" />
+                        <div class="form-text">Use this if the change request is not listed.</div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
+                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="form-select"></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="AssigneeType" class="form-label fw-semibold">Assign To</label>
+                            <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="form-select" id="assigneeType">
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6" id="developerAssignGroup">
+                            <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assign To Developer</label>
+                            <select asp-for="AssignedDeveloperId" class="form-select">
+                                <option value="">-- Unassigned --</option>
+                                @foreach (var dev in Model.DeveloperOptions)
+                                {
+                                    <option value="@dev.Value">@dev.Text</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-none" id="agentStatusGroup">
+                            <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
+                            <input class="form-control" value="Queued" disabled />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="DocumentFile" class="form-label fw-semibold">Supporting Document</label>
+                        <input asp-for="DocumentFile" type="file" class="form-control" />
+                        <div class="form-text">PDF, Word, Excel, PowerPoint, TXT - max 20 MB</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-2"></i>Create Bug
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        function toggleAssigneeFields() {
+            var isAgent = $('#assigneeType').val() === 'Agent';
+            $('#developerAssignGroup').toggleClass('d-none', isAgent);
+            $('#agentStatusGroup').toggleClass('d-none', !isAgent);
+            if (isAgent) {
+                $('#AssignedDeveloperId').val('');
+            }
+        }
+
+        toggleAssigneeFields();
+        $('#assigneeType').on('change', toggleAssigneeFields);
+    </script>
+}

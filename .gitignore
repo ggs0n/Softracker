@@ -1,0 +1,57 @@
+## .NET / ASP.NET Core
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.userosscache
+*.sln.docstates
+.vs/
+_ReSharper*/
+*.resharper
+
+## EF Core migrations should be kept — do NOT ignore Migrations/
+
+## Publish / deploy artifacts
+publish/
+**/publish/
+**/PublishProfiles/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+!**/packages/repositories.config
+
+## Secrets — never commit these
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Secrets.json
+*.pfx
+*.p12
+
+## Logs
+logs/
+*.log
+
+## Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## VS Code
+.vscode/settings.json
+# Keep launch.json and tasks.json (team-shared)
+!.vscode/launch.json
+!.vscode/tasks.json
+
+
+## MD
+.md
+.claude/settings.json

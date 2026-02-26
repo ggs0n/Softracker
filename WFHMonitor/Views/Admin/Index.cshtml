@@ -1,0 +1,111 @@
+@model AdminDashboardViewModel
+@{ ViewData["Title"] = "Admin Dashboard"; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Admin Dashboard</h2>
+    <span class="text-muted">@Model.Today.ToString("dddd, MMMM dd yyyy")</span>
+</div>
+
+@* Summary Cards *@
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-primary text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-people fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.TotalEmployees</h3>
+                <small>Total Employees</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-success text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-check-circle fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.TasksDoneTodayCount</h3>
+                <small>Tasks Done Today</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-warning">
+            <div class="card-body py-3">
+                <i class="bi bi-slash-circle fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.BlockedTasks.Count</h3>
+                <small>Blocked Tasks</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-0 bg-dark text-white">
+            <div class="card-body py-3">
+                <i class="bi bi-kanban fs-2"></i>
+                <h3 class="mt-1 mb-0">Task Board</h3>
+                <small>Manage Team Tasks</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    @* Tasks Done Today *@
+    <div class="col-md-12">
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>Tasks Completed Today</h6>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.TasksDoneToday.Any())
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var task in Model.TasksDoneToday)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-check2 text-success me-2"></i>@task.Title
+                                </div>
+                                @if (task.Assignee != null)
+                                {
+                                    <span class="badge bg-light text-dark border small">@task.Assignee.FullName</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-center text-muted py-3">No tasks completed today</p>
+                }
+            </div>
+        </div>
+
+        @* Blocked Tasks *@
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h6 class="mb-0"><i class="bi bi-slash-circle me-2"></i>Blocked Tasks</h6>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.BlockedTasks.Any())
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var task in Model.BlockedTasks)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-slash-circle text-danger me-2"></i>@task.Title
+                                </div>
+                                @if (task.Assignee != null)
+                                {
+                                    <span class="badge bg-light text-dark border small">@task.Assignee.FullName</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-center text-muted py-3 fst-italic">No blocked tasks</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>

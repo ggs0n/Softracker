@@ -1,0 +1,84 @@
+@model TaskBoardViewModel
+@{ ViewData["Title"] = "Task Board"; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-kanban me-2 text-primary"></i>Task Board</h2>
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>New Task
+        </a>
+    }
+</div>
+
+@if (User.IsInRole("Developer"))
+{
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-check me-2"></i>Assigned Tasks</span>
+            <span class="badge bg-light text-dark">@Model.AssignedTasks.Count()</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Detail</th>
+                    <th>Description</th>
+                    <th>Timeline</th>
+                    <th>Related CR / Bug</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var task in Model.AssignedTasks)
+                {
+                    <tr>
+                        <td class="fw-semibold">@task.Title</td>
+                        <td>@(string.IsNullOrWhiteSpace(task.Details) ? "-" : task.Details)</td>
+                        <td>@(string.IsNullOrWhiteSpace(task.Description) ? "-" : task.Description)</td>
+                        <td>
+                            @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
+                            {
+                                <span>@task.TimelineStart?.ToString("yyyy-MM-dd") - @task.TimelineEnd?.ToString("yyyy-MM-dd")</span>
+                            }
+                            else if (task.DueDate.HasValue)
+                            {
+                                <span>Due: @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        </td>
+                        <td>
+                            <div>@(task.ChangeRequest != null ? $"{task.ChangeRequest.CrNumber} - {task.ChangeRequest.Title}" : "-")</div>
+                            <div>@(task.BugReport != null ? $"{task.BugReport.BugNumber} - {task.BugReport.Title}" : "-")</div>
+                        </td>
+                        <td>@task.Status</td>
+                        <td>
+                            <a asp-action="Edit" asp-route-id="@task.Id" class="btn btn-sm btn-outline-primary">Detail</a>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.AssignedTasks.Any())
+                {
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No tasks assigned.</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @await Html.PartialAsync("_TaskColumn", (Model.ToDo, "To Do", "secondary", "bi-circle"))
+        @await Html.PartialAsync("_TaskColumn", (Model.InProgress, "In Progress", "primary", "bi-arrow-repeat"))
+        @await Html.PartialAsync("_TaskColumn", (Model.Blocked, "Blocked", "danger", "bi-slash-circle"))
+        @await Html.PartialAsync("_TaskColumn", (Model.Done, "Done", "success", "bi-check-circle"))
+    </div>
+}

@@ -1,0 +1,181 @@
+@model WFHMonitor.ViewModels.ChangeRequestFormViewModel
+@{ ViewData["Title"] = "New Change Request"; }
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>New Change Request</h5>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="Create" method="post" id="crForm">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                        <input asp-for="Title" class="form-control" placeholder="Short description of the change..." />
+                        <span asp-validation-for="Title" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="4"
+                                  placeholder="Detail the change request scope, goals, and impact..."></textarea>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
+                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="form-select"></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Priority" class="form-label fw-semibold">Priority</label>
+                            <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="form-select"></select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
+                        <select asp-for="Stage" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStage>()" class="form-select"></select>
+                    </div>
+
+                    <hr class="my-3" />
+                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links & Specs</h6>
+
+                    <div class="mb-3">
+                        <label asp-for="FigmaLink" class="form-label fw-semibold">
+                            <i class="bi bi-vector-pen me-1 text-muted"></i>Figma Link
+                        </label>
+                        <input asp-for="FigmaLink" class="form-control" placeholder="https://figma.com/file/..." />
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ArchSpecLink" class="form-label fw-semibold">
+                            <i class="bi bi-diagram-3 me-1 text-muted"></i>SA Spec / Diagram Link
+                        </label>
+                        <input asp-for="ArchSpecLink" class="form-control" placeholder="https://docs.google.com/..." />
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ArchSpecNotes" class="form-label fw-semibold">
+                            <i class="bi bi-card-text me-1 text-muted"></i>Architect Spec Preview Notes
+                        </label>
+                        <textarea asp-for="ArchSpecNotes" class="form-control" rows="3"
+                                  placeholder="Paste key highlights or diagram descriptions here..."></textarea>
+                    </div>
+
+                    <hr class="my-3" />
+                    <h6 class="fw-bold mb-3"><i class="bi bi-calendar-range me-2 text-primary"></i>Timeline</h6>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label asp-for="TimelineStart" class="form-label fw-semibold">Start Date</label>
+                            <input asp-for="TimelineStart" type="date" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="TimelineEnd" class="form-label fw-semibold">End Date</label>
+                            <input asp-for="TimelineEnd" type="date" class="form-control" />
+                        </div>
+                    </div>
+
+                    <hr class="my-3" />
+                    <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
+                            <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="GitHubRepoName" class="form-label fw-semibold">Repo Name</label>
+                            <input asp-for="GitHubRepoName" class="form-control" placeholder="e.g. myproject" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
+                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/CR-2026-0001" />
+                    </div>
+
+                    <hr class="my-3" />
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Person in Charge (PIC)</h6>
+                        <button type="button" id="addPic" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-plus-circle me-1"></i>Add PIC
+                        </button>
+                    </div>
+                    <div id="picContainer">
+                        @* rows rendered by JS *@
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-2"></i>Create Change Request
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>About CR Numbers</h6>
+            </div>
+            <div class="card-body small text-muted">
+                <p>CR numbers are auto-generated in the format <strong>CR-YYYY-XXXX</strong>.</p>
+                <p class="mb-0">The number is assigned once you submit the form.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        var employeeOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            Model.EmployeeOptions.Select(o => new { value = o.Value, text = o.Text })
+        ));
+        var picIndex = 0;
+
+        function addPicRow(empId, role) {
+            var opts = employeeOptions.map(o =>
+                `<option value="${o.value}" ${o.value === empId ? 'selected' : ''}>${o.text}</option>`
+            ).join('');
+
+            var row = `<div class="pic-row d-flex gap-2 mb-2 align-items-center">
+                <select name="Pics[${picIndex}].EmployeeId" class="form-select form-select-sm" style="max-width:220px;">
+                    <option value="">-- Select Employee --</option>
+                    ${opts}
+                </select>
+                <input type="text" name="Pics[${picIndex}].Role" value="${role || ''}"
+                       class="form-control form-control-sm" placeholder="Role (Developer, Tester...)"
+                       style="max-width:200px;" />
+                <button type="button" class="btn btn-sm btn-outline-danger remove-pic">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>`;
+
+            $('#picContainer').append(row);
+            picIndex++;
+            reindexPics();
+        }
+
+        function reindexPics() {
+            $('#picContainer .pic-row').each(function(i) {
+                $(this).find('select').attr('name', `Pics[${i}].EmployeeId`);
+                $(this).find('input').attr('name', `Pics[${i}].Role`);
+            });
+            picIndex = $('#picContainer .pic-row').length;
+        }
+
+        $('#addPic').click(function() { addPicRow('', ''); });
+
+        $(document).on('click', '.remove-pic', function() {
+            $(this).closest('.pic-row').remove();
+            reindexPics();
+        });
+    </script>
+}
