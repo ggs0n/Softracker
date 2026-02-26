@@ -31,27 +31,51 @@ public class ChangeRequestController : Controller
         this.env = env;
     }
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? q, CrStatus? status, CrPriority? priority, string? sort = "newest")
     {
         var query = _db.ChangeRequests
             .Include(c => c.CreatedBy)
             .Include(c => c.Pics).ThenInclude(p => p.Employee)
-            .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
-        List<ChangeRequest> crs;
         if (User.IsInRole("Developer"))
         {
             var userId = _userManager.GetUserId(User);
-            crs = await query
-                .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
-                .ToListAsync();
-        }
-        else
-        {
-            crs = await query.ToListAsync();
+            query = query.Where(c => c.Pics.Any(p => p.EmployeeId == userId));
         }
 
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var keyword = q.Trim();
+            query = query.Where(c =>
+                c.CrNumber.Contains(keyword) ||
+                c.Title.Contains(keyword) ||
+                (c.Description != null && c.Description.Contains(keyword)) ||
+                c.Pics.Any(p => p.Employee != null && p.Employee.Email != null && p.Employee.Email.Contains(keyword)) ||
+                c.Pics.Any(p => p.Employee != null && p.Employee.FullName != null && p.Employee.FullName.Contains(keyword))
+            );
+        }
+
+        if (status.HasValue)
+            query = query.Where(c => c.Status == status.Value);
+
+        if (priority.HasValue)
+            query = query.Where(c => c.Priority == priority.Value);
+
+        query = sort switch
+        {
+            "oldest" => query.OrderBy(c => c.CreatedAt),
+            "priority" => query.OrderByDescending(c => c.Priority).ThenByDescending(c => c.CreatedAt),
+            "status" => query.OrderBy(c => c.Status).ThenByDescending(c => c.CreatedAt),
+            _ => query.OrderByDescending(c => c.CreatedAt)
+        };
+
+        ViewBag.Query = q;
+        ViewBag.Status = status;
+        ViewBag.Priority = priority;
+        ViewBag.Sort = sort;
+
+        var crs = await query.ToListAsync();
         return View(crs);
     }
 
