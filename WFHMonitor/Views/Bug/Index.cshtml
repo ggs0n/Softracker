@@ -21,6 +21,7 @@
                     <th>Status</th>
                     <th>Assigned</th>
                     <th>Created</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -45,12 +46,30 @@
                             }
                         </td>
                         <td class="text-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@bug.Id" class="btn btn-sm btn-outline-primary me-1" title="View bug" aria-label="View bug">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
+                            {
+                                <a asp-action="Edit" asp-route-id="@bug.Id" class="btn btn-sm btn-outline-warning me-1" title="Edit bug" aria-label="Edit bug">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form asp-action="Delete" asp-route-id="@bug.Id" method="post" class="d-inline"
+                                      onsubmit="return confirm('Delete @bug.BugNumber?')">
+                                    @Html.AntiForgeryToken()
+                                    <button class="btn btn-sm btn-outline-danger" title="Delete bug" aria-label="Delete bug">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            }
+                        </td>
                     </tr>
                 }
                 @if (!Model.Any())
                 {
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-3">No bugs yet.</td>
+                        <td colspan="6" class="text-center text-muted py-3">No bugs yet.</td>
                     </tr>
                 }
             </tbody>
