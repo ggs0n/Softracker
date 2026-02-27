@@ -98,6 +98,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(ChangeRequestFormViewModel model)
     {
+        ValidateTimeline(model);
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -179,6 +181,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Edit(int id, ChangeRequestFormViewModel model)
     {
+        ValidateTimeline(model);
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -394,6 +398,14 @@ public class ChangeRequestController : Controller
         var path = Path.Combine(environment.WebRootPath, "uploads", "docs", fileName);
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
+    }
+
+    private void ValidateTimeline(ChangeRequestFormViewModel model)
+    {
+        if (model.TimelineStart.HasValue && model.TimelineEnd.HasValue && model.TimelineEnd < model.TimelineStart)
+        {
+            ModelState.AddModelError(nameof(model.TimelineEnd), "End Date cannot be earlier than Start Date.");
+        }
     }
 
     private async Task<List<SelectListItem>> GetEmployeeOptions()
