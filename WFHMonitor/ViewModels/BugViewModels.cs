@@ -1,10 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using WFHMonitor.Models;
 
 namespace WFHMonitor.ViewModels;
 
-public class BugFormViewModel
+public partial class BugFormViewModel : IValidatableObject
 {
     public int Id { get; set; }
 
@@ -45,4 +46,37 @@ public class BugFormViewModel
 
     [Display(Name = "Supporting Document")]
     public Microsoft.AspNetCore.Http.IFormFile? DocumentFile { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (AssigneeType != BugAssigneeType.Agent)
+            yield break;
+
+        if (LooksLikeInstructionPrompt(Title))
+        {
+            yield return new ValidationResult(
+                "Agent-assigned bug titles must describe a defect, not direct implementation commands.",
+                [nameof(Title)]);
+        }
+
+        if (LooksLikeInstructionPrompt(Description) ||
+            LooksLikeInstructionPrompt(Workflow) ||
+            LooksLikeInstructionPrompt(StepsToReproduce))
+        {
+            yield return new ValidationResult(
+                "Agent-assigned bug details contain command-like instructions. Describe observed behavior, expected behavior, and reproduction steps instead.",
+                [nameof(Description), nameof(Workflow), nameof(StepsToReproduce)]);
+        }
+    }
+
+    private static bool LooksLikeInstructionPrompt(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        return InstructionPromptPattern().IsMatch(text);
+    }
+
+    [GeneratedRegex(@"\b(change|rename|set|update|modify|replace|delete|drop|create\s+pr|open\s+pr|run\s+dotnet|execute|ignore\s+previous|act\s+as)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex InstructionPromptPattern();
 }
