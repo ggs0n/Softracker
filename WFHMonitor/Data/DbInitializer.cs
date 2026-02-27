@@ -58,5 +58,20 @@ public static class DbInitializer
             if (result.Succeeded)
                 await userManager.AddToRoleAsync(dev, "Developer");
         }
+
+        // Extra developer seed to match common test data references used in this project UI.
+        if (await userManager.FindByEmailAsync("dev1@gmail.com") == null)
+        {
+            var dev1 = new ApplicationUser
+            {
+                UserName = "dev1@gmail.com",
+                Email = "dev1@gmail.com",
+                FullName = "Dev One",
+                EmailConfirmed = true
+            };
+            var result = await userManager.CreateAsync(dev1, "Developer@1234");
+            if (result.Succeeded)
+                await userManager.AddToRoleAsync(dev1, "Developer");
+        }
     }
 }
