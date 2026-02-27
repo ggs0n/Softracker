@@ -98,8 +98,7 @@ public class BugService : IBugService
 
     public async Task<(bool Succeeded, string Error, int BugId)> CreateAsync(BugFormViewModel model, string createdById)
     {
-        var bugCount = await _db.BugReports.CountAsync();
-        var bugNumber = $"BUG-{DateTime.UtcNow.Year}-{(bugCount + 1):D4}";
+        var bugNumber = await GetNextBugNumberAsync();
         var bug = new BugReport
         {
             BugNumber = bugNumber,
@@ -333,6 +332,28 @@ public class BugService : IBugService
         var path = Path.Combine(_env.WebRootPath, "uploads", "bugs", subFolder, fileName);
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
+    }
+
+    private async Task<string> GetNextBugNumberAsync()
+    {
+        var year = DateTime.UtcNow.Year;
+        var yearPrefix = $"BUG-{year}-";
+
+        var existingNumbers = await _db.BugReports
+            .AsNoTracking()
+            .Where(b => b.BugNumber.StartsWith(yearPrefix))
+            .Select(b => b.BugNumber)
+            .ToListAsync();
+
+        var maxSequence = 0;
+        foreach (var bugNumber in existingNumbers)
+        {
+            var suffix = bugNumber.Substring(yearPrefix.Length);
+            if (int.TryParse(suffix, out var sequence) && sequence > maxSequence)
+                maxSequence = sequence;
+        }
+
+        return $"{yearPrefix}{(maxSequence + 1):D4}";
     }
 
     private static bool ValidateFile(
