@@ -101,7 +101,8 @@
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
             <div class="d-flex align-items-center gap-2">
-                @if (User.IsInRole("Admin"))
+                @if (User.IsInRole("Admin") &&
+                    string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), "TaskBoard", StringComparison.OrdinalIgnoreCase))
                 {
                     <a asp-controller="TaskBoard" asp-action="Create" class="btn btn-sm btn-primary">
                         <i class="bi bi-plus-circle me-1"></i>New Task
