@@ -3,7 +3,7 @@ using WFHMonitor.Models;
 
 namespace WFHMonitor.ViewModels;
 
-public class TaskCreateViewModel
+public class TaskCreateViewModel : IValidatableObject
 {
     [Required, MaxLength(200)]
     public string Title { get; set; } = string.Empty;
@@ -35,6 +35,16 @@ public class TaskCreateViewModel
 
     [Display(Name = "Related Bug")]
     public int? BugReportId { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (TimelineStart.HasValue && TimelineEnd.HasValue && TimelineEnd.Value.Date < TimelineStart.Value.Date)
+        {
+            yield return new ValidationResult(
+                "Timeline End must be on or after Timeline Start.",
+                new[] { nameof(TimelineEnd) });
+        }
+    }
 }
 
 public class TaskEditViewModel : TaskCreateViewModel
