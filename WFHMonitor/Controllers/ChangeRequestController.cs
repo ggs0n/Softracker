@@ -31,6 +31,8 @@ public class ChangeRequestController : Controller
         this.env = env;
     }
 
+    // List Change Requests with optional search/filter/sort controls.
+    // This keeps the page useful as CR volume grows.
     public async Task<IActionResult> Index(string? q, CrStatus? status, CrPriority? priority, string? sort = "newest")
     {
         var query = _db.ChangeRequests
@@ -44,6 +46,7 @@ public class ChangeRequestController : Controller
             query = query.Where(c => c.Pics.Any(p => p.EmployeeId == userId));
         }
 
+        // Keyword search across key business fields + PIC identity.
         if (!string.IsNullOrWhiteSpace(q))
         {
             var keyword = q.Trim();
@@ -62,6 +65,7 @@ public class ChangeRequestController : Controller
         if (priority.HasValue)
             query = query.Where(c => c.Priority == priority.Value);
 
+        // Centralized sort mapping for predictable list behavior.
         query = sort switch
         {
             "oldest" => query.OrderBy(c => c.CreatedAt),
