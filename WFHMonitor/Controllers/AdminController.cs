@@ -30,7 +30,17 @@ public class AdminController : Controller
     {
         var today = DateTime.UtcNow.Date;
 
-        var employees = await _userManager.GetUsersInRoleAsync("Employee");
+        var usersInTrackedRoles = new List<ApplicationUser>();
+        foreach (var role in new[] { "Employee", "Developer", "Tester" })
+        {
+            var usersInRole = await _userManager.GetUsersInRoleAsync(role);
+            usersInTrackedRoles.AddRange(usersInRole);
+        }
+
+        var uniqueEmployeeCount = usersInTrackedRoles
+            .Select(u => u.Id)
+            .Distinct()
+            .Count();
 
         var tasksDoneToday = await _db.WorkTasks
             .Include(t => t.Assignee)
@@ -49,7 +59,7 @@ public class AdminController : Controller
             Today = today,
             TasksDoneToday = tasksDoneToday,
             BlockedTasks = blockedTasks,
-            TotalEmployees = employees.Count
+            TotalEmployees = uniqueEmployeeCount
         };
 
         return View(vm);
