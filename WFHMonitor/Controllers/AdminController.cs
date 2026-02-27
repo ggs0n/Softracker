@@ -62,7 +62,7 @@ public class AdminController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddEmployee(RegisterViewModel model)
+    public async Task<IActionResult> AddEmployee([Bind(Prefix = "NewEmployee")] RegisterViewModel model)
     {
         var registration = await _userRegistrationService.RegisterAsync(model);
         if (registration.Succeeded)
