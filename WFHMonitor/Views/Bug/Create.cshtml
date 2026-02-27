@@ -13,8 +13,11 @@
                     <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
                     <div class="mb-3">
-                        <label asp-for="Title" class="form-label fw-semibold">Title</label>
-                        <input asp-for="Title" class="form-control" />
+                        <label asp-for="Title" class="form-label fw-semibold">
+                            Title <span class="text-danger" aria-hidden="true">*</span>
+                            <span class="visually-hidden">required</span>
+                        </label>
+                        <input asp-for="Title" class="form-control" required aria-required="true" />
                         <span asp-validation-for="Title" class="text-danger small"></span>
                     </div>
 
