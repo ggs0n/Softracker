@@ -107,6 +107,7 @@
                     <div id="picContainer">
                         @* rows rendered by JS *@
                     </div>
+                    <span asp-validation-for="Pics" class="text-danger small"></span>
 
                     <div class="d-flex gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">
@@ -137,6 +138,10 @@
     <script>
         var employeeOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
             Model.EmployeeOptions.Select(o => new { value = o.Value, text = o.Text })
+        ));
+        var existingPics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            (Model.Pics ?? new List<WFHMonitor.ViewModels.PicEntry>())
+                .Select(p => new { employeeId = p.EmployeeId, role = p.Role ?? "" })
         ));
         var picIndex = 0;
 
@@ -170,6 +175,8 @@
             });
             picIndex = $('#picContainer .pic-row').length;
         }
+
+        existingPics.forEach(function(p) { addPicRow(p.employeeId, p.role); });
 
         $('#addPic').click(function() { addPicRow('', ''); });
 

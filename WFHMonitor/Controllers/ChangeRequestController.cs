@@ -98,6 +98,9 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(ChangeRequestFormViewModel model)
     {
+        if (!HasAtLeastOnePic(model.Pics))
+            ModelState.AddModelError(nameof(model.Pics), "At least one PIC is required.");
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -179,6 +182,9 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Edit(int id, ChangeRequestFormViewModel model)
     {
+        if (!HasAtLeastOnePic(model.Pics))
+            ModelState.AddModelError(nameof(model.Pics), "At least one PIC is required.");
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -395,6 +401,9 @@ public class ChangeRequestController : Controller
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
     }
+
+    private static bool HasAtLeastOnePic(IEnumerable<PicEntry>? pics)
+        => pics?.Any(p => !string.IsNullOrWhiteSpace(p.EmployeeId)) == true;
 
     private async Task<List<SelectListItem>> GetEmployeeOptions()
     {
