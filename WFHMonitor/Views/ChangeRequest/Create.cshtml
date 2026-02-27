@@ -181,6 +181,8 @@
         const startInput = document.getElementById('TimelineStart');
         const endInput = document.getElementById('TimelineEnd');
 
+        // Keep timeline dates valid on the client side:
+        // End date cannot be earlier than start date.
         function syncDateConstraints() {
             if (startInput && endInput) {
                 endInput.min = startInput.value || '';
@@ -193,6 +195,7 @@
         startInput?.addEventListener('change', syncDateConstraints);
         syncDateConstraints();
 
+        // If server-side validation fails, bring the user to the error block.
         const validationSummary = document.querySelector('[asp-validation-summary], .validation-summary-errors, .alert-danger');
         if (validationSummary && validationSummary.textContent.trim().length > 0) {
             validationSummary.scrollIntoView({ behavior: 'smooth', block: 'center' });
