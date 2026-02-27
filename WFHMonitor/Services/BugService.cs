@@ -98,27 +98,44 @@ public class BugService : IBugService
 
     public async Task<(bool Succeeded, string Error, int BugId)> CreateAsync(BugFormViewModel model, string createdById)
     {
-        var bugCount = await _db.BugReports.CountAsync();
-        var bugNumber = $"BUG-{DateTime.UtcNow.Year}-{(bugCount + 1):D4}";
-        var bug = new BugReport
-        {
-            BugNumber = bugNumber,
-            Title = model.Title,
-            Description = model.Description,
-            Workflow = model.Workflow,
-            StepsToReproduce = model.StepsToReproduce,
-            ModuleImpacted = model.ModuleImpacted,
-            Status = model.Status,
-            AssigneeType = model.AssigneeType,
-            AgentStatus = model.AssigneeType == BugAssigneeType.Agent ? BugAgentStatus.Queued : BugAgentStatus.None,
-            ChangeRequestId = model.ChangeRequestId,
-            ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim(),
-            AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? null : model.AssignedDeveloperId,
-            CreatedById = createdById
-        };
+        BugReport? bug = null;
 
-        _db.BugReports.Add(bug);
-        await _db.SaveChangesAsync();
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var bugNumber = await GenerateNextBugNumberAsync(DateTime.UtcNow.Year);
+            bug = new BugReport
+            {
+                BugNumber = bugNumber,
+                Title = model.Title,
+                Description = model.Description,
+                Workflow = model.Workflow,
+                StepsToReproduce = model.StepsToReproduce,
+                ModuleImpacted = model.ModuleImpacted,
+                Status = model.Status,
+                AssigneeType = model.AssigneeType,
+                AgentStatus = model.AssigneeType == BugAssigneeType.Agent ? BugAgentStatus.Queued : BugAgentStatus.None,
+                ChangeRequestId = model.ChangeRequestId,
+                ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim(),
+                AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? null : model.AssignedDeveloperId,
+                CreatedById = createdById
+            };
+
+            _db.BugReports.Add(bug);
+
+            try
+            {
+                await _db.SaveChangesAsync();
+                break;
+            }
+            catch (DbUpdateException ex) when (IsBugNumberUniqueConstraintViolation(ex) && attempt < 3)
+            {
+                _db.Entry(bug).State = EntityState.Detached;
+                bug = null;
+            }
+        }
+
+        if (bug == null)
+            return (false, "Failed to allocate a unique bug number. Please try again.", 0);
 
         _db.BugActivities.Add(new BugActivity
         {
@@ -333,6 +350,33 @@ public class BugService : IBugService
         var path = Path.Combine(_env.WebRootPath, "uploads", "bugs", subFolder, fileName);
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
+    }
+
+    private async Task<string> GenerateNextBugNumberAsync(int year)
+    {
+        var prefix = $"BUG-{year}-";
+        var existingNumbers = await _db.BugReports
+            .Where(b => b.BugNumber.StartsWith(prefix))
+            .Select(b => b.BugNumber)
+            .ToListAsync();
+
+        var maxSequence = 0;
+        foreach (var number in existingNumbers)
+        {
+            var sequenceText = number[prefix.Length..];
+            if (int.TryParse(sequenceText, out var sequence) && sequence > maxSequence)
+                maxSequence = sequence;
+        }
+
+        return $"{prefix}{(maxSequence + 1):D4}";
+    }
+
+    private static bool IsBugNumberUniqueConstraintViolation(DbUpdateException ex)
+    {
+        var message = ex.InnerException?.Message ?? ex.Message;
+        return message.Contains("IX_BugReports_BugNumber", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("BugNumber", StringComparison.OrdinalIgnoreCase)
+                  && message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ValidateFile(
