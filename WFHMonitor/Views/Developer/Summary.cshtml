@@ -20,7 +20,7 @@
             <div class="card-body py-3">
                 <i class="bi bi-file-earmark-diff fs-2"></i>
                 <h3 class="mt-1 mb-0">@Model.AssignedChangeRequestCount</h3>
-                <small>Assigned Change Requests</small>
+                <small>Assigned Projects</small>
             </div>
         </div>
     </div>
@@ -34,6 +34,15 @@
         </div>
     </div>
     <div class="col-md-3">
+        <div class="card text-center border-0 bg-warning text-dark">
+            <div class="card-body py-3">
+                <i class="bi bi-trophy fs-2"></i>
+                <h3 class="mt-1 mb-0">@Model.TotalXpPoints</h3>
+                <small>Total XP Points</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="card text-center border-0 bg-success text-white">
             <div class="card-body py-3">
                 <i class="bi bi-git fs-2"></i>
@@ -41,6 +50,61 @@
                 <small>Recent My Commits</small>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-stars me-2"></i>XP Actions
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    <th class="text-center">Count</th>
+                    <th class="text-end">Points</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Bug fixed (+20)</td>
+                    <td class="text-center">@Model.BugFixedCount</td>
+                    <td class="text-end text-success fw-semibold">+@Model.BugFixedPoints</td>
+                </tr>
+                <tr>
+                    <td>Critical bug fixed (+40)</td>
+                    <td class="text-center">@Model.CriticalBugFixedCount</td>
+                    <td class="text-end text-success fw-semibold">+@Model.CriticalBugFixedPoints</td>
+                </tr>
+                <tr>
+                    <td>Project delivered on time (+30)</td>
+                    <td class="text-center">@Model.CrDeliveredOnTimeCount</td>
+                    <td class="text-end text-success fw-semibold">+@Model.CrDeliveredOnTimePoints</td>
+                </tr>
+                <tr>
+                    <td>Task completed before due date (+15 bonus)</td>
+                    <td class="text-center">@Model.TaskCompletedBeforeDueDateCount</td>
+                    <td class="text-end text-success fw-semibold">+@Model.TaskCompletedBeforeDueDatePoints</td>
+                </tr>
+                <tr>
+                    <td>Reopened bug penalty (-10)</td>
+                    <td class="text-center">@Model.ReopenedBugPenaltyCount</td>
+                    <td class="text-end text-danger fw-semibold">-@Model.ReopenedBugPenaltyPoints</td>
+                </tr>
+                <tr>
+                    <td>Failed SLA penalty (-15)</td>
+                    <td class="text-center">@Model.FailedSlaPenaltyCount</td>
+                    <td class="text-end text-danger fw-semibold">-@Model.FailedSlaPenaltyPoints</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr class="table-light">
+                    <th colspan="2" class="text-end">Total</th>
+                    <th class="text-end">@Model.TotalXpPoints</th>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 </div>
 
@@ -79,12 +143,12 @@
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-file-earmark-diff me-2"></i>Assigned Change Requests
+                <i class="bi bi-file-earmark-diff me-2"></i>Assigned Projects
             </div>
             <div class="card-body p-0">
                 @if (!Model.AssignedChangeRequests.Any())
                 {
-                    <p class="text-muted fst-italic p-3 mb-0">No change requests assigned.</p>
+                    <p class="text-muted fst-italic p-3 mb-0">No projects assigned.</p>
                 }
                 else
                 {
@@ -118,7 +182,7 @@
             <div class="card-body p-0">
                 @if (!Model.Branches.Any())
                 {
-                    <p class="text-muted fst-italic p-3 mb-0">No linked GitHub branches in your assigned change requests.</p>
+                    <p class="text-muted fst-italic p-3 mb-0">No linked GitHub branches in your assigned projects.</p>
                 }
                 else
                 {

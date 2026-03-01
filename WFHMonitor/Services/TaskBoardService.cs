@@ -43,7 +43,7 @@ public class TaskBoardService : ITaskBoardService
 
     public async Task<List<SelectListItem>> GetAssigneeOptionsAsync()
     {
-        var roles = new[] { "Employee", "Developer" };
+        var roles = new[] { "Employee", "Developer", "Agent" };
         var usersByRole = new List<IList<ApplicationUser>>();
         foreach (var role in roles)
             usersByRole.Add(await _userManager.GetUsersInRoleAsync(role));

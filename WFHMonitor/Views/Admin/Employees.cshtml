@@ -14,6 +14,7 @@
                             <th>Name</th>
                             <th>Email</th>
                             <th>Role</th>
+                            <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -23,12 +24,22 @@
                                 <td>@item.Employee.FullName</td>
                                 <td class="text-muted">@item.Employee.Email</td>
                                 <td><span class="badge bg-secondary">@item.Role</span></td>
+                                <td class="text-end">
+                                    <form asp-action="DeleteEmployee" method="post" class="d-inline"
+                                          onsubmit="return confirm('Delete @item.Employee.FullName? This cannot be undone.');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="userId" value="@item.Employee.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash me-1"></i>Delete
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                         }
                         @if (!Model.Employees.Any())
                         {
                             <tr>
-                                <td colspan="3" class="text-center text-muted py-3">No employees registered</td>
+                                <td colspan="4" class="text-center text-muted py-3">No employees registered</td>
                             </tr>
                         }
                     </tbody>
@@ -62,6 +73,7 @@
                             <option value="Employee">Employee</option>
                             <option value="Developer">Developer</option>
                             <option value="Tester">Tester</option>
+                            <option value="Agent">Agent</option>
                         </select>
                     </div>
                     <div class="mb-3">

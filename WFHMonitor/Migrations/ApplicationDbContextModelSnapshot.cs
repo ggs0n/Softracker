@@ -452,6 +452,49 @@ namespace WFHMonitor.Migrations
                     b.ToTable("BugScreenshots");
                 });
 
+            modelBuilder.Entity("WFHMonitor.Models.CalendarEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedById")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("EndAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MeetingLink")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("StartAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("StartAt");
+
+                    b.ToTable("CalendarEvents");
+                });
+
             modelBuilder.Entity("WFHMonitor.Models.ChangeRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -499,6 +542,10 @@ namespace WFHMonitor.Migrations
                     b.Property<string>("GitHubRepoOwner")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("GitHubRepoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("Priority")
                         .HasColumnType("int");
@@ -867,6 +914,17 @@ namespace WFHMonitor.Migrations
                         .IsRequired();
 
                     b.Navigation("BugReport");
+                });
+
+            modelBuilder.Entity("WFHMonitor.Models.CalendarEvent", b =>
+                {
+                    b.HasOne("WFHMonitor.Models.ApplicationUser", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedBy");
                 });
 
             modelBuilder.Entity("WFHMonitor.Models.ChangeRequest", b =>

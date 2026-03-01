@@ -19,6 +19,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BugScreenshot> BugScreenshots => Set<BugScreenshot>();
     public DbSet<BugDocument> BugDocuments => Set<BugDocument>();
     public DbSet<BugActivity> BugActivities => Set<BugActivity>();
+    public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -180,6 +181,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasOne(a => a.NewAssignedDeveloper)
              .WithMany()
              .HasForeignKey(a => a.NewAssignedDeveloperId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CalendarEvent>(e =>
+        {
+            e.HasIndex(c => c.StartAt);
+            e.HasIndex(c => c.CreatedById);
+
+            e.HasOne(c => c.CreatedBy)
+             .WithMany()
+             .HasForeignKey(c => c.CreatedById)
              .OnDelete(DeleteBehavior.Restrict);
         });
     }

@@ -1,0 +1,244 @@
+@model WFHMonitor.ViewModels.AgentDashboardViewModel
+@{
+    ViewData["Title"] = "Agent";
+}
+
+<div class="row g-3 mb-4">
+    @foreach (var agent in Model.Agents)
+    {
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h5 class="card-title mb-1">@agent.Name</h5>
+                        <span class="badge @(agent.Status == "Running" ? "bg-success" : "bg-secondary")">@agent.Status</span>
+                    </div>
+                    <div class="small text-muted">@agent.Description</div>
+                    <div class="small text-muted mb-3">Agent Summary</div>
+                    <div class="d-flex justify-content-between">
+                        <span>Running Work Items</span>
+                        <span class="fw-semibold">@agent.RunningWorkItems</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Queued Work Items</span>
+                        <span class="fw-semibold">@agent.QueuedWorkItems</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-dark text-white">
+            <div class="card-body py-3">
+                <div class="small opacity-75">Total</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-secondary text-white">
+            <div class="card-body py-3">
+                <div class="small opacity-75">Queued</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Queued</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-primary text-white">
+            <div class="card-body py-3">
+                <div class="small opacity-75">In Progress</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.InProgress</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-warning">
+            <div class="card-body py-3">
+                <div class="small text-dark-50">Blocked</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Blocked</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-success text-white">
+            <div class="card-body py-3">
+                <div class="small opacity-75">PR Raised</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.PrRaised</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card text-center border-0 bg-danger text-white">
+            <div class="card-body py-3">
+                <div class="small opacity-75">Failed</div>
+                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Failed</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-xl-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <strong>Running Agent Work Items</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bug</th>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.RunningAgentWorkItems.Count == 0)
+                            {
+                                <tr><td colspan="4" class="text-center text-muted py-3">No running agent work items.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in Model.RunningAgentWorkItems)
+                                {
+                                    <tr>
+                                        <td><a asp-controller="Bug" asp-action="Details" asp-route-id="@item.Id">@item.BugNumber</a></td>
+                                        <td>@item.Title</td>
+                                        <td>@item.AgentStatus</td>
+                                        <td>@item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <strong>Running Cron Jobs</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Cron</th>
+                                <th>Enabled</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.RunningCronJobs.Count == 0)
+                            {
+                                <tr><td colspan="3" class="text-center text-muted py-3">No cron jobs marked as running.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var job in Model.RunningCronJobs)
+                                {
+                                    <tr>
+                                        <td>@job.Name</td>
+                                        <td><code>@job.CronExpression</code></td>
+                                        <td>@(job.IsEnabled ? "Yes" : "No")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <strong>Recent Agent Activities</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Time</th>
+                                <th>Bug</th>
+                                <th>Action</th>
+                                <th>Status Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.RecentActivities.Count == 0)
+                            {
+                                <tr><td colspan="4" class="text-center text-muted py-3">No activity recorded yet.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var activity in Model.RecentActivities)
+                                {
+                                    <tr>
+                                        <td class="text-muted">@activity.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>
+                                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@activity.BugId">@activity.BugNumber</a>
+                                            <div class="small text-muted">@activity.Title</div>
+                                        </td>
+                                        <td>@activity.Action</td>
+                                        <td>@(string.IsNullOrWhiteSpace(activity.StatusTransition) ? "-" : activity.StatusTransition)</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>All Cron Jobs</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Cron</th>
+                                <th>Enabled</th>
+                                <th>Running</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.CronJobs.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-center text-muted py-3">No cron jobs configured.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var job in Model.CronJobs)
+                                {
+                                    <tr>
+                                        <td>@job.Name</td>
+                                        <td>@job.Description</td>
+                                        <td><code>@job.CronExpression</code></td>
+                                        <td>@(job.IsEnabled ? "Yes" : "No")</td>
+                                        <td>@(job.IsRunning ? "Yes" : "No")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

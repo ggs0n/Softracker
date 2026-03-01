@@ -45,6 +45,11 @@ public class ChangeRequestFormViewModel
     [Display(Name = "GitHub Repo Name")]
     public string? GitHubRepoName { get; set; }
 
+    [MaxLength(500)]
+    [Display(Name = "GitHub Repo URL")]
+    [Url(ErrorMessage = "Please enter a valid GitHub repository URL.")]
+    public string? GitHubRepoUrl { get; set; }
+
     [MaxLength(100)]
     [Display(Name = "GitHub Branch")]
     public string? GitHubBranch { get; set; }

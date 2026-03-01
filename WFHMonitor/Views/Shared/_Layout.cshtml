@@ -57,7 +57,7 @@
             <li>
                 <a asp-controller="ChangeRequest" asp-action="Index"
                    class="@(ctrl == "ChangeRequest" ? "active" : "")">
-                    <i class="bi bi-file-earmark-diff"></i> Change Requests
+                    <i class="bi bi-file-earmark-diff"></i> Projects
                 </a>
             </li>
             @if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
@@ -66,6 +66,15 @@
                     <a asp-controller="Bug" asp-action="Index"
                        class="@(ctrl == "Bug" ? "active" : "")">
                         <i class="bi bi-bug"></i> Bugs
+                    </a>
+                </li>
+            }
+            @if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer") || User.IsInRole("Agent"))
+            {
+                <li>
+                    <a asp-controller="Agent" asp-action="Index"
+                       class="@(ctrl == "Agent" ? "active" : "")">
+                        <i class="bi bi-cpu"></i> Agent
                     </a>
                 </li>
             }
@@ -85,7 +94,7 @@
                 <i class="bi bi-person-circle"></i>
                 <div>
                     <div class="fw-semibold text-white" style="font-size:0.82rem;">@User.Identity!.Name</div>
-                    <div style="font-size:0.72rem;opacity:0.5;">@(User.IsInRole("Admin") ? "Admin" : User.IsInRole("Tester") ? "Tester" : User.IsInRole("Developer") ? "Developer" : "Employee")</div>
+                    <div style="font-size:0.72rem;opacity:0.5;">@(User.IsInRole("Admin") ? "Admin" : User.IsInRole("Tester") ? "Tester" : User.IsInRole("Developer") ? "Developer" : User.IsInRole("Agent") ? "Agent" : "Employee")</div>
                 </div>
             </div>
             <form asp-controller="Auth" asp-action="Logout" method="post">
@@ -101,6 +110,13 @@
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
             <div class="d-flex align-items-center gap-2">
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary calendar-launch"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#calendarDrawer"
+                        aria-controls="calendarDrawer">
+                    <i class="bi bi-calendar3 me-1"></i>Calendar
+                </button>
                 @if (User.IsInRole("Admin"))
                 {
                     <a asp-controller="TaskBoard" asp-action="Create" class="btn btn-sm btn-primary">
@@ -135,6 +151,82 @@
             @RenderBody()
         </div>
     </div>
+
+    <div class="offcanvas offcanvas-end calendar-drawer" tabindex="-1" id="calendarDrawer" aria-labelledby="calendarDrawerLabel">
+        <div class="offcanvas-header border-bottom">
+            <div>
+                <h5 class="offcanvas-title mb-0" id="calendarDrawerLabel">Team Calendar</h5>
+                <small class="text-muted">Shared events for all users</small>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="calendar-toolbar d-flex align-items-center justify-content-between mb-3">
+                <button type="button" class="btn btn-sm btn-light border" id="calendarPrevMonth">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <div class="fw-semibold" id="calendarCurrentMonth"></div>
+                <button type="button" class="btn btn-sm btn-light border" id="calendarNextMonth">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="calendar-weekdays mb-1">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+            </div>
+            <div id="calendarGrid" class="calendar-grid mb-3"></div>
+
+            <div class="calendar-day-events mb-4">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="fw-semibold small text-uppercase text-muted">Selected Day Events</div>
+                    <div id="calendarSelectedDateLabel" class="calendar-selected-date-label small"></div>
+                </div>
+                <div id="calendarDayEvents" class="small text-muted">Select a day to see events.</div>
+            </div>
+
+            <div class="calendar-form-wrap">
+                <div class="fw-semibold mb-2"><i class="bi bi-plus-circle me-1"></i>Add Event</div>
+                <form asp-controller="Calendar" asp-action="Create" method="post" id="calendarEventForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">Title</label>
+                        <input name="Title" id="calendarTitleInput" class="form-control form-control-sm" maxlength="200" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">Start</label>
+                        <input name="StartAt" id="calendarStartAtInput" type="datetime-local" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">End</label>
+                        <input name="EndAt" type="datetime-local" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-sm btn-success calendar-save-inline">
+                            <i class="bi bi-check2-circle me-1"></i>Save Date
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">Meeting Link</label>
+                        <input name="MeetingLink" type="url" class="form-control form-control-sm" maxlength="1000" placeholder="https://meet.google.com/..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Details</label>
+                        <textarea name="Details" rows="3" class="form-control form-control-sm" maxlength="2000" placeholder="Agenda, attendees, context..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                        <i class="bi bi-calendar-check me-1"></i>Save Event
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="calendar-drawer-footer">
+            <button type="submit" form="calendarEventForm" class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-calendar-check me-1"></i>Save Event
+            </button>
+        </div>
+    </div>
 }
 else
 {
@@ -144,6 +236,178 @@ else
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <script>
+        (function() {
+            const monthLabel = document.getElementById('calendarCurrentMonth');
+            const grid = document.getElementById('calendarGrid');
+            const dayEvents = document.getElementById('calendarDayEvents');
+            const startInput = document.getElementById('calendarStartAtInput');
+            const titleInput = document.getElementById('calendarTitleInput');
+            const selectedDateLabel = document.getElementById('calendarSelectedDateLabel');
+            if (!monthLabel || !grid || !dayEvents || !startInput || !titleInput || !selectedDateLabel) return;
+
+            const state = {
+                cursor: new Date(),
+                selectedDate: new Date(),
+                events: []
+            };
+
+            function formatMonthLabel(date) {
+                return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            }
+
+            function formatSelectedDateLabel(date) {
+                return date.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+            }
+
+            function toDateKey(date) {
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            }
+
+            function normalizeToLocalDate(dateString) {
+                const d = new Date(dateString);
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            }
+
+            function eventsForDay(dayDate) {
+                const dayKey = toDateKey(dayDate);
+                return state.events.filter(e => {
+                    const start = normalizeToLocalDate(e.startAt);
+                    const end = e.endAt ? normalizeToLocalDate(e.endAt) : start;
+                    return toDateKey(start) <= dayKey && dayKey <= toDateKey(end);
+                });
+            }
+
+            function setDefaultStartFromDate(date) {
+                const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
+                const yyyy = start.getFullYear();
+                const mm = String(start.getMonth() + 1).padStart(2, '0');
+                const dd = String(start.getDate()).padStart(2, '0');
+                const hh = String(start.getHours()).padStart(2, '0');
+                const min = String(start.getMinutes()).padStart(2, '0');
+                startInput.value = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+            }
+
+            function renderSelectedDayEvents() {
+                selectedDateLabel.textContent = formatSelectedDateLabel(state.selectedDate);
+                const events = eventsForDay(state.selectedDate);
+                if (!events.length) {
+                    dayEvents.innerHTML = '<span class="text-muted">No events for this day.</span>';
+                    return;
+                }
+
+                const html = events.map(e => {
+                    const start = new Date(e.startAt);
+                    const end = e.endAt ? new Date(e.endAt) : null;
+                    const timeText = end
+                        ? `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const details = e.details ? `<div class="text-muted">${e.details}</div>` : '';
+                    const meeting = e.meetingLink ? `<a href="${e.meetingLink}" target="_blank" rel="noopener" class="small">Join meeting</a>` : '';
+                    return `<div class="calendar-day-event-item mb-2">
+                        <div class="fw-semibold">${e.title}</div>
+                        <div class="small">${timeText}</div>
+                        ${details}
+                        ${meeting}
+                    </div>`;
+                }).join('');
+
+                dayEvents.innerHTML = html;
+            }
+
+            function renderCalendar() {
+                monthLabel.textContent = formatMonthLabel(state.cursor);
+                grid.innerHTML = '';
+
+                const year = state.cursor.getFullYear();
+                const month = state.cursor.getMonth();
+                const first = new Date(year, month, 1);
+                const startIndex = first.getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const today = new Date();
+                const todayKey = toDateKey(today);
+                const selectedKey = toDateKey(state.selectedDate);
+
+                for (let i = 0; i < startIndex; i++) {
+                    const empty = document.createElement('div');
+                    empty.className = 'calendar-cell is-empty';
+                    grid.appendChild(empty);
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dateKey = toDateKey(date);
+                    const events = eventsForDay(date);
+
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-cell';
+                    if (dateKey === todayKey) cell.classList.add('is-today');
+                    if (dateKey === selectedKey) cell.classList.add('is-selected');
+
+                    const eventBadges = events.slice(0, 2)
+                        .map(e => `<span class="calendar-event-dot" title="${e.title}"></span>`)
+                        .join('');
+
+                    const eventCount = events.length > 0
+                        ? `<span class="calendar-event-count">${events.length}</span>`
+                        : '';
+
+                    cell.innerHTML = `
+                        <button type="button" class="calendar-day-hit" aria-label="Select day ${day}">
+                            <span class="calendar-day-number">${day}</span>
+                            ${eventCount}
+                        </button>
+                        <span class="calendar-cell-events">${eventBadges}</span>
+                        <button type="button" class="calendar-inline-add" aria-label="Add event on ${day}">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>`;
+
+                    cell.querySelector('.calendar-day-hit')?.addEventListener('click', function() {
+                        state.selectedDate = date;
+                        setDefaultStartFromDate(date);
+                        renderCalendar();
+                        renderSelectedDayEvents();
+                    });
+
+                    cell.querySelector('.calendar-inline-add')?.addEventListener('click', function() {
+                        state.selectedDate = date;
+                        setDefaultStartFromDate(date);
+                        renderCalendar();
+                        renderSelectedDayEvents();
+                        titleInput.focus();
+                    });
+
+                    grid.appendChild(cell);
+                }
+            }
+
+            async function loadMonthEvents() {
+                const year = state.cursor.getFullYear();
+                const month = state.cursor.getMonth() + 1;
+                const response = await fetch(`/Calendar/Events?year=${year}&month=${month}`, { headers: { 'Accept': 'application/json' } });
+                if (!response.ok) return;
+                state.events = await response.json();
+                renderCalendar();
+                renderSelectedDayEvents();
+            }
+
+            document.getElementById('calendarPrevMonth')?.addEventListener('click', async function() {
+                state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
+                await loadMonthEvents();
+            });
+
+            document.getElementById('calendarNextMonth')?.addEventListener('click', async function() {
+                state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
+                await loadMonthEvents();
+            });
+
+            setDefaultStartFromDate(state.selectedDate);
+            loadMonthEvents();
+        })();
+    </script>
+}
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

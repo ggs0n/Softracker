@@ -34,11 +34,11 @@ public class BugFormViewModel
 
     public List<SelectListItem> DeveloperOptions { get; set; } = new();
 
-    [Display(Name = "Change Request")]
+    [Display(Name = "Project")]
     public int? ChangeRequestId { get; set; }
 
     [MaxLength(300)]
-    [Display(Name = "Change Request (Free Text)")]
+    [Display(Name = "Project (Free Text)")]
     public string? ChangeRequestReferenceText { get; set; }
 
     public List<SelectListItem> ChangeRequestOptions { get; set; } = new();

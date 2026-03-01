@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services.Interfaces;
@@ -66,14 +67,38 @@ public class ChangeRequestController : Controller
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
 
-        if (!string.IsNullOrWhiteSpace(cr.GitHubRepoOwner) &&
-            !string.IsNullOrWhiteSpace(cr.GitHubRepoName) &&
-            !string.IsNullOrWhiteSpace(cr.GitHubBranch))
+        ViewBag.LinkedBugs = await _db.BugReports
+            .Include(b => b.AssignedDeveloper)
+            .Where(b => b.ChangeRequestId == id)
+            .OrderByDescending(b => b.CreatedAt)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var owner = cr.GitHubRepoOwner;
+        var repo = cr.GitHubRepoName;
+        var branch = cr.GitHubBranch;
+        if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
+            !string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) &&
+            TryParseGitHubRepoUrl(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+        {
+            owner = parsedOwner;
+            repo = parsedRepo;
+            if (string.IsNullOrWhiteSpace(branch))
+                branch = parsedBranch;
+        }
+
+        ViewBag.ResolvedGitHubOwner = owner;
+        ViewBag.ResolvedGitHubRepo = repo;
+        ViewBag.ResolvedGitHubBranch = branch;
+
+        if (!string.IsNullOrWhiteSpace(owner) &&
+            !string.IsNullOrWhiteSpace(repo) &&
+            !string.IsNullOrWhiteSpace(branch))
         {
             try
             {
                 ViewBag.Commits = await _gitHub.GetCommitsAsync(
-                    cr.GitHubRepoOwner, cr.GitHubRepoName, cr.GitHubBranch);
+                    owner, repo, branch);
             }
             catch (Exception ex)
             {
@@ -98,6 +123,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(ChangeRequestFormViewModel model)
     {
+        ApplyGitHubRepoFromUrl(model);
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -123,6 +150,7 @@ public class ChangeRequestController : Controller
             TimelineEnd = model.TimelineEnd,
             GitHubRepoOwner = model.GitHubRepoOwner,
             GitHubRepoName = model.GitHubRepoName,
+            GitHubRepoUrl = model.GitHubRepoUrl,
             GitHubBranch = model.GitHubBranch,
             CreatedById = userId
         };
@@ -141,7 +169,7 @@ public class ChangeRequestController : Controller
         }
         await _db.SaveChangesAsync();
 
-        TempData["Success"] = $"Change Request {crNumber} created.";
+        TempData["Success"] = $"Project {crNumber} created.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
     }
 
@@ -168,6 +196,7 @@ public class ChangeRequestController : Controller
             TimelineEnd = cr.TimelineEnd,
             GitHubRepoOwner = cr.GitHubRepoOwner,
             GitHubRepoName = cr.GitHubRepoName,
+            GitHubRepoUrl = cr.GitHubRepoUrl,
             GitHubBranch = cr.GitHubBranch,
             Pics = cr.Pics.Select(p => new PicEntry { EmployeeId = p.EmployeeId, Role = p.Role }).ToList(),
             EmployeeOptions = await GetEmployeeOptions()
@@ -179,6 +208,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Edit(int id, ChangeRequestFormViewModel model)
     {
+        ApplyGitHubRepoFromUrl(model);
+
         if (!ModelState.IsValid)
         {
             model.EmployeeOptions = await GetEmployeeOptions();
@@ -202,6 +233,7 @@ public class ChangeRequestController : Controller
         cr.TimelineEnd = model.TimelineEnd;
         cr.GitHubRepoOwner = model.GitHubRepoOwner;
         cr.GitHubRepoName = model.GitHubRepoName;
+        cr.GitHubRepoUrl = model.GitHubRepoUrl;
         cr.GitHubBranch = model.GitHubBranch;
         cr.UpdatedAt = DateTime.UtcNow;
 
@@ -217,7 +249,7 @@ public class ChangeRequestController : Controller
         }
 
         await _db.SaveChangesAsync();
-        TempData["Success"] = "Change Request updated.";
+        TempData["Success"] = "Project updated.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
     }
 
@@ -239,7 +271,7 @@ public class ChangeRequestController : Controller
 
         _db.ChangeRequests.Remove(cr);
         await _db.SaveChangesAsync();
-        TempData["Success"] = "Change Request deleted.";
+        TempData["Success"] = "Project deleted.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -400,10 +432,71 @@ public class ChangeRequestController : Controller
     {
         var employees = await _userManager.GetUsersInRoleAsync("Employee");
         var developers = await _userManager.GetUsersInRoleAsync("Developer");
+        var agents = await _userManager.GetUsersInRoleAsync("Agent");
 
         return employees.Select(e => new SelectListItem($"{e.FullName} (Employee)", e.Id))
             .Concat(developers.Select(e => new SelectListItem($"{e.FullName} (Developer)", e.Id)))
+            .Concat(agents.Select(e => new SelectListItem($"{e.FullName} (Agent)", e.Id)))
             .OrderBy(e => e.Text)
             .ToList();
+    }
+
+    private void ApplyGitHubRepoFromUrl(ChangeRequestFormViewModel model)
+    {
+        model.GitHubRepoUrl = model.GitHubRepoUrl?.Trim();
+        model.GitHubRepoOwner = model.GitHubRepoOwner?.Trim();
+        model.GitHubRepoName = model.GitHubRepoName?.Trim();
+        model.GitHubBranch = model.GitHubBranch?.Trim();
+
+        if (string.IsNullOrWhiteSpace(model.GitHubRepoUrl))
+            return;
+
+        if (!TryParseGitHubRepoUrl(model.GitHubRepoUrl, out var owner, out var repo, out var branchFromUrl))
+        {
+            ModelState.AddModelError(nameof(model.GitHubRepoUrl), "Invalid GitHub repository URL. Example: https://github.com/owner/repo");
+            return;
+        }
+
+        model.GitHubRepoOwner = owner;
+        model.GitHubRepoName = repo;
+        if (string.IsNullOrWhiteSpace(model.GitHubBranch) && !string.IsNullOrWhiteSpace(branchFromUrl))
+            model.GitHubBranch = branchFromUrl;
+    }
+
+    private static bool TryParseGitHubRepoUrl(
+        string url,
+        out string owner,
+        out string repo,
+        out string? branch)
+    {
+        owner = string.Empty;
+        repo = string.Empty;
+        branch = null;
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+        if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var path = uri.AbsolutePath.Trim('/');
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2)
+            return false;
+
+        owner = segments[0];
+        repo = Regex.Replace(segments[1], @"\.git$", string.Empty, RegexOptions.IgnoreCase);
+        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+            return false;
+
+        // Supports URLs like /owner/repo/tree/main or /owner/repo/tree/feature/my-branch
+        if (segments.Length >= 4 && string.Equals(segments[2], "tree", StringComparison.OrdinalIgnoreCase))
+        {
+            branch = string.Join('/', segments.Skip(3));
+        }
+
+        return true;
     }
 }

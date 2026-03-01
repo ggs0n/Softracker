@@ -1,0 +1,17 @@
+Evidence: Task Board task card shows unreadable/garbled icon glyphs instead of meaningful action labels/icons.
+
+Page: http://localhost:5227/TaskBoard
+Date/Time: 2026-02-27 21:34 Asia/Kuala_Lumpur
+Observed on card title: "SSSS"
+
+Observed text near action area appears as random glyphs (e.g., symbols) rather than recognizable buttons/labels, which makes actions unclear.
+
+Expected:
+- Action controls should display proper icons/labels (e.g., edit, move, details)
+- Tooltips/aria-labels should be readable and meaningful
+
+Actual:
+- Garbled symbols are rendered, reducing usability and clarity.
+
+Screenshot reference:
+C:\Users\A\.openclaw\media\browser\bb7e52cc-a78e-4d05-b1a5-24c0e164f715.jpg

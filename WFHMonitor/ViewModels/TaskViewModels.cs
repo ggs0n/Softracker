@@ -30,7 +30,7 @@ public class TaskCreateViewModel
     [Display(Name = "Due Date")]
     public DateTime? DueDate { get; set; }
 
-    [Display(Name = "Related Change Request")]
+    [Display(Name = "Related Project")]
     public int? ChangeRequestId { get; set; }
 
     [Display(Name = "Related Bug")]

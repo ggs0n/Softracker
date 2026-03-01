@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services.Interfaces;
@@ -42,27 +43,66 @@ public class DeveloperSummaryService : IDeveloperSummaryService
             .AsNoTracking()
             .ToListAsync();
 
+        var tasks = await _db.WorkTasks
+            .Where(t => t.AssigneeId == userId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var bugIds = bugs.Select(b => b.Id).ToList();
+        var reopenedBugPenaltyCount = bugIds.Count == 0
+            ? 0
+            : await _db.BugActivities
+                .Where(a =>
+                    bugIds.Contains(a.BugReportId) &&
+                    a.OldStatus == BugStatus.Complete &&
+                    a.NewStatus != BugStatus.Complete &&
+                    a.NewAssignedDeveloperId == userId)
+                .CountAsync();
+
+        var completedBugs = bugs.Where(b => b.Status == BugStatus.Complete).ToList();
+        var criticalBugFixedCount = completedBugs.Count(b => b.ChangeRequest?.Priority == CrPriority.Critical);
+        var bugFixedCount = completedBugs.Count - criticalBugFixedCount;
+        var failedSlaPenaltyCount = completedBugs.Count(b =>
+            b.ChangeRequest?.TimelineEnd.HasValue == true &&
+            b.UpdatedAt.Date > b.ChangeRequest.TimelineEnd!.Value.Date);
+        var crDeliveredOnTimeCount = changeRequests.Count(c =>
+            c.Status == CrStatus.Done &&
+            c.TimelineEnd.HasValue &&
+            c.UpdatedAt.Date <= c.TimelineEnd.Value.Date);
+        var taskCompletedBeforeDueDateCount = tasks.Count(t =>
+            t.Status == WorkTaskStatus.Done &&
+            t.DueDate.HasValue &&
+            t.UpdatedAt.Date < t.DueDate.Value.Date);
+
         var vm = new DeveloperSummaryViewModel
         {
             AssignedBugCount = bugs.Count,
             AssignedChangeRequestCount = changeRequests.Count,
             DeveloperEmail = developerEmail,
             AssignedBugs = bugs,
-            AssignedChangeRequests = changeRequests
+            AssignedChangeRequests = changeRequests,
+            BugFixedCount = bugFixedCount,
+            CriticalBugFixedCount = criticalBugFixedCount,
+            CrDeliveredOnTimeCount = crDeliveredOnTimeCount,
+            TaskCompletedBeforeDueDateCount = taskCompletedBeforeDueDateCount,
+            ReopenedBugPenaltyCount = reopenedBugPenaltyCount,
+            FailedSlaPenaltyCount = failedSlaPenaltyCount
         };
 
         var githubLinkedCrs = changeRequests
-            .Where(c => !string.IsNullOrWhiteSpace(c.GitHubRepoOwner)
-                        && !string.IsNullOrWhiteSpace(c.GitHubRepoName)
-                        && !string.IsNullOrWhiteSpace(c.GitHubBranch))
+            .Where(c => HasGitHubConfig(c, out _, out _, out _))
             .ToList();
 
         vm.Branches = githubLinkedCrs
-            .Select(c => new DeveloperGitHubBranchItem
+            .Select(c =>
             {
-                CrNumber = c.CrNumber,
-                Repo = $"{c.GitHubRepoOwner}/{c.GitHubRepoName}",
-                Branch = c.GitHubBranch!
+                HasGitHubConfig(c, out var owner, out var repo, out var branch);
+                return new DeveloperGitHubBranchItem
+                {
+                    CrNumber = c.CrNumber,
+                    Repo = $"{owner}/{repo}",
+                    Branch = branch!
+                };
             })
             .ToList();
         vm.LinkedBranchCount = vm.Branches.Count;
@@ -75,8 +115,9 @@ public class DeveloperSummaryService : IDeveloperSummaryService
 
                 foreach (var cr in githubLinkedCrs)
                 {
+                    HasGitHubConfig(cr, out var owner, out var repo, out var branch);
                     var commits = await _gitHubService.GetCommitsAsync(
-                        cr.GitHubRepoOwner!, cr.GitHubRepoName!, cr.GitHubBranch!, count: 15);
+                        owner!, repo!, branch!, count: 15);
 
                     foreach (var commit in commits.Where(c =>
                                  string.Equals(c.AuthorEmail, developerEmail, StringComparison.OrdinalIgnoreCase)))
@@ -84,8 +125,8 @@ public class DeveloperSummaryService : IDeveloperSummaryService
                         commitItems.Add(new DeveloperGitHubCommitItem
                         {
                             CrNumber = cr.CrNumber,
-                            Repo = $"{cr.GitHubRepoOwner}/{cr.GitHubRepoName}",
-                            Branch = cr.GitHubBranch!,
+                            Repo = $"{owner}/{repo}",
+                            Branch = branch!,
                             Sha = commit.Sha,
                             Message = commit.Message,
                             Date = commit.Date,
@@ -107,5 +148,60 @@ public class DeveloperSummaryService : IDeveloperSummaryService
         }
 
         return vm;
+    }
+
+    private static bool HasGitHubConfig(ChangeRequest project, out string? owner, out string? repo, out string? branch)
+    {
+        owner = project.GitHubRepoOwner?.Trim();
+        repo = project.GitHubRepoName?.Trim();
+        branch = project.GitHubBranch?.Trim();
+
+        if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
+            !string.IsNullOrWhiteSpace(project.GitHubRepoUrl) &&
+            TryParseGitHubRepoUrl(project.GitHubRepoUrl!, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+        {
+            owner = parsedOwner;
+            repo = parsedRepo;
+            if (string.IsNullOrWhiteSpace(branch))
+                branch = parsedBranch;
+        }
+
+        return !string.IsNullOrWhiteSpace(owner) &&
+               !string.IsNullOrWhiteSpace(repo) &&
+               !string.IsNullOrWhiteSpace(branch);
+    }
+
+    private static bool TryParseGitHubRepoUrl(
+        string url,
+        out string owner,
+        out string repo,
+        out string? branch)
+    {
+        owner = string.Empty;
+        repo = string.Empty;
+        branch = null;
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+        if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var path = uri.AbsolutePath.Trim('/');
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2)
+            return false;
+
+        owner = segments[0];
+        repo = Regex.Replace(segments[1], @"\.git$", string.Empty, RegexOptions.IgnoreCase);
+        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+            return false;
+
+        if (segments.Length >= 4 && string.Equals(segments[2], "tree", StringComparison.OrdinalIgnoreCase))
+            branch = string.Join('/', segments.Skip(3));
+
+        return true;
     }
 }

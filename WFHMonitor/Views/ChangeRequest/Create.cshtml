@@ -1,11 +1,11 @@
 @model WFHMonitor.ViewModels.ChangeRequestFormViewModel
-@{ ViewData["Title"] = "New Change Request"; }
+@{ ViewData["Title"] = "New Project"; }
 
 <div class="row">
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>New Change Request</h5>
+                <h5 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>New Project</h5>
             </div>
             <div class="card-body p-4">
                 <form asp-action="Create" method="post" id="crForm">
@@ -21,7 +21,7 @@
                     <div class="mb-3">
                         <label asp-for="Description" class="form-label fw-semibold">Description</label>
                         <textarea asp-for="Description" class="form-control" rows="4"
-                                  placeholder="Detail the change request scope, goals, and impact..."></textarea>
+                                  placeholder="Detail the project scope, goals, and impact..."></textarea>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -82,6 +82,11 @@
                     <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
 
                     <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
+                            <input asp-for="GitHubRepoUrl" class="form-control" placeholder="https://github.com/owner/repo" />
+                            <div class="form-text">Owner and repo fields are auto-filled from this URL.</div>
+                        </div>
                         <div class="col-md-6">
                             <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
                             <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
@@ -94,7 +99,7 @@
 
                     <div class="mb-3">
                         <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
-                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/CR-2026-0001" />
+                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
                     </div>
 
                     <hr class="my-3" />
@@ -110,7 +115,7 @@
 
                     <div class="d-flex gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg me-2"></i>Create Change Request
+                            <i class="bi bi-check-lg me-2"></i>Create Project
                         </button>
                         <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
                     </div>
@@ -122,10 +127,10 @@
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header bg-light">
-                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>About CR Numbers</h6>
+                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>About Project Numbers</h6>
             </div>
             <div class="card-body small text-muted">
-                <p>CR numbers are auto-generated in the format <strong>CR-YYYY-XXXX</strong>.</p>
+                <p>Project numbers are auto-generated in the format <strong>CR-YYYY-XXXX</strong>.</p>
                 <p class="mb-0">The number is assigned once you submit the form.</p>
             </div>
         </div>

@@ -1,6 +1,10 @@
 @model WFHMonitor.Models.ChangeRequest
 @{
     ViewData["Title"] = Model.CrNumber;
+    var resolvedRepoOwner = ViewBag.ResolvedGitHubOwner as string;
+    var resolvedRepoName = ViewBag.ResolvedGitHubRepo as string;
+    var resolvedRepoBranch = ViewBag.ResolvedGitHubBranch as string;
+    var linkedBugs = ViewBag.LinkedBugs as IList<WFHMonitor.Models.BugReport> ?? new List<WFHMonitor.Models.BugReport>();
 
     var statColors = new Dictionary<string, string> {
         {"Draft","secondary"}, {"InReview","info"}, {"Approved","primary"},
@@ -268,13 +272,13 @@
         <div class="card mb-4">
             <div class="card-header bg-light fw-semibold">
                 <i class="bi bi-github me-2"></i>GitHub Commits
-                @if (!string.IsNullOrEmpty(Model.GitHubBranch))
+                @if (!string.IsNullOrEmpty(resolvedRepoBranch))
                 {
-                    <span class="badge bg-secondary ms-2 fw-normal" style="font-family:monospace;">@Model.GitHubBranch</span>
+                    <span class="badge bg-secondary ms-2 fw-normal" style="font-family:monospace;">@resolvedRepoBranch</span>
                 }
             </div>
             <div class="card-body p-0">
-                @if (string.IsNullOrEmpty(Model.GitHubRepoOwner) || string.IsNullOrEmpty(Model.GitHubRepoName) || string.IsNullOrEmpty(Model.GitHubBranch))
+                @if (string.IsNullOrEmpty(resolvedRepoOwner) || string.IsNullOrEmpty(resolvedRepoName) || string.IsNullOrEmpty(resolvedRepoBranch))
                 {
                     <p class="text-muted fst-italic p-3 mb-0">No GitHub branch linked.</p>
                 }
@@ -372,20 +376,27 @@
         </div>
 
         @* GitHub Config *@
-        @if (!string.IsNullOrEmpty(Model.GitHubRepoOwner) || !string.IsNullOrEmpty(Model.GitHubRepoName))
+        @if (!string.IsNullOrEmpty(resolvedRepoOwner) || !string.IsNullOrEmpty(resolvedRepoName) || !string.IsNullOrEmpty(Model.GitHubRepoUrl))
         {
             <div class="card mb-4">
                 <div class="card-header bg-light fw-semibold">
                     <i class="bi bi-github me-2"></i>Repository
                 </div>
                 <div class="card-body small">
-                    @if (!string.IsNullOrEmpty(Model.GitHubRepoOwner) && !string.IsNullOrEmpty(Model.GitHubRepoName))
+                    @if (!string.IsNullOrEmpty(resolvedRepoOwner) && !string.IsNullOrEmpty(resolvedRepoName))
                     {
-                        <div class="mb-1"><span class="text-muted">Repo: </span><span class="fw-semibold" style="font-family:monospace;">@Model.GitHubRepoOwner/@Model.GitHubRepoName</span></div>
+                        <div class="mb-1"><span class="text-muted">Repo: </span><span class="fw-semibold" style="font-family:monospace;">@resolvedRepoOwner/@resolvedRepoName</span></div>
                     }
-                    @if (!string.IsNullOrEmpty(Model.GitHubBranch))
+                    @if (!string.IsNullOrEmpty(Model.GitHubRepoUrl))
                     {
-                        <div><span class="text-muted">Branch: </span><span class="fw-semibold" style="font-family:monospace;">@Model.GitHubBranch</span></div>
+                        <div class="mb-1">
+                            <span class="text-muted">URL: </span>
+                            <a href="@Model.GitHubRepoUrl" target="_blank" rel="noopener" class="fw-semibold">Open Repository</a>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(resolvedRepoBranch))
+                    {
+                        <div><span class="text-muted">Branch: </span><span class="fw-semibold" style="font-family:monospace;">@resolvedRepoBranch</span></div>
                     }
                 </div>
             </div>
@@ -418,6 +429,61 @@
                 else
                 {
                     <p class="text-muted small p-3 mb-0">No PIC assigned.</p>
+                }
+            </div>
+        </div>
+
+        @* Linked Bugs *@
+        <div class="card mt-4">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-bug me-2"></i>Linked Bugs</span>
+                <span class="badge bg-secondary">@linkedBugs.Count</span>
+            </div>
+            <div class="card-body p-0">
+                @if (!linkedBugs.Any())
+                {
+                    <p class="text-muted small p-3 mb-0">No bugs linked to this project.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Bug #</th>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Assigned</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var bug in linkedBugs)
+                                {
+                                    <tr>
+                                        <td class="text-muted">@bug.BugNumber</td>
+                                        <td>
+                                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@bug.Id" class="fw-semibold text-decoration-none">
+                                                @bug.Title
+                                            </a>
+                                        </td>
+                                        <td><span class="badge bg-secondary">@bug.Status</span></td>
+                                        <td>
+                                            @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
+                                            {
+                                                <span>Agent (@bug.AgentStatus)</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
+                                            }
+                                        </td>
+                                        <td class="text-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
         </div>

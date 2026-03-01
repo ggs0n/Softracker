@@ -39,7 +39,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Change Request</label>
+                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
                         <select asp-for="ChangeRequestId" class="form-select">
                             <option value="">-- None --</option>
                             @foreach (var cr in Model.ChangeRequestOptions)
@@ -50,9 +50,9 @@
                     </div>
 
                     <div class="mb-3">
-                        <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Change Request (Free Text)</label>
+                        <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Project (Free Text)</label>
                         <input asp-for="ChangeRequestReferenceText" class="form-control" id="crFreeText" />
-                        <div class="form-text">Use this if the change request is not listed.</div>
+                        <div class="form-text">Use this if the project is not listed.</div>
                     </div>
 
                     <div class="row g-3 mb-3">

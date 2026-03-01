@@ -18,6 +18,7 @@
                 <tr>
                     <th>Bug #</th>
                     <th>Title</th>
+                    <th>Project</th>
                     <th>Status</th>
                     <th>Assigned</th>
                     <th>Created</th>
@@ -30,6 +31,20 @@
                         <td class="text-muted">@bug.BugNumber</td>
                         <td>
                             <a asp-action="Details" asp-route-id="@bug.Id" class="fw-semibold">@bug.Title</a>
+                        </td>
+                        <td>
+                            @if (bug.ChangeRequest != null)
+                            {
+                                <span>@bug.ChangeRequest.CrNumber - @bug.ChangeRequest.Title</span>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(bug.ChangeRequestReferenceText))
+                            {
+                                <span>@bug.ChangeRequestReferenceText</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
                         </td>
                         <td>
                             <span class="badge bg-secondary">@bug.Status</span>
@@ -50,7 +65,7 @@
                 @if (!Model.Any())
                 {
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-3">No bugs yet.</td>
+                        <td colspan="6" class="text-center text-muted py-3">No bugs yet.</td>
                     </tr>
                 }
             </tbody>

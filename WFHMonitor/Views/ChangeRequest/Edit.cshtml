@@ -1,11 +1,11 @@
 @model WFHMonitor.ViewModels.ChangeRequestFormViewModel
-@{ ViewData["Title"] = "Edit Change Request"; }
+@{ ViewData["Title"] = "Edit Project"; }
 
 <div class="row">
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-warning">
-                <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>Edit Change Request</h5>
+                <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>Edit Project</h5>
             </div>
             <div class="card-body p-4">
                 <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="crForm">
@@ -81,6 +81,11 @@
                     <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
 
                     <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
+                            <input asp-for="GitHubRepoUrl" class="form-control" placeholder="https://github.com/owner/repo" />
+                            <div class="form-text">Owner and repo fields are auto-filled from this URL.</div>
+                        </div>
                         <div class="col-md-6">
                             <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
                             <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
@@ -93,7 +98,7 @@
 
                     <div class="mb-3">
                         <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
-                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/CR-2026-0001" />
+                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
                     </div>
 
                     <hr class="my-3" />

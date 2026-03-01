@@ -22,16 +22,7 @@ public class UserRegistrationService : IUserRegistrationService
         model.ConfirmPassword = string.IsNullOrWhiteSpace(model.ConfirmPassword) ? model.Password : model.ConfirmPassword;
         model.Role = string.IsNullOrWhiteSpace(model.Role) ? "Employee" : model.Role;
 
-        if (string.IsNullOrWhiteSpace(model.Email))
-        {
-            return new UserRegistrationResult
-            {
-                Succeeded = false,
-                Errors = new List<string> { "Email is required." }
-            };
-        }
-
-        var allowedRoles = new[] { "Employee", "Developer", "Tester" };
+        var allowedRoles = new[] { "Employee", "Developer", "Tester", "Agent" };
         var role = allowedRoles.Contains(model.Role) ? model.Role : "Employee";
 
         var user = new ApplicationUser

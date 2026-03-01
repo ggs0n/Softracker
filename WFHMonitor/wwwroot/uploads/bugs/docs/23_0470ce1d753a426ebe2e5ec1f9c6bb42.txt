@@ -1,0 +1,16 @@
+Evidence: Icon glyph rendering defect
+Observed date: 2026-02-27
+Environment: http://localhost:5227 (admin session)
+
+Affected pages:
+- /Admin
+- /TaskBoard
+- /ChangeRequest
+- /Bug
+- /Admin/Employees
+
+Observed behavior:
+Icons display as unreadable private-use glyph characters (examples: , , ) instead of intended icon graphics.
+
+Impact:
+Navigation/action affordance is degraded across core modules.
