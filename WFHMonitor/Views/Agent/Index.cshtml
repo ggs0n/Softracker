@@ -1,27 +1,434 @@
 @model WFHMonitor.ViewModels.AgentDashboardViewModel
 @{
     ViewData["Title"] = "Agent";
+    var avatarIcons = new[] { "bi-robot", "bi-cpu-fill", "bi-motherboard", "bi-hdd-rack", "bi-gear-wide-connected", "bi-lightning-charge-fill" };
+    var avatarColors = new[] { "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6" };
 }
 
+<style>
+    .agent-card {
+        border: 1px solid rgba(255,255,255,0.08);
+        background: linear-gradient(145deg, #1e1e2e, #16213e);
+        color: #e2e8f0;
+        border-radius: 16px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+        overflow: hidden;
+        position: relative;
+    }
+    .agent-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    }
+    .agent-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--agent-color, #6366f1);
+    }
+    .agent-avatar-wrap {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        flex-shrink: 0;
+        position: relative;
+        overflow: hidden;
+    }
+    .agent-avatar-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+    .agent-avatar-ring {
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        transition: border-color 0.3s ease;
+        pointer-events: none;
+    }
+    .agent-card.status-running .agent-avatar-ring {
+        border-color: #10b981;
+        animation: agent-ring-spin 3s linear infinite;
+        border-top-color: transparent;
+    }
+    /* Upload area */
+    .agent-avatar-outer {
+        position: relative;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+    .agent-avatar-wrap {
+        width: 80px !important;
+        height: 80px !important;
+        font-size: 2.1rem !important;
+    }
+    .agent-avatar-ring {
+        inset: -5px !important;
+    }
+    /* Hover-overlay on the circle (replace photo) */
+    .agent-avatar-circle-wrap {
+        position: relative;
+        width: 80px;
+        height: 80px;
+    }
+    .agent-avatar-upload-btn {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        border: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        gap: 2px;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        cursor: pointer;
+        z-index: 2;
+    }
+    .agent-avatar-upload-btn span {
+        font-size: 0.6rem;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .agent-avatar-circle-wrap:hover .agent-avatar-upload-btn {
+        opacity: 1;
+    }
+    /* "Add photo" dashed button shown when no photo */
+    .agent-add-photo-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #94a3b8;
+        background: rgba(255,255,255,0.04);
+        border: 1px dashed rgba(255,255,255,0.18);
+        border-radius: 6px;
+        padding: 3px 8px;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s, background 0.15s;
+        white-space: nowrap;
+    }
+    .agent-add-photo-btn:hover {
+        color: #e2e8f0;
+        border-color: rgba(255,255,255,0.4);
+        background: rgba(255,255,255,0.08);
+    }
+    /* "Replace" chip shown under photo */
+    .agent-replace-photo-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.63rem;
+        font-weight: 600;
+        color: #64748b;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        transition: color 0.15s;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .agent-replace-photo-btn:hover {
+        color: #94a3b8;
+    }
+    @@keyframes agent-ring-spin {
+        to { transform: rotate(360deg); }
+    }
+    .agent-status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+        flex-shrink: 0;
+    }
+    .agent-status-dot.running {
+        background: #10b981;
+        box-shadow: 0 0 6px #10b981;
+        animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+    .agent-status-dot.idle {
+        background: #64748b;
+    }
+    @@keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.85); }
+    }
+    .agent-stat-pill {
+        background: rgba(255,255,255,0.06);
+        border-radius: 8px;
+        padding: 6px 12px;
+        flex: 1;
+        text-align: center;
+    }
+    .agent-stat-pill .stat-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .agent-stat-pill .stat-label {
+        font-size: 0.68rem;
+        opacity: 0.55;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-top: 2px;
+    }
+    .agent-card-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.2;
+    }
+    .agent-card-desc {
+        font-size: 0.75rem;
+        opacity: 0.5;
+        margin-top: 2px;
+    }
+    .agent-status-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+    }
+    .agent-status-badge.running {
+        background: rgba(16,185,129,0.15);
+        color: #10b981;
+        border: 1px solid rgba(16,185,129,0.3);
+    }
+    .agent-status-badge.idle {
+        background: rgba(100,116,139,0.15);
+        color: #94a3b8;
+        border: 1px solid rgba(100,116,139,0.2);
+    }
+
+    /* ── Performance Rating ── */
+    .perf-section {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .perf-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+    }
+    .perf-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #64748b;
+    }
+    .perf-grade-badge {
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 1px 9px;
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+        border: 1px solid;
+    }
+    .perf-bar-bg {
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.07);
+        overflow: hidden;
+    }
+    .perf-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.6s ease;
+    }
+    .perf-stats {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+    .perf-stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.65rem;
+        color: #64748b;
+    }
+    .perf-stat-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .perf-score-text {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #94a3b8;
+    }
+</style>
+
 <div class="row g-3 mb-4">
+    @{ int agentIdx = 0; }
     @foreach (var agent in Model.Agents)
     {
+        var icon = avatarIcons[agentIdx % avatarIcons.Length];
+        var color = avatarColors[agentIdx % avatarColors.Length];
+        var isRunning = agent.Status == "Running";
+        var statusClass = isRunning ? "running" : "idle";
+        var formId = $"photo-form-{agentIdx}";
+        var fileInputId = $"photo-input-{agentIdx}";
+        agentIdx++;
         <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <h5 class="card-title mb-1">@agent.Name</h5>
-                        <span class="badge @(agent.Status == "Running" ? "bg-success" : "bg-secondary")">@agent.Status</span>
+            <div class="agent-card h-100 @("status-" + statusClass)" style="--agent-color: @color">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+
+                        @* Avatar with upload controls (Admin only) *@
+                        <div class="agent-avatar-outer">
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <form id="@formId"
+                                      asp-controller="Agent" asp-action="UploadPhoto"
+                                      method="post" enctype="multipart/form-data"
+                                      style="display:none">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="profileFolder" value="@agent.ProfileFolder" />
+                                    <input type="file" id="@fileInputId" name="photo"
+                                           accept="image/jpeg,image/png,image/gif,image/webp"
+                                           onchange="document.getElementById('@formId').submit()" />
+                                </form>
+                            }
+
+                            @* The circle — hover shows camera overlay when Admin *@
+                            <div class="agent-avatar-circle-wrap">
+                                <div class="agent-avatar-wrap" style="background: @(color + "22")">
+                                    @if (!string.IsNullOrEmpty(agent.PhotoUrl))
+                                    {
+                                        <img src="@agent.PhotoUrl" alt="@agent.Name photo" />
+                                    }
+                                    else
+                                    {
+                                        <i class="bi @icon" style="color: @color"></i>
+                                    }
+                                    <div class="agent-avatar-ring"></div>
+                                </div>
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <button type="button"
+                                            class="agent-avatar-upload-btn"
+                                            title="@(string.IsNullOrEmpty(agent.PhotoUrl) ? "Upload photo" : "Replace photo")"
+                                            onclick="document.getElementById('@fileInputId').click()">
+                                        <i class="bi bi-camera-fill"></i>
+                                        <span>@(string.IsNullOrEmpty(agent.PhotoUrl) ? "Upload" : "Replace")</span>
+                                    </button>
+                                }
+                            </div>
+
+                            @* Below the circle: visible CTA when no photo; replace link when photo exists *@
+                            @if (User.IsInRole("Admin"))
+                            {
+                                if (string.IsNullOrEmpty(agent.PhotoUrl))
+                                {
+                                    <button type="button"
+                                            class="agent-add-photo-btn"
+                                            onclick="document.getElementById('@fileInputId').click()">
+                                        <i class="bi bi-camera-fill"></i> Add photo
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="agent-replace-photo-btn"
+                                            onclick="document.getElementById('@fileInputId').click()">
+                                        <i class="bi bi-arrow-repeat"></i> Replace
+                                    </button>
+                                }
+                            }
+                        </div>
+
+                        <div class="flex-grow-1 min-width-0">
+                            <div class="agent-card-name">@agent.Name</div>
+                            <div class="agent-card-desc">@agent.Description</div>
+                        </div>
+                        <span class="agent-status-badge @statusClass">
+                            <span class="agent-status-dot @statusClass"></span>@agent.Status
+                        </span>
                     </div>
-                    <div class="small text-muted">@agent.Description</div>
-                    <div class="small text-muted mb-3">Agent Summary</div>
-                    <div class="d-flex justify-content-between">
-                        <span>Running Work Items</span>
-                        <span class="fw-semibold">@agent.RunningWorkItems</span>
+                    <div class="d-flex gap-2">
+                        <div class="agent-stat-pill">
+                            <div class="stat-value" style="color: @color">@agent.RunningWorkItems</div>
+                            <div class="stat-label">Running</div>
+                        </div>
+                        <div class="agent-stat-pill">
+                            <div class="stat-value">@agent.QueuedWorkItems</div>
+                            <div class="stat-label">Queued</div>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between">
-                        <span>Queued Work Items</span>
-                        <span class="fw-semibold">@agent.QueuedWorkItems</span>
+
+                    @* Performance Rating *@
+                    <div class="perf-section">
+                        <div class="perf-header">
+                            <span class="perf-label">Performance Rating</span>
+                            @if (agent.PerformanceScore >= 0)
+                            {
+                                <span class="perf-grade-badge"
+                                      style="color:@agent.PerformanceGradeColor;border-color:@(agent.PerformanceGradeColor + "55");background:@(agent.PerformanceGradeColor + "18")">
+                                    @agent.PerformanceGrade
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="perf-grade-badge" style="color:#475569;border-color:#33415533;background:rgba(51,65,85,0.12)">N/A</span>
+                            }
+                        </div>
+                        @if (agent.PerformanceScore >= 0)
+                        {
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <div class="perf-bar-bg flex-grow-1">
+                                    <div class="perf-bar-fill"
+                                         style="width:@(agent.PerformanceScore)%;background:@agent.PerformanceGradeColor"></div>
+                                </div>
+                                <span class="perf-score-text">@agent.PerformanceScore%</span>
+                            </div>
+                            <div class="perf-stats">
+                                <span class="perf-stat">
+                                    <span class="perf-stat-dot" style="background:#10b981"></span>
+                                    @agent.Completed done
+                                </span>
+                                <span class="perf-stat">
+                                    <span class="perf-stat-dot" style="background:#ef4444"></span>
+                                    @agent.Failed failed
+                                </span>
+                                <span class="perf-stat">
+                                    <span class="perf-stat-dot" style="background:#eab308"></span>
+                                    @agent.Blocked blocked
+                                </span>
+                                <span class="perf-stat" style="margin-left:auto">
+                                    @agent.TotalAssigned total
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="font-size:0.68rem;color:#334155;margin-top:2px">No tasks assigned yet</div>
+                        }
                     </div>
                 </div>
             </div>
@@ -29,215 +436,585 @@
     }
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-dark text-white">
-            <div class="card-body py-3">
-                <div class="small opacity-75">Total</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Total</div>
+@* ── Queue Snapshot ───────────────────────────────────────────── *@
+<style>
+    /* ── Queue bar ── */
+    .qs-bar {
+        background: linear-gradient(135deg, #0f172a, #1e1b4b);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px;
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        gap: 0;
+        flex-wrap: wrap;
+        row-gap: 12px;
+        margin-bottom: 28px;
+    }
+    .qs-item {
+        flex: 1 1 100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 12px;
+        border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .qs-item:last-child { border-right: none; }
+    .qs-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.03em;
+    }
+    .qs-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        opacity: 0.45;
+        margin-top: 4px;
+        color: #e2e8f0;
+    }
+    .qs-divider {
+        width: 1px;
+        height: 36px;
+        background: rgba(255,255,255,0.06);
+        flex-shrink: 0;
+    }
+
+    /* ── AI panel shared ── */
+    .ai-panel {
+        background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .ai-panel-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.02);
+    }
+    .ai-panel-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+    .ai-panel-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #cbd5e1;
+    }
+    .ai-panel-count {
+        margin-left: auto;
+        font-size: 0.65rem;
+        font-weight: 700;
+        background: rgba(255,255,255,0.07);
+        color: #94a3b8;
+        border-radius: 999px;
+        padding: 2px 9px;
+        letter-spacing: 0.04em;
+    }
+    .ai-panel-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 6px 0;
+        max-height: 340px;
+    }
+    .ai-panel-body::-webkit-scrollbar { width: 4px; }
+    .ai-panel-body::-webkit-scrollbar-track { background: transparent; }
+    .ai-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .ai-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 40px 20px;
+        color: #475569;
+        font-size: 0.78rem;
+        text-align: center;
+    }
+    .ai-empty i { font-size: 1.6rem; opacity: 0.3; }
+
+    /* ── Work item rows ── */
+    .wi-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 10px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        transition: background 0.15s;
+    }
+    .wi-row:last-child { border-bottom: none; }
+    .wi-row:hover { background: rgba(255,255,255,0.03); }
+    .wi-pulse {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 6px #10b981;
+        animation: pulse-dot 1.4s ease-in-out infinite;
+        flex-shrink: 0;
+        margin-top: 5px;
+    }
+    .wi-body { flex: 1; min-width: 0; }
+    .wi-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .wi-title a { color: inherit; text-decoration: none; }
+    .wi-title a:hover { color: #6366f1; }
+    .wi-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 3px;
+        flex-wrap: wrap;
+    }
+    .wi-bug-num {
+        font-size: 0.67rem;
+        font-weight: 700;
+        color: #6366f1;
+        font-family: monospace;
+        letter-spacing: 0.03em;
+    }
+    .wi-status-chip {
+        font-size: 0.62rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: rgba(16,185,129,0.15);
+        color: #10b981;
+        border: 1px solid rgba(16,185,129,0.25);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .wi-time {
+        font-size: 0.63rem;
+        color: #475569;
+        margin-left: auto;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ── Cron job rows ── */
+    .cj-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        transition: background 0.15s;
+    }
+    .cj-row:last-child { border-bottom: none; }
+    .cj-row:hover { background: rgba(255,255,255,0.03); }
+    .cj-icon-wrap {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: rgba(234,179,8,0.12);
+        color: #eab308;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+    .cj-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+    .cj-desc {
+        font-size: 0.68rem;
+        color: #475569;
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cj-cron {
+        font-family: monospace;
+        font-size: 0.7rem;
+        color: #eab308;
+        background: rgba(234,179,8,0.08);
+        border: 1px solid rgba(234,179,8,0.2);
+        border-radius: 6px;
+        padding: 2px 8px;
+        white-space: nowrap;
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+    .cj-running-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 5px #10b981;
+        animation: pulse-dot 1.4s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+
+    /* ── Activity feed ── */
+    .af-row {
+        display: flex;
+        gap: 14px;
+        padding: 10px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        transition: background 0.15s;
+    }
+    .af-row:last-child { border-bottom: none; }
+    .af-row:hover { background: rgba(255,255,255,0.03); }
+    .af-timeline {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex-shrink: 0;
+        width: 14px;
+        padding-top: 4px;
+    }
+    .af-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #6366f1;
+        flex-shrink: 0;
+        box-shadow: 0 0 6px rgba(99,102,241,0.5);
+    }
+    .af-line {
+        flex: 1;
+        width: 1px;
+        background: rgba(99,102,241,0.15);
+        margin-top: 4px;
+        min-height: 16px;
+    }
+    .af-body { flex: 1; min-width: 0; }
+    .af-action {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        line-height: 1.3;
+    }
+    .af-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        flex-wrap: wrap;
+    }
+    .af-bug {
+        font-size: 0.67rem;
+        font-weight: 700;
+        color: #6366f1;
+        font-family: monospace;
+        text-decoration: none;
+    }
+    .af-bug:hover { color: #818cf8; }
+    .af-title-text {
+        font-size: 0.68rem;
+        color: #475569;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+    }
+    .af-transition {
+        font-size: 0.65rem;
+        font-family: monospace;
+        color: #94a3b8;
+        background: rgba(255,255,255,0.05);
+        border-radius: 5px;
+        padding: 1px 7px;
+        white-space: nowrap;
+    }
+    .af-time {
+        margin-left: auto;
+        font-size: 0.63rem;
+        color: #334155;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ── All Cron Jobs table-card ── */
+    .cj-all-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .cj-all-row:last-child { border-bottom: none; }
+    .cj-badge-enabled {
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(16,185,129,0.12);
+        color: #10b981;
+        border: 1px solid rgba(16,185,129,0.2);
+        flex-shrink: 0;
+    }
+    .cj-badge-disabled {
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(100,116,139,0.12);
+        color: #64748b;
+        border: 1px solid rgba(100,116,139,0.2);
+        flex-shrink: 0;
+    }
+    .cj-running-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(16,185,129,0.12);
+        color: #10b981;
+        border: 1px solid rgba(16,185,129,0.2);
+        flex-shrink: 0;
+    }
+</style>
+
+@* Queue Snapshot Bar *@
+<div class="qs-bar mb-4">
+    <div class="qs-item">
+        <div class="qs-value" style="color:#e2e8f0">@Model.QueueSnapshot.Total</div>
+        <div class="qs-label">Total</div>
+    </div>
+    <div class="qs-item">
+        <div class="qs-value" style="color:#94a3b8">@Model.QueueSnapshot.Queued</div>
+        <div class="qs-label">Queued</div>
+    </div>
+    <div class="qs-item">
+        <div class="qs-value" style="color:#6366f1">@Model.QueueSnapshot.InProgress</div>
+        <div class="qs-label">In Progress</div>
+    </div>
+    <div class="qs-item">
+        <div class="qs-value" style="color:#eab308">@Model.QueueSnapshot.Blocked</div>
+        <div class="qs-label">Blocked</div>
+    </div>
+    <div class="qs-item">
+        <div class="qs-value" style="color:#10b981">@Model.QueueSnapshot.PrRaised</div>
+        <div class="qs-label">PR Raised</div>
+    </div>
+    <div class="qs-item">
+        <div class="qs-value" style="color:#ef4444">@Model.QueueSnapshot.Failed</div>
+        <div class="qs-label">Failed</div>
+    </div>
+</div>
+
+@* Top row: Running Work Items + Running Cron Jobs *@
+<div class="row g-3 mb-3">
+    @* Running Agent Work Items *@
+    <div class="col-12 col-xl-6">
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <div class="ai-panel-icon" style="background:rgba(99,102,241,0.15);color:#6366f1">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                </div>
+                <span class="ai-panel-title">Running Work Items</span>
+                <span class="ai-panel-count">@Model.RunningAgentWorkItems.Count active</span>
+            </div>
+            <div class="ai-panel-body">
+                @if (Model.RunningAgentWorkItems.Count == 0)
+                {
+                    <div class="ai-empty">
+                        <i class="bi bi-inbox"></i>
+                        No work items currently executing
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in Model.RunningAgentWorkItems)
+                    {
+                        <div class="wi-row">
+                            <div class="wi-pulse"></div>
+                            <div class="wi-body">
+                                <div class="wi-title">
+                                    <a asp-controller="Bug" asp-action="Details" asp-route-id="@item.Id">@item.Title</a>
+                                </div>
+                                <div class="wi-meta">
+                                    <span class="wi-bug-num">@item.BugNumber</span>
+                                    <span class="wi-status-chip">@item.AgentStatus</span>
+                                </div>
+                            </div>
+                            <span class="wi-time">@item.UpdatedAt.ToLocalTime().ToString("HH:mm")</span>
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-secondary text-white">
-            <div class="card-body py-3">
-                <div class="small opacity-75">Queued</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Queued</div>
+
+    @* Running Cron Jobs *@
+    <div class="col-12 col-xl-6">
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <div class="ai-panel-icon" style="background:rgba(234,179,8,0.12);color:#eab308">
+                    <i class="bi bi-clock-fill"></i>
+                </div>
+                <span class="ai-panel-title">Running Cron Jobs</span>
+                <span class="ai-panel-count">@Model.RunningCronJobs.Count running</span>
             </div>
-        </div>
-    </div>
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-primary text-white">
-            <div class="card-body py-3">
-                <div class="small opacity-75">In Progress</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.InProgress</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-warning">
-            <div class="card-body py-3">
-                <div class="small text-dark-50">Blocked</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Blocked</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-success text-white">
-            <div class="card-body py-3">
-                <div class="small opacity-75">PR Raised</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.PrRaised</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2 col-6">
-        <div class="card text-center border-0 bg-danger text-white">
-            <div class="card-body py-3">
-                <div class="small opacity-75">Failed</div>
-                <div class="fs-4 fw-semibold">@Model.QueueSnapshot.Failed</div>
+            <div class="ai-panel-body">
+                @if (Model.RunningCronJobs.Count == 0)
+                {
+                    <div class="ai-empty">
+                        <i class="bi bi-clock"></i>
+                        No scheduled jobs currently running
+                    </div>
+                }
+                else
+                {
+                    @foreach (var job in Model.RunningCronJobs)
+                    {
+                        <div class="cj-row">
+                            <div class="cj-running-dot"></div>
+                            <div class="cj-icon-wrap"><i class="bi bi-gear-fill"></i></div>
+                            <div class="flex-grow-1 min-width-0">
+                                <div class="cj-name">@job.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(job.Description))
+                                {
+                                    <div class="cj-desc">@job.Description</div>
+                                }
+                            </div>
+                            <span class="cj-cron">@job.CronExpression</span>
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-12 col-xl-6">
-        <div class="card shadow-sm h-100">
-            <div class="card-header">
-                <strong>Running Agent Work Items</strong>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Bug</th>
-                                <th>Title</th>
-                                <th>Status</th>
-                                <th>Updated</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.RunningAgentWorkItems.Count == 0)
-                            {
-                                <tr><td colspan="4" class="text-center text-muted py-3">No running agent work items.</td></tr>
-                            }
-                            else
-                            {
-                                @foreach (var item in Model.RunningAgentWorkItems)
-                                {
-                                    <tr>
-                                        <td><a asp-controller="Bug" asp-action="Details" asp-route-id="@item.Id">@item.BugNumber</a></td>
-                                        <td>@item.Title</td>
-                                        <td>@item.AgentStatus</td>
-                                        <td>@item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-xl-6">
-        <div class="card shadow-sm h-100">
-            <div class="card-header">
-                <strong>Running Cron Jobs</strong>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Name</th>
-                                <th>Cron</th>
-                                <th>Enabled</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.RunningCronJobs.Count == 0)
-                            {
-                                <tr><td colspan="3" class="text-center text-muted py-3">No cron jobs marked as running.</td></tr>
-                            }
-                            else
-                            {
-                                @foreach (var job in Model.RunningCronJobs)
-                                {
-                                    <tr>
-                                        <td>@job.Name</td>
-                                        <td><code>@job.CronExpression</code></td>
-                                        <td>@(job.IsEnabled ? "Yes" : "No")</td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
+@* Activity Feed — full width *@
+<div class="row g-3 mb-3">
     <div class="col-12">
-        <div class="card shadow-sm mb-4">
-            <div class="card-header">
-                <strong>Recent Agent Activities</strong>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Time</th>
-                                <th>Bug</th>
-                                <th>Action</th>
-                                <th>Status Change</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.RecentActivities.Count == 0)
-                            {
-                                <tr><td colspan="4" class="text-center text-muted py-3">No activity recorded yet.</td></tr>
-                            }
-                            else
-                            {
-                                @foreach (var activity in Model.RecentActivities)
-                                {
-                                    <tr>
-                                        <td class="text-muted">@activity.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                                        <td>
-                                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@activity.BugId">@activity.BugNumber</a>
-                                            <div class="small text-muted">@activity.Title</div>
-                                        </td>
-                                        <td>@activity.Action</td>
-                                        <td>@(string.IsNullOrWhiteSpace(activity.StatusTransition) ? "-" : activity.StatusTransition)</td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <div class="ai-panel-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+                    <i class="bi bi-activity"></i>
                 </div>
+                <span class="ai-panel-title">Recent Agent Activity</span>
+                <span class="ai-panel-count">last @Model.RecentActivities.Count events</span>
+            </div>
+            <div class="ai-panel-body" style="max-height:320px">
+                @if (Model.RecentActivities.Count == 0)
+                {
+                    <div class="ai-empty">
+                        <i class="bi bi-broadcast"></i>
+                        No activity recorded yet
+                    </div>
+                }
+                else
+                {
+                    @foreach (var activity in Model.RecentActivities)
+                    {
+                        <div class="af-row">
+                            <div class="af-timeline">
+                                <div class="af-dot"></div>
+                                <div class="af-line"></div>
+                            </div>
+                            <div class="af-body">
+                                <div class="af-action">@activity.Action</div>
+                                <div class="af-meta">
+                                    <a asp-controller="Bug" asp-action="Details" asp-route-id="@activity.BugId" class="af-bug">@activity.BugNumber</a>
+                                    <span class="af-title-text">@activity.Title</span>
+                                    @if (!string.IsNullOrWhiteSpace(activity.StatusTransition))
+                                    {
+                                        <span class="af-transition">@activity.StatusTransition</span>
+                                    }
+                                </div>
+                            </div>
+                            <span class="af-time">@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+                        </div>
+                    }
+                }
             </div>
         </div>
+    </div>
+</div>
 
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <strong>All Cron Jobs</strong>
+@* All Cron Jobs *@
+<div class="row g-3">
+    <div class="col-12">
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <div class="ai-panel-icon" style="background:rgba(234,179,8,0.12);color:#eab308">
+                    <i class="bi bi-calendar3"></i>
+                </div>
+                <span class="ai-panel-title">All Scheduled Jobs</span>
+                <span class="ai-panel-count">@Model.CronJobs.Count configured</span>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Name</th>
-                                <th>Description</th>
-                                <th>Cron</th>
-                                <th>Enabled</th>
-                                <th>Running</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.CronJobs.Count == 0)
+            <div class="ai-panel-body" style="max-height:none">
+                @if (Model.CronJobs.Count == 0)
+                {
+                    <div class="ai-empty">
+                        <i class="bi bi-calendar-x"></i>
+                        No cron jobs configured
+                    </div>
+                }
+                else
+                {
+                    @foreach (var job in Model.CronJobs)
+                    {
+                        <div class="cj-all-row">
+                            @if (job.IsRunning)
                             {
-                                <tr><td colspan="5" class="text-center text-muted py-3">No cron jobs configured.</td></tr>
+                                <div class="cj-running-dot"></div>
                             }
                             else
                             {
-                                @foreach (var job in Model.CronJobs)
-                                {
-                                    <tr>
-                                        <td>@job.Name</td>
-                                        <td>@job.Description</td>
-                                        <td><code>@job.CronExpression</code></td>
-                                        <td>@(job.IsEnabled ? "Yes" : "No")</td>
-                                        <td>@(job.IsRunning ? "Yes" : "No")</td>
-                                    </tr>
-                                }
+                                <div style="width:7px;height:7px;border-radius:50%;background:rgba(100,116,139,0.3);flex-shrink:0"></div>
                             }
-                        </tbody>
-                    </table>
-                </div>
+                            <div class="cj-icon-wrap"><i class="bi bi-gear-fill"></i></div>
+                            <div class="flex-grow-1 min-width-0">
+                                <div class="cj-name">@job.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(job.Description))
+                                {
+                                    <div class="cj-desc">@job.Description</div>
+                                }
+                            </div>
+                            <span class="cj-cron">@job.CronExpression</span>
+                            @if (job.IsEnabled)
+                            {
+                                <span class="cj-badge-enabled">Enabled</span>
+                            }
+                            else
+                            {
+                                <span class="cj-badge-disabled">Disabled</span>
+                            }
+                            @if (job.IsRunning)
+                            {
+                                <span class="cj-running-badge">Running</span>
+                            }
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>

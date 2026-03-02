@@ -1,76 +1,101 @@
 @model TaskBoardViewModel
 @{ ViewData["Title"] = "Task Board"; }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-kanban me-2 text-primary"></i>Task Board</h2>
+<div class="mod-header mb-4">
+    <div class="mod-header-left">
+        <h1 class="mod-title"><i class="bi bi-kanban-fill" style="color:#818cf8"></i> Task Board</h1>
+        <p class="mod-subtitle">Track work in progress across all stages</p>
+    </div>
     @if (User.IsInRole("Admin"))
     {
-        <a asp-action="Create" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-2"></i>New Task
+        <a asp-action="Create" class="dp-btn-primary">
+            <i class="bi bi-plus-circle"></i> New Task
         </a>
     }
 </div>
 
 @if (User.IsInRole("Developer"))
 {
-    <div class="card">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-list-check me-2"></i>Assigned Tasks</span>
-            <span class="badge bg-light text-dark">@Model.AssignedTasks.Count()</span>
+    <div class="dp" style="--dp-color:#6366f1">
+        <div class="dp-header">
+            <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <span class="dp-header-title">My Assigned Tasks</span>
+            <span class="dp-header-count">@Model.AssignedTasks.Count() tasks</span>
         </div>
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Detail</th>
-                    <th>Description</th>
-                    <th>Timeline</th>
-                    <th>Related Project / Bug</th>
-                    <th>Status</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                @foreach (var task in Model.AssignedTasks)
-                {
-                    <tr>
-                        <td class="fw-semibold">@task.Title</td>
-                        <td>@(string.IsNullOrWhiteSpace(task.Details) ? "-" : task.Details)</td>
-                        <td>@(string.IsNullOrWhiteSpace(task.Description) ? "-" : task.Description)</td>
-                        <td>
-                            @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
-                            {
-                                <span>@task.TimelineStart?.ToString("yyyy-MM-dd") - @task.TimelineEnd?.ToString("yyyy-MM-dd")</span>
-                            }
-                            else if (task.DueDate.HasValue)
-                            {
-                                <span>Due: @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
-                            }
-                            else
-                            {
-                                <span>-</span>
-                            }
-                        </td>
-                        <td>
-                            <div>@(task.ChangeRequest != null ? $"{task.ChangeRequest.CrNumber} - {task.ChangeRequest.Title}" : "-")</div>
-                            <div>@(task.BugReport != null ? $"{task.BugReport.BugNumber} - {task.BugReport.Title}" : "-")</div>
-                        </td>
-                        <td>@task.Status</td>
-                        <td>
-                            <a asp-action="Edit" asp-route-id="@task.Id" class="btn btn-sm btn-outline-primary">Detail</a>
-                        </td>
-                    </tr>
-                }
-                @if (!Model.AssignedTasks.Any())
-                {
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-4">No tasks assigned.</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
+
+        @if (!Model.AssignedTasks.Any())
+        {
+            <div class="dp-empty">
+                <i class="bi bi-inbox"></i>
+                No tasks assigned to you
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="dp-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Detail</th>
+                            <th>Timeline</th>
+                            <th>Related</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in Model.AssignedTasks)
+                        {
+                            var stCls = task.Status.ToString() switch {
+                                "ToDo"       => "dp-badge-slate",
+                                "InProgress" => "dp-badge-indigo",
+                                "Blocked"    => "dp-badge-red",
+                                "Done"       => "dp-badge-green",
+                                _            => "dp-badge-slate"
+                            };
+                            <tr>
+                                <td class="dp-cell-title">@task.Title</td>
+                                <td class="dp-cell-muted">@(string.IsNullOrWhiteSpace(task.Details) ? "—" : task.Details)</td>
+                                <td class="dp-cell-muted" style="font-size:0.75rem;white-space:nowrap">
+                                    @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
+                                    {
+                                        @(task.TimelineStart?.ToString("yyyy-MM-dd"))<span class="mx-1" style="color:#334155">→</span>@(task.TimelineEnd?.ToString("yyyy-MM-dd"))
+                                    }
+                                    else if (task.DueDate.HasValue)
+                                    {
+                                        <span>Due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
+                                    }
+                                    else { <span>—</span> }
+                                </td>
+                                <td>
+                                    @if (task.ChangeRequest != null)
+                                    {
+                                        <span class="dp-badge dp-badge-indigo me-1">@task.ChangeRequest.CrNumber</span>
+                                    }
+                                    @if (task.BugReport != null)
+                                    {
+                                        <span class="dp-badge dp-badge-red">@task.BugReport.BugNumber</span>
+                                    }
+                                    @if (task.ChangeRequest == null && task.BugReport == null)
+                                    {
+                                        <span class="dp-cell-muted">—</span>
+                                    }
+                                </td>
+                                <td><span class="dp-badge @stCls">@task.Status</span></td>
+                                <td>
+                                    <a asp-action="Edit" asp-route-id="@task.Id" class="dp-btn" title="View / Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 }
 else

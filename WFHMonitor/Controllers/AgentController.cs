@@ -12,11 +12,15 @@ public class AgentController : Controller
 {
     private readonly ApplicationDbContext _db;
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _env;
 
-    public AgentController(ApplicationDbContext db, IConfiguration configuration)
+    private static readonly string[] AllowedPhotoExts = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+
+    public AgentController(ApplicationDbContext db, IConfiguration configuration, IWebHostEnvironment env)
     {
         _db = db;
         _configuration = configuration;
+        _env = env;
     }
 
     public async Task<IActionResult> Index()
@@ -83,6 +87,35 @@ public class AgentController : Controller
             mainAgent.Status = runningAgentItems.Count > 0 ? "Running" : "Idle";
             mainAgent.RunningWorkItems = runningAgentItems.Count;
             mainAgent.QueuedWorkItems = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.Queued), StringComparison.Ordinal));
+
+            // Performance stats
+            mainAgent.TotalAssigned = agentItems.Count;
+            mainAgent.Completed = queueSnapshot.PrRaised;
+            mainAgent.Failed = queueSnapshot.Failed;
+            mainAgent.Blocked = queueSnapshot.Blocked;
+
+            if (mainAgent.TotalAssigned > 0)
+            {
+                // Score = (completed * 100 - failed * 40 - blocked * 10) / total, clamped 0-100
+                var raw = (mainAgent.Completed * 100 - mainAgent.Failed * 40 - mainAgent.Blocked * 10)
+                          / (double)mainAgent.TotalAssigned;
+                mainAgent.PerformanceScore = Math.Clamp((int)Math.Round(raw), 0, 100);
+            }
+        }
+
+        // Resolve uploaded photos
+        var uploadsDir = Path.Combine(_env.WebRootPath, "uploads", "agents");
+        foreach (var agent in agents)
+        {
+            foreach (var ext in AllowedPhotoExts)
+            {
+                var file = Path.Combine(uploadsDir, agent.ProfileFolder + ext);
+                if (System.IO.File.Exists(file))
+                {
+                    agent.PhotoUrl = $"/uploads/agents/{agent.ProfileFolder}{ext}";
+                    break;
+                }
+            }
         }
 
         var vm = new AgentDashboardViewModel
@@ -100,6 +133,55 @@ public class AgentController : Controller
         return View(vm);
     }
 
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UploadPhoto(string profileFolder, IFormFile photo)
+    {
+        if (string.IsNullOrWhiteSpace(profileFolder) || photo == null || photo.Length == 0)
+        {
+            TempData["Error"] = "Invalid upload request.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Sanitise the folder slug — only allow safe filename characters
+        var slug = System.Text.RegularExpressions.Regex.Replace(profileFolder, @"[^a-zA-Z0-9_\-]", "");
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            TempData["Error"] = "Invalid agent identifier.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var ext = Path.GetExtension(photo.FileName).ToLowerInvariant();
+        if (!AllowedPhotoExts.Contains(ext))
+        {
+            TempData["Error"] = "Only image files (jpg, png, gif, webp) are allowed.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (photo.Length > 5 * 1024 * 1024)
+        {
+            TempData["Error"] = "Photo must be under 5 MB.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var dir = Path.Combine(_env.WebRootPath, "uploads", "agents");
+        Directory.CreateDirectory(dir);
+
+        // Delete any previous photo for this agent (different extension)
+        foreach (var oldExt in AllowedPhotoExts)
+        {
+            var old = Path.Combine(dir, slug + oldExt);
+            if (System.IO.File.Exists(old)) System.IO.File.Delete(old);
+        }
+
+        var dest = Path.Combine(dir, slug + ext);
+        await using var stream = new FileStream(dest, FileMode.Create);
+        await photo.CopyToAsync(stream);
+
+        TempData["Success"] = "Agent photo updated.";
+        return RedirectToAction(nameof(Index));
+    }
+
     private static List<AgentInfoViewModel> LoadOpenClawAgents()
     {
         var result = new List<AgentInfoViewModel>();
@@ -114,7 +196,8 @@ public class AgentController : Controller
                 {
                     Name = "OpenClaw Main",
                     Description = "Default OpenClaw agent profile.",
-                    Status = "Unknown"
+                    Status = "Unknown",
+                    ProfileFolder = "main"
                 }
             };
         }
@@ -141,7 +224,8 @@ public class AgentController : Controller
                 Description = description,
                 Status = "Idle",
                 RunningWorkItems = 0,
-                QueuedWorkItems = 0
+                QueuedWorkItems = 0,
+                ProfileFolder = folder!
             });
         }
 

@@ -1,88 +1,98 @@
 @model (List<WorkTask> Tasks, string Title, string Color, string Icon)
 
+@{
+    var colColor = Model.Color switch {
+        "primary"   => "#6366f1",
+        "success"   => "#10b981",
+        "danger"    => "#ef4444",
+        "warning"   => "#eab308",
+        _           => "#64748b"
+    };
+}
+
 <div class="col-md-3">
-    <div class="card h-100">
-        <div class="card-header bg-@Model.Color @(Model.Color == "secondary" ? "" : "text-white") d-flex justify-content-between align-items-center">
-            <span><i class="bi @Model.Icon me-2"></i>@Model.Title</span>
-            <span class="badge bg-white text-dark">@Model.Tasks.Count</span>
+    <div class="dp-kanban-col h-100" style="--kc-color:@colColor">
+        <div class="dp-kanban-header">
+            <i class="bi @Model.Icon" style="color:@colColor;font-size:0.9rem"></i>
+            <span class="dp-kanban-title">@Model.Title</span>
+            <span class="dp-kanban-count">@Model.Tasks.Count</span>
         </div>
-        <div class="card-body p-2" style="min-height: 300px;">
+
+        <div style="padding:10px;min-height:300px;display:flex;flex-direction:column;gap:8px">
             @foreach (var task in Model.Tasks)
             {
-                <div class="card mb-2 border-start border-@Model.Color border-3">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h6 class="card-title mb-1 fw-semibold">@task.Title</h6>
-                            <div class="dropdown ms-2">
-                                <button class="btn btn-sm btn-light py-0 px-1" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" asp-action="Edit" asp-route-id="@task.Id">
-                                        <i class="bi bi-pencil me-2"></i>Edit
-                                    </a></li>
-                                    @if (User.IsInRole("Admin"))
-                                    {
-                                        <li>
-                                            <form asp-action="Delete" asp-route-id="@task.Id" method="post"
-                                                  onsubmit="return confirm('Delete this task?')">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit" class="dropdown-item text-danger">
-                                                    <i class="bi bi-trash me-2"></i>Delete
-                                                </button>
-                                            </form>
-                                        </li>
-                                    }
-                                </ul>
-                            </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-left:3px solid @colColor;border-radius:10px;padding:12px 14px;transition:background 0.15s"
+                     onmouseenter="this.style.background='rgba(255,255,255,0.07)'"
+                     onmouseleave="this.style.background='rgba(255,255,255,0.04)'">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div style="font-size:0.82rem;font-weight:600;color:#e2e8f0;line-height:1.3">@task.Title</div>
+                        <div class="dropdown flex-shrink-0">
+                            <button class="dp-btn" data-bs-toggle="dropdown" style="width:24px;height:24px;font-size:0.7rem">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" style="background:#1e1e2d;border:1px solid rgba(255,255,255,0.1);border-radius:10px;min-width:140px">
+                                <li>
+                                    <a class="dropdown-item" asp-action="Edit" asp-route-id="@task.Id"
+                                       style="color:#cbd5e1;font-size:0.82rem;padding:8px 14px">
+                                        <i class="bi bi-pencil me-2" style="color:#818cf8"></i>Edit
+                                    </a>
+                                </li>
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <li>
+                                        <form asp-action="Delete" asp-route-id="@task.Id" method="post"
+                                              onsubmit="return confirm('Delete this task?')">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item"
+                                                    style="color:#f87171;font-size:0.82rem;padding:8px 14px;background:none;border:none;width:100%;text-align:left">
+                                                <i class="bi bi-trash me-2"></i>Delete
+                                            </button>
+                                        </form>
+                                    </li>
+                                }
+                            </ul>
                         </div>
-                        @if (!string.IsNullOrEmpty(task.Description))
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(task.Description))
+                    {
+                        <p style="font-size:0.72rem;color:#475569;margin:5px 0 0;line-height:1.4">@task.Description</p>
+                    }
+
+                    <div class="d-flex gap-1 flex-wrap mt-2">
+                        @if (task.Assignee != null)
                         {
-                            <p class="card-text small text-muted mb-1">@task.Description</p>
+                            <span class="dp-badge dp-badge-slate"><i class="bi bi-person me-1"></i>@task.Assignee.FullName</span>
                         }
-                        @if (!string.IsNullOrWhiteSpace(task.Details))
+                        @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
                         {
-                            <p class="card-text small mb-1"><strong>Detail:</strong> @task.Details</p>
+                            <span class="dp-badge dp-badge-slate"><i class="bi bi-calendar-range me-1"></i>@task.TimelineStart?.ToString("MMM dd") – @task.TimelineEnd?.ToString("MMM dd")</span>
                         }
-                        <div class="d-flex gap-2 flex-wrap mt-1">
-                            @if (task.Assignee != null)
-                            {
-                                <span class="badge bg-light text-dark border small">
-                                    <i class="bi bi-person me-1"></i>@task.Assignee.FullName
-                                </span>
-                            }
-                            @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
-                            {
-                                <span class="badge bg-light text-dark border small">
-                                    <i class="bi bi-calendar-range me-1"></i>@task.TimelineStart?.ToString("MMM dd") - @task.TimelineEnd?.ToString("MMM dd")
-                                </span>
-                            }
-                            @if (task.DueDate.HasValue)
-                            {
-                                var isOverdue = task.DueDate.Value.Date < DateTime.Today && task.Status != WorkTaskStatus.Done;
-                                <span class="badge @(isOverdue ? "bg-danger" : "bg-light text-dark border") small">
-                                    <i class="bi bi-calendar me-1"></i>@task.DueDate.Value.ToString("MMM dd")
-                                </span>
-                            }
-                            @if (task.ChangeRequest != null)
-                            {
-                                <span class="badge bg-light text-dark border small">
-                                    <i class="bi bi-file-earmark-diff me-1"></i>@task.ChangeRequest.CrNumber
-                                </span>
-                            }
-                            @if (task.BugReport != null)
-                            {
-                                <span class="badge bg-light text-dark border small">
-                                    <i class="bi bi-bug me-1"></i>@task.BugReport.BugNumber
-                                </span>
-                            }
-                        </div>
+                        @if (task.DueDate.HasValue)
+                        {
+                            var overdue = task.DueDate.Value.Date < DateTime.Today && task.Status != WorkTaskStatus.Done;
+                            <span class="dp-badge @(overdue ? "dp-badge-red" : "dp-badge-slate")">
+                                <i class="bi bi-calendar me-1"></i>@task.DueDate.Value.ToString("MMM dd")
+                            </span>
+                        }
+                        @if (task.ChangeRequest != null)
+                        {
+                            <span class="dp-badge dp-badge-indigo"><i class="bi bi-file-earmark-diff me-1"></i>@task.ChangeRequest.CrNumber</span>
+                        }
+                        @if (task.BugReport != null)
+                        {
+                            <span class="dp-badge dp-badge-red"><i class="bi bi-bug me-1"></i>@task.BugReport.BugNumber</span>
+                        }
                     </div>
                 </div>
             }
+
             @if (!Model.Tasks.Any())
             {
-                <p class="text-center text-muted small mt-4 fst-italic">No tasks</p>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:8px;color:#334155;font-size:0.75rem">
+                    <i class="bi bi-inbox" style="font-size:1.5rem;opacity:0.3"></i>
+                    No tasks
+                </div>
             }
         </div>
     </div>
