@@ -40,6 +40,9 @@ builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
 builder.Services.AddScoped<IDeveloperSummaryService, DeveloperSummaryService>();
 builder.Services.AddScoped<IBugService, BugService>();
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IOutlookCalendarSyncService, OutlookCalendarSyncService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddControllersWithViews();
 

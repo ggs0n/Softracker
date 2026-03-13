@@ -20,6 +20,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BugDocument> BugDocuments => Set<BugDocument>();
     public DbSet<BugActivity> BugActivities => Set<BugActivity>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
+    public DbSet<ProjectFeature> ProjectFeatures => Set<ProjectFeature>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -188,11 +190,34 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(c => c.StartAt);
             e.HasIndex(c => c.CreatedById);
+            e.HasIndex(c => new { c.CreatedById, c.ExternalSource, c.ExternalEventId });
 
             e.HasOne(c => c.CreatedBy)
              .WithMany()
              .HasForeignKey(c => c.CreatedById)
              .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ProjectFeature>(e =>
+        {
+            e.HasIndex(f => f.ChangeRequestId);
+
+            e.HasOne(f => f.ChangeRequest)
+             .WithMany(c => c.Features)
+             .HasForeignKey(f => f.ChangeRequestId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UserNotification>(e =>
+        {
+            e.HasIndex(n => n.RecipientId);
+            e.HasIndex(n => new { n.RecipientId, n.IsRead });
+            e.HasIndex(n => n.CreatedAt);
+
+            e.HasOne(n => n.Recipient)
+             .WithMany(u => u.Notifications)
+             .HasForeignKey(n => n.RecipientId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -45,12 +45,88 @@ public class AdminController : Controller
             .AsNoTracking()
             .ToListAsync();
 
+        // Project overview with task & bug breakdowns
+        var projects = await _db.ChangeRequests
+            .AsNoTracking()
+            .OrderByDescending(c => c.UpdatedAt)
+            .ToListAsync();
+
+        var allTasks = await _db.WorkTasks
+            .Where(t => t.ChangeRequestId != null)
+            .GroupBy(t => t.ChangeRequestId)
+            .Select(g => new
+            {
+                ChangeRequestId = g.Key,
+                Total = g.Count(),
+                Done = g.Count(t => t.Status == WorkTaskStatus.Done),
+                InProgress = g.Count(t => t.Status == WorkTaskStatus.InProgress),
+                Blocked = g.Count(t => t.Status == WorkTaskStatus.Blocked)
+            })
+            .ToListAsync();
+
+        var allBugs = await _db.BugReports
+            .Where(b => b.ChangeRequestId != null)
+            .GroupBy(b => b.ChangeRequestId)
+            .Select(g => new
+            {
+                ChangeRequestId = g.Key,
+                Total = g.Count(),
+                Open = g.Count(b => b.Status != BugStatus.Complete),
+                Complete = g.Count(b => b.Status == BugStatus.Complete)
+            })
+            .ToListAsync();
+
+        var allFeatures = await _db.ProjectFeatures
+            .GroupBy(f => f.ChangeRequestId)
+            .Select(g => new
+            {
+                ChangeRequestId = g.Key,
+                Total = g.Count(),
+                Completed = g.Count(f => f.IsCompleted)
+            })
+            .ToListAsync();
+
+        var projectItems = projects.Select(p =>
+        {
+            var taskStats = allTasks.FirstOrDefault(t => t.ChangeRequestId == p.Id);
+            var bugStats = allBugs.FirstOrDefault(b => b.ChangeRequestId == p.Id);
+            var featureStats = allFeatures.FirstOrDefault(f => f.ChangeRequestId == p.Id);
+            return new ProjectOverviewItem
+            {
+                Id = p.Id,
+                CrNumber = p.CrNumber,
+                Title = p.Title,
+                Status = p.Status,
+                Stage = p.Stage,
+                Priority = p.Priority,
+                TimelineStart = p.TimelineStart,
+                TimelineEnd = p.TimelineEnd,
+                TotalTasks = taskStats?.Total ?? 0,
+                DoneTasks = taskStats?.Done ?? 0,
+                InProgressTasks = taskStats?.InProgress ?? 0,
+                BlockedTasks = taskStats?.Blocked ?? 0,
+                TotalBugs = bugStats?.Total ?? 0,
+                OpenBugs = bugStats?.Open ?? 0,
+                CompleteBugs = bugStats?.Complete ?? 0,
+                TotalFeatures = featureStats?.Total ?? 0,
+                CompletedFeatures = featureStats?.Completed ?? 0
+            };
+        }).ToList();
+
+        // Global bug stats
+        var totalBugs = await _db.BugReports.CountAsync();
+        var completeBugs = await _db.BugReports.CountAsync(b => b.Status == BugStatus.Complete);
+
         var vm = new AdminDashboardViewModel
         {
             Today = today,
             TasksDoneToday = tasksDoneToday,
             BlockedTasks = blockedTasks,
-            TotalEmployees = employees.Count
+            TotalEmployees = employees.Count,
+            Projects = projectItems,
+            TotalBugs = totalBugs,
+            OpenBugs = totalBugs - completeBugs,
+            CompleteBugs = completeBugs
         };
 
         return View(vm);

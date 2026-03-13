@@ -1,3 +1,10 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using WFHMonitor.Models
+@using WFHMonitor.Services.Interfaces
+@inject INotificationService NotificationService
+@inject UserManager<ApplicationUser> UserManager
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,6 +21,13 @@
 {
     var ctrl = ViewContext.RouteData.Values["controller"]?.ToString();
     var act  = ViewContext.RouteData.Values["action"]?.ToString();
+    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    var currentUser = string.IsNullOrWhiteSpace(userId) ? null : await UserManager.FindByIdAsync(userId);
+    var hasOutlookFeed = !string.IsNullOrWhiteSpace(currentUser?.OutlookCalendarIcsUrl);
+    var notificationBell = string.IsNullOrWhiteSpace(userId)
+        ? new WFHMonitor.ViewModels.NotificationBellViewModel()
+        : await NotificationService.GetBellAsync(userId);
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
 
     <aside class="sidebar">
         <a class="sidebar-brand" asp-controller="Home" asp-action="Index">
@@ -110,6 +124,66 @@
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
             <div class="d-flex align-items-center gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary notification-btn"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="outside"
+                            aria-expanded="false">
+                        <i class="bi bi-bell"></i>
+                        @if (notificationBell.UnreadCount > 0)
+                        {
+                            <span class="notification-badge">@(notificationBell.UnreadCount > 99 ? "99+" : notificationBell.UnreadCount.ToString())</span>
+                        }
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end notification-menu p-0">
+                        <div class="notification-header d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+                            <span class="fw-semibold">Notifications</span>
+                            @if (notificationBell.UnreadCount > 0)
+                            {
+                                <form asp-controller="Notification" asp-action="MarkAllRead" method="post" class="m-0">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none">Mark all read</button>
+                                </form>
+                            }
+                        </div>
+                        <div class="notification-list">
+                            @if (!notificationBell.Items.Any())
+                            {
+                                <div class="px-3 py-3 text-muted small">No notifications yet.</div>
+                            }
+                            else
+                            {
+                                @foreach (var item in notificationBell.Items)
+                                {
+                                    <div class="notification-item @(item.IsRead ? "is-read" : "is-unread")">
+                                        <div class="notification-item-body">
+                                            <div class="notification-title">@item.Title</div>
+                                            <div class="notification-message">@item.Message</div>
+                                            <div class="notification-time">@item.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</div>
+                                        </div>
+                                        <div class="notification-item-actions">
+                                            @if (!item.IsRead)
+                                            {
+                                                <form asp-controller="Notification" asp-action="MarkRead" method="post" class="m-0">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@item.Id" />
+                                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none">Read</button>
+                                                </form>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(item.LinkUrl))
+                                            {
+                                                <a href="@item.LinkUrl" class="btn btn-link btn-sm p-0 text-decoration-none">Open</a>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
                 <button type="button"
                         class="btn btn-sm btn-outline-secondary calendar-launch"
                         data-bs-toggle="offcanvas"
@@ -169,6 +243,49 @@
                 <button type="button" class="btn btn-sm btn-light border" id="calendarNextMonth">
                     <i class="bi bi-chevron-right"></i>
                 </button>
+            </div>
+            <div class="d-flex justify-content-end mb-2">
+                <a asp-controller="Calendar" asp-action="FeedIcs" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-microsoft me-1"></i>Export to Outlook (.ics)
+                </a>
+            </div>
+
+            <div class="calendar-outlook-sync mb-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-cloud-arrow-down me-1"></i>Sync from Outlook</div>
+                <form asp-controller="Calendar" asp-action="ConnectOutlook" method="post" class="d-flex gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <input type="url"
+                           name="icsUrl"
+                           class="form-control form-control-sm"
+                           placeholder="Paste Outlook published ICS URL"
+                           value="@(currentUser?.OutlookCalendarIcsUrl ?? string.Empty)"
+                           required />
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Connect</button>
+                </form>
+
+                <div class="d-flex align-items-center gap-2">
+                    <form asp-controller="Calendar" asp-action="SyncOutlook" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="btn btn-sm btn-primary" @(hasOutlookFeed ? null : "disabled")>
+                            <i class="bi bi-arrow-repeat me-1"></i>Sync Outlook
+                        </button>
+                    </form>
+
+                    <form asp-controller="Calendar" asp-action="DisconnectOutlook" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger" @(hasOutlookFeed ? null : "disabled")>
+                            Disconnect
+                        </button>
+                    </form>
+                </div>
+
+                <div class="small text-muted mt-1">
+                    Last sync:
+                    @(currentUser?.OutlookCalendarLastSyncAt?.ToLocalTime().ToString("MMM dd, yyyy HH:mm") ?? "Never")
+                </div>
             </div>
 
             <div class="calendar-weekdays mb-1">
@@ -306,11 +423,13 @@ else
                         : start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const details = e.details ? `<div class="text-muted">${e.details}</div>` : '';
                     const meeting = e.meetingLink ? `<a href="${e.meetingLink}" target="_blank" rel="noopener" class="small">Join meeting</a>` : '';
+                    const outlook = `<a href="/Calendar/EventIcs/${e.id}" class="small">Add to Outlook</a>`;
                     return `<div class="calendar-day-event-item mb-2">
                         <div class="fw-semibold">${e.title}</div>
                         <div class="small">${timeText}</div>
                         ${details}
                         ${meeting}
+                        <div>${outlook}</div>
                     </div>`;
                 }).join('');
 

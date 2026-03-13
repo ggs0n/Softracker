@@ -69,4 +69,35 @@ public class GitHubService : IGitHubService
         }
         return commits;
     }
+
+    public async Task<List<string>> GetRepoTreeAsync(string owner, string repo, string branch)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1");
+
+        request.Headers.UserAgent.ParseAdd("WFHMonitor/1.0");
+        if (!string.IsNullOrWhiteSpace(_token))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+
+        var response = await _http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            throw new Exception($"GitHub API {(int)response.StatusCode}: {error}");
+        }
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var paths = new List<string>();
+        if (doc.RootElement.TryGetProperty("tree", out var tree))
+        {
+            foreach (var item in tree.EnumerateArray())
+            {
+                var path = item.GetProperty("path").GetString() ?? "";
+                paths.Add(path);
+            }
+        }
+        return paths;
+    }
 }

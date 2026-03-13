@@ -17,15 +17,18 @@ public class BugService : IBugService
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IWebHostEnvironment _env;
+    private readonly INotificationService _notificationService;
 
     public BugService(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        INotificationService notificationService)
     {
         _db = db;
         _userManager = userManager;
         _env = env;
+        _notificationService = notificationService;
     }
 
     public async Task<List<BugReport>> GetIndexBugsAsync(bool forDeveloper, string? userId)
@@ -136,6 +139,17 @@ public class BugService : IBugService
         }
 
         await _db.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(bug.AssignedDeveloperId) &&
+            bug.AssigneeType == BugAssigneeType.Developer)
+        {
+            await _notificationService.CreateAsync(
+                bug.AssignedDeveloperId,
+                $"New bug assigned: {bug.BugNumber}",
+                bug.Title,
+                $"/Bug/Details/{bug.Id}");
+        }
+
         return (true, string.Empty, bug.Id);
     }
 
@@ -183,6 +197,22 @@ public class BugService : IBugService
         }
 
         await _db.SaveChangesAsync();
+
+        var assignedToDeveloper = bug.AssigneeType == BugAssigneeType.Developer &&
+                                  !string.IsNullOrWhiteSpace(bug.AssignedDeveloperId);
+
+        var assignmentChanged = oldAssigneeType != BugAssigneeType.Developer ||
+                                oldAssignedId != bug.AssignedDeveloperId;
+
+        if (assignedToDeveloper && assignmentChanged)
+        {
+            await _notificationService.CreateAsync(
+                bug.AssignedDeveloperId!,
+                $"Bug assignment updated: {bug.BugNumber}",
+                bug.Title,
+                $"/Bug/Details/{bug.Id}");
+        }
+
         return (true, string.Empty);
     }
 

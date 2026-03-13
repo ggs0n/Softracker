@@ -25,6 +25,14 @@ public class CalendarEvent
     [Display(Name = "End")]
     public DateTime? EndAt { get; set; }
 
+    [MaxLength(50)]
+    public string? ExternalSource { get; set; }
+
+    [MaxLength(300)]
+    public string? ExternalEventId { get; set; }
+
+    public DateTime? LastSyncedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [ForeignKey(nameof(CreatedBy))]

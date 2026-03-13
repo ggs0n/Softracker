@@ -95,6 +95,7 @@ public class ChangeRequest
     public ICollection<ChangeRequestPic> Pics { get; set; } = new List<ChangeRequestPic>();
     public ICollection<ArchSpecImage> ArchSpecImages { get; set; } = new List<ArchSpecImage>();
     public ICollection<ChangeRequestDocument> Documents { get; set; } = new List<ChangeRequestDocument>();
+    public ICollection<ProjectFeature> Features { get; set; } = new List<ProjectFeature>();
 }
 
 public class ArchSpecImage
@@ -147,4 +148,24 @@ public class ChangeRequestDocument
     public string OriginalFileName { get; set; } = string.Empty;
 
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class ProjectFeature
+{
+    public int Id { get; set; }
+
+    [ForeignKey(nameof(ChangeRequest))]
+    public int ChangeRequestId { get; set; }
+    public ChangeRequest? ChangeRequest { get; set; }
+
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    public bool IsCompleted { get; set; }
+    public bool IsAutoDetected { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

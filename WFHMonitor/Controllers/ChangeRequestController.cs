@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
+using WFHMonitor.Services;
 using WFHMonitor.Services.Interfaces;
 using WFHMonitor.ViewModels;
 using IWebHostEnvironment = Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
@@ -63,6 +64,7 @@ public class ChangeRequestController : Controller
             .Include(c => c.Pics).ThenInclude(p => p.Employee)
             .Include(c => c.ArchSpecImages.OrderBy(i => i.SortOrder))
             .Include(c => c.Documents.OrderBy(d => d.UploadedAt))
+            .Include(c => c.Features.OrderBy(f => f.Name))
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
@@ -411,6 +413,126 @@ public class ChangeRequestController : Controller
         await _db.SaveChangesAsync();
 
         TempData["Success"] = "Document deleted.";
+        return RedirectToAction(nameof(Details), new { id = crId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ScanFeatures(int id)
+    {
+        var cr = await _db.ChangeRequests.FindAsync(id);
+        if (cr == null) return NotFound();
+
+        var owner = cr.GitHubRepoOwner;
+        var repo = cr.GitHubRepoName;
+        var branch = cr.GitHubBranch;
+
+        if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
+            !string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) &&
+            TryParseGitHubRepoUrl(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+        {
+            owner = parsedOwner;
+            repo = parsedRepo;
+            if (string.IsNullOrWhiteSpace(branch))
+                branch = parsedBranch;
+        }
+
+        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+        {
+            TempData["Error"] = "No GitHub repository linked to this project.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        branch ??= "main";
+
+        try
+        {
+            var tree = await _gitHub.GetRepoTreeAsync(owner, repo, branch);
+            var detected = FeatureDetector.DetectFeatures(tree);
+
+            var existingNames = await _db.ProjectFeatures
+                .Where(f => f.ChangeRequestId == id)
+                .Select(f => f.Name)
+                .ToListAsync();
+
+            var added = 0;
+            foreach (var (name, description) in detected)
+            {
+                if (existingNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                _db.ProjectFeatures.Add(new ProjectFeature
+                {
+                    ChangeRequestId = id,
+                    Name = name,
+                    Description = description,
+                    IsAutoDetected = true
+                });
+                added++;
+            }
+
+            await _db.SaveChangesAsync();
+            TempData["Success"] = added > 0
+                ? $"Scan complete — {added} feature(s) detected and added."
+                : "Scan complete — no new features detected.";
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"Scan failed: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AddFeature(int crId, string name, string? description)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["Error"] = "Feature name is required.";
+            return RedirectToAction(nameof(Details), new { id = crId });
+        }
+
+        var cr = await _db.ChangeRequests.FindAsync(crId);
+        if (cr == null) return NotFound();
+
+        _db.ProjectFeatures.Add(new ProjectFeature
+        {
+            ChangeRequestId = crId,
+            Name = name.Trim(),
+            Description = description?.Trim()
+        });
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = $"Feature \"{name.Trim()}\" added.";
+        return RedirectToAction(nameof(Details), new { id = crId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleFeature(int featureId)
+    {
+        var feature = await _db.ProjectFeatures.FindAsync(featureId);
+        if (feature == null) return NotFound();
+
+        feature.IsCompleted = !feature.IsCompleted;
+        await _db.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Details), new { id = feature.ChangeRequestId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteFeature(int featureId)
+    {
+        var feature = await _db.ProjectFeatures.FindAsync(featureId);
+        if (feature == null) return NotFound();
+
+        var crId = feature.ChangeRequestId;
+        _db.ProjectFeatures.Remove(feature);
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Feature removed.";
         return RedirectToAction(nameof(Details), new { id = crId });
     }
 

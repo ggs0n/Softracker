@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WFHMonitor.Data;
 
@@ -11,9 +12,11 @@ using WFHMonitor.Data;
 namespace WFHMonitor.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260303032942_AddProjectFeatures")]
+    partial class AddProjectFeatures
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -749,52 +752,6 @@ namespace WFHMonitor.Migrations
                     b.ToTable("ProjectFeatures");
                 });
 
-            modelBuilder.Entity("WFHMonitor.Models.UserNotification", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("LinkUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RecipientId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedAt");
-
-                    b.HasIndex("RecipientId");
-
-                    b.HasIndex("RecipientId", "IsRead");
-
-                    b.ToTable("UserNotifications");
-                });
-
             modelBuilder.Entity("WFHMonitor.Models.WorkTask", b =>
                 {
                     b.Property<int>("Id")
@@ -1091,17 +1048,6 @@ namespace WFHMonitor.Migrations
                     b.Navigation("ChangeRequest");
                 });
 
-            modelBuilder.Entity("WFHMonitor.Models.UserNotification", b =>
-                {
-                    b.HasOne("WFHMonitor.Models.ApplicationUser", "Recipient")
-                        .WithMany("Notifications")
-                        .HasForeignKey("RecipientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Recipient");
-                });
-
             modelBuilder.Entity("WFHMonitor.Models.WorkTask", b =>
                 {
                     b.HasOne("WFHMonitor.Models.ApplicationUser", "Assignee")
@@ -1139,8 +1085,6 @@ namespace WFHMonitor.Migrations
                     b.Navigation("AssignedTasks");
 
                     b.Navigation("EodReports");
-
-                    b.Navigation("Notifications");
                 });
 
             modelBuilder.Entity("WFHMonitor.Models.BugReport", b =>

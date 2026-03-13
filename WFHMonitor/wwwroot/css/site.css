@@ -169,6 +169,83 @@ body {
   margin: 0;
 }
 
+.notification-btn {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #e74c6f;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.notification-menu {
+  width: min(380px, 92vw);
+  max-height: 420px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e8eaf4;
+  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.12);
+}
+
+.notification-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f2f7;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item.is-unread {
+  background: #f7f9ff;
+}
+
+.notification-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e1e2d;
+  margin-bottom: 2px;
+}
+
+.notification-message {
+  font-size: 0.75rem;
+  color: #4b5563;
+  margin-bottom: 4px;
+}
+
+.notification-time {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.notification-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 36px;
+}
+
 .main-content {
   padding: 28px;
   flex: 1;
@@ -571,6 +648,13 @@ body {
 
 .calendar-drawer .offcanvas-body {
   padding-bottom: 84px;
+}
+
+.calendar-outlook-sync {
+  background: #f8f9ff;
+  border: 1px solid #e9ecfa;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 .calendar-weekdays {
