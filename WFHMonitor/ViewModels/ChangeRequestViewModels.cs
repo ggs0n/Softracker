@@ -1,9 +1,10 @@
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using WFHMonitor.Models;
 
 namespace WFHMonitor.ViewModels;
 
-public class ChangeRequestFormViewModel
+public class ChangeRequestFormViewModel : IValidatableObject
 {
     public int Id { get; set; }
 
@@ -66,6 +67,43 @@ public class ChangeRequestFormViewModel
 
     // for populating dropdown
     public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> EmployeeOptions { get; set; } = new();
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!TimelineStart.HasValue)
+        {
+            yield return new ValidationResult("Start Date is required.", new[] { nameof(TimelineStart) });
+        }
+
+        if (!TimelineEnd.HasValue)
+        {
+            yield return new ValidationResult("End Date is required.", new[] { nameof(TimelineEnd) });
+        }
+
+        if (TimelineStart.HasValue && TimelineEnd.HasValue && TimelineEnd.Value.Date < TimelineStart.Value.Date)
+        {
+            yield return new ValidationResult(
+                "End Date cannot be earlier than Start Date.",
+                new[] { nameof(TimelineEnd), nameof(TimelineStart) });
+        }
+
+        var hasPic = Pics.Any(p => !string.IsNullOrWhiteSpace(p.EmployeeId));
+        if (!hasPic)
+        {
+            yield return new ValidationResult(
+                "At least one PIC is required.",
+                new[] { nameof(Pics) });
+        }
+
+        if (string.IsNullOrWhiteSpace(GitHubRepoOwner))
+            yield return new ValidationResult("Repo Owner is required.", new[] { nameof(GitHubRepoOwner) });
+
+        if (string.IsNullOrWhiteSpace(GitHubRepoName))
+            yield return new ValidationResult("Repo Name is required.", new[] { nameof(GitHubRepoName) });
+
+        if (string.IsNullOrWhiteSpace(GitHubBranch))
+            yield return new ValidationResult("GitHub Branch is required.", new[] { nameof(GitHubBranch) });
+    }
 }
 
 public class PicEntry

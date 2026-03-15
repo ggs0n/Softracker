@@ -29,16 +29,19 @@
                         <div class="col-md-6">
                             <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
                             <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
+                            <span asp-validation-for="GitHubRepoOwner" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="GitHubRepoName" class="form-label fw-semibold">Repo Name</label>
                             <input asp-for="GitHubRepoName" class="form-control" placeholder="e.g. myproject" />
+                            <span asp-validation-for="GitHubRepoName" class="text-danger small"></span>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
                         <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
+                        <span asp-validation-for="GitHubBranch" class="text-danger small"></span>
                     </div>
                     <div class="mb-3">
                         <label asp-for="TechnologyStack" class="form-label fw-semibold">Technology / Languages</label>
@@ -119,10 +122,12 @@
                         <div class="col-md-6">
                             <label asp-for="TimelineStart" class="form-label fw-semibold">Start Date</label>
                             <input asp-for="TimelineStart" type="date" class="form-control" />
+                            <span asp-validation-for="TimelineStart" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="TimelineEnd" class="form-label fw-semibold">End Date</label>
                             <input asp-for="TimelineEnd" type="date" class="form-control" />
+                            <span asp-validation-for="TimelineEnd" class="text-danger small"></span>
                         </div>
                     </div>
 
@@ -136,6 +141,7 @@
                     <div id="picContainer">
                         @* rows rendered by JS *@
                     </div>
+                    <span asp-validation-for="Pics" class="text-danger small"></span>
 
                     <div class="d-flex gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">
