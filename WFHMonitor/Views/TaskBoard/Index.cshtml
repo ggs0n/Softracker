@@ -62,7 +62,15 @@
                                 <td class="dp-cell-muted" style="font-size:0.75rem;white-space:nowrap">
                                     @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
                                     {
-                                        @(task.TimelineStart?.ToString("yyyy-MM-dd"))<span class="mx-1" style="color:#334155">→</span>@(task.TimelineEnd?.ToString("yyyy-MM-dd"))
+                                        var hasInvalidTimeline = task.TimelineStart.HasValue && task.TimelineEnd.HasValue && task.TimelineEnd.Value.Date < task.TimelineStart.Value.Date;
+                                        if (hasInvalidTimeline)
+                                        {
+                                            <span class="text-danger">Invalid timeline</span>
+                                        }
+                                        else
+                                        {
+                                            @(task.TimelineStart?.ToString("yyyy-MM-dd"))<span class="mx-1" style="color:#334155">→</span>@(task.TimelineEnd?.ToString("yyyy-MM-dd"))
+                                        }
                                     }
                                     else if (task.DueDate.HasValue)
                                     {

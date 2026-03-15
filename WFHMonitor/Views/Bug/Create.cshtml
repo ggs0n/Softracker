@@ -78,6 +78,17 @@
                                 }
                             </select>
                         </div>
+                        <div class="col-md-6 d-none" id="agentAssignGroup">
+                            <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
+                            <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
+                                <option value="">-- Select Agent --</option>
+                                @foreach (var agent in Model.AgentOptions)
+                                {
+                                    <option value="@agent.Value">@agent.Text</option>
+                                }
+                            </select>
+                            <span asp-validation-for="AssignedAgentId" class="text-danger small"></span>
+                        </div>
                         <div class="col-md-6 d-none" id="agentStatusGroup">
                             <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
                             <input class="form-control" value="Queued" disabled />
@@ -108,9 +119,12 @@
         function toggleAssigneeFields() {
             var isAgent = $('#assigneeType').val() === 'Agent';
             $('#developerAssignGroup').toggleClass('d-none', isAgent);
+            $('#agentAssignGroup').toggleClass('d-none', !isAgent);
             $('#agentStatusGroup').toggleClass('d-none', !isAgent);
             if (isAgent) {
                 $('#AssignedDeveloperId').val('');
+            } else {
+                $('#AssignedAgentId').val('');
             }
         }
 

@@ -69,6 +69,9 @@ public class BugController : Controller
     [Authorize(Roles = "Admin,Tester")]
     public async Task<IActionResult> Create(BugFormViewModel model)
     {
+        if (model.AssigneeType == BugAssigneeType.Agent && string.IsNullOrWhiteSpace(model.AssignedAgentId))
+            ModelState.AddModelError(nameof(model.AssignedAgentId), "Please select an agent.");
+
         if (!ModelState.IsValid)
             return await ReturnBugFormWithOptions(model);
 
@@ -100,6 +103,9 @@ public class BugController : Controller
     [Authorize(Roles = "Admin,Tester")]
     public async Task<IActionResult> Edit(int id, BugFormViewModel model)
     {
+        if (model.AssigneeType == BugAssigneeType.Agent && string.IsNullOrWhiteSpace(model.AssignedAgentId))
+            ModelState.AddModelError(nameof(model.AssignedAgentId), "Please select an agent.");
+
         if (!ModelState.IsValid)
             return await ReturnBugFormWithOptions(model);
 

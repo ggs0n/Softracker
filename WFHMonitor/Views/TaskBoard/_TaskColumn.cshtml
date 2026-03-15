@@ -66,7 +66,15 @@
                         }
                         @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
                         {
-                            <span class="dp-badge dp-badge-slate"><i class="bi bi-calendar-range me-1"></i>@task.TimelineStart?.ToString("MMM dd") – @task.TimelineEnd?.ToString("MMM dd")</span>
+                            var hasInvalidTimeline = task.TimelineStart.HasValue && task.TimelineEnd.HasValue && task.TimelineEnd.Value.Date < task.TimelineStart.Value.Date;
+                            if (hasInvalidTimeline)
+                            {
+                                <span class="dp-badge dp-badge-red"><i class="bi bi-exclamation-triangle me-1"></i>Invalid timeline</span>
+                            }
+                            else
+                            {
+                                <span class="dp-badge dp-badge-slate"><i class="bi bi-calendar-range me-1"></i>@task.TimelineStart?.ToString("MMM dd") – @task.TimelineEnd?.ToString("MMM dd")</span>
+                            }
                         }
                         @if (task.DueDate.HasValue)
                         {

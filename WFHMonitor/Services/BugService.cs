@@ -71,6 +71,7 @@ public class BugService : IBugService
     public async Task PopulateFormOptionsAsync(BugFormViewModel model)
     {
         model.DeveloperOptions = await GetDeveloperOptionsAsync();
+        model.AgentOptions = await GetAgentOptionsAsync();
         model.ChangeRequestOptions = await GetChangeRequestOptionsAsync();
     }
 
@@ -92,7 +93,8 @@ public class BugService : IBugService
             AgentStatus = bug.AgentStatus,
             ChangeRequestId = bug.ChangeRequestId,
             ChangeRequestReferenceText = bug.ChangeRequestReferenceText,
-            AssignedDeveloperId = bug.AssignedDeveloperId
+            AssignedDeveloperId = bug.AssigneeType == BugAssigneeType.Developer ? bug.AssignedDeveloperId : null,
+            AssignedAgentId = bug.AssigneeType == BugAssigneeType.Agent ? bug.AssignedDeveloperId : null
         };
 
         await PopulateFormOptionsAsync(vm);
@@ -116,7 +118,7 @@ public class BugService : IBugService
             AgentStatus = model.AssigneeType == BugAssigneeType.Agent ? BugAgentStatus.Queued : BugAgentStatus.None,
             ChangeRequestId = model.ChangeRequestId,
             ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim(),
-            AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? null : model.AssignedDeveloperId,
+            AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? model.AssignedAgentId : model.AssignedDeveloperId,
             CreatedById = createdById
         };
 
@@ -175,7 +177,7 @@ public class BugService : IBugService
             : BugAgentStatus.None;
         bug.ChangeRequestId = model.ChangeRequestId;
         bug.ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim();
-        bug.AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? null : model.AssignedDeveloperId;
+        bug.AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? model.AssignedAgentId : model.AssignedDeveloperId;
         bug.UpdatedAt = DateTime.UtcNow;
 
         if (oldStatus != bug.Status ||
@@ -324,6 +326,15 @@ public class BugService : IBugService
         return developers
             .OrderBy(d => d.FullName)
             .Select(d => new SelectListItem(d.FullName, d.Id))
+            .ToList();
+    }
+
+    private async Task<List<SelectListItem>> GetAgentOptionsAsync()
+    {
+        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        return agents
+            .OrderBy(a => a.FullName)
+            .Select(a => new SelectListItem(a.FullName, a.Id))
             .ToList();
     }
 
