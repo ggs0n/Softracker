@@ -258,7 +258,7 @@
                     <div class="small text-muted mt-3">Agent Status</div>
                     <div class="fw-semibold">@Model.AgentStatus</div>
                 }
-                <div class="small text-muted">Assigned Developer</div>
+                <div class="small text-muted">@(Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent ? "Assigned Agent" : "Assigned Developer")</div>
                 <div class="fw-semibold">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
                 <div class="small text-muted mt-3">Project</div>
                 <div class="fw-semibold">

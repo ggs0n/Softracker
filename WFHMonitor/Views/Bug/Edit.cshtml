@@ -77,6 +77,16 @@
                                 }
                             </select>
                         </div>
+                        <div class="col-md-6 d-none" id="agentAssignGroup">
+                            <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
+                            <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
+                                <option value="">-- Select Agent --</option>
+                                @foreach (var agent in Model.AgentOptions)
+                                {
+                                    <option value="@agent.Value" selected="@(agent.Value == Model.AssignedAgentId ? "selected" : null)">@agent.Text</option>
+                                }
+                            </select>
+                        </div>
                         <div class="col-md-6" id="agentStatusGroup">
                             <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
                             <select asp-for="AgentStatus" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAgentStatus>()" class="form-select"></select>
@@ -101,10 +111,12 @@
         function toggleAssigneeFields() {
             var isAgent = $('#assigneeType').val() === 'Agent';
             $('#developerAssignGroup').toggleClass('d-none', isAgent);
+            $('#agentAssignGroup').toggleClass('d-none', !isAgent);
             $('#agentStatusGroup').toggleClass('d-none', !isAgent);
             if (isAgent) {
                 $('#AssignedDeveloperId').val('');
             } else {
+                $('#AssignedAgentId').val('');
                 $('#AgentStatus').val('None');
             }
         }

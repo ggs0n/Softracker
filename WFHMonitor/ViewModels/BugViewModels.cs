@@ -32,7 +32,11 @@ public class BugFormViewModel
     [Display(Name = "Assign To Developer")]
     public string? AssignedDeveloperId { get; set; }
 
+    [Display(Name = "Assign To Agent")]
+    public string? AssignedAgentId { get; set; }
+
     public List<SelectListItem> DeveloperOptions { get; set; } = new();
+    public List<SelectListItem> AgentOptions { get; set; } = new();
 
     [Display(Name = "Project")]
     public int? ChangeRequestId { get; set; }
