@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using WFHMonitor.Data;
@@ -38,6 +39,7 @@ public class ChangeRequestController : Controller
         var query = _db.ChangeRequests
             .Include(c => c.CreatedBy)
             .Include(c => c.Pics).ThenInclude(p => p.Employee)
+            .Include(c => c.Features)
             .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
@@ -59,6 +61,23 @@ public class ChangeRequestController : Controller
 
     public async Task<IActionResult> Details(int id)
     {
+        var projectForSync = await _db.ChangeRequests
+            .AsTracking()
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (projectForSync == null) return NotFound();
+
+        if (TryResolveGitHubConfig(projectForSync, out var syncOwner, out var syncRepo, out var syncBranch))
+        {
+            try
+            {
+                await RefreshProjectFromGitHubAsync(projectForSync, syncOwner, syncRepo, syncBranch);
+            }
+            catch (Exception ex)
+            {
+                ViewBag.SyncWarning = ex.Message;
+            }
+        }
+
         var cr = await _db.ChangeRequests
             .Include(c => c.CreatedBy)
             .Include(c => c.Pics).ThenInclude(p => p.Employee)
@@ -99,8 +118,7 @@ public class ChangeRequestController : Controller
         {
             try
             {
-                ViewBag.Commits = await _gitHub.GetCommitsAsync(
-                    owner, repo, branch);
+                ViewBag.Commits = await _gitHub.GetCommitsAsync(owner, repo, branch);
             }
             catch (Exception ex)
             {
@@ -134,31 +152,32 @@ public class ChangeRequestController : Controller
         }
 
         var userId = _userManager.GetUserId(User)!;
-        var count = await _db.ChangeRequests.CountAsync();
-        var crNumber = $"CR-{DateTime.UtcNow.Year}-{(count + 1):D4}";
+        var currentYear = DateTime.UtcNow.Year;
+        ChangeRequest? cr = null;
+        const int maxCrNumberAttempts = 6;
 
-        var cr = new ChangeRequest
+        for (var attempt = 1; attempt <= maxCrNumberAttempts; attempt++)
         {
-            CrNumber = crNumber,
-            Title = model.Title,
-            Description = model.Description,
-            Status = model.Status,
-            Priority = model.Priority,
-            Stage = model.Stage,
-            FigmaLink = model.FigmaLink,
-            ArchSpecLink = model.ArchSpecLink,
-            ArchSpecNotes = model.ArchSpecNotes,
-            TimelineStart = model.TimelineStart,
-            TimelineEnd = model.TimelineEnd,
-            GitHubRepoOwner = model.GitHubRepoOwner,
-            GitHubRepoName = model.GitHubRepoName,
-            GitHubRepoUrl = model.GitHubRepoUrl,
-            GitHubBranch = model.GitHubBranch,
-            CreatedById = userId
-        };
+            var crNumberCandidate = await GenerateNextCrNumberAsync(currentYear);
+            var candidate = BuildChangeRequestEntity(model, userId, crNumberCandidate);
 
-        _db.ChangeRequests.Add(cr);
-        await _db.SaveChangesAsync();
+            _db.ChangeRequests.Add(candidate);
+            try
+            {
+                await _db.SaveChangesAsync();
+                cr = candidate;
+                break;
+            }
+            catch (DbUpdateException ex) when (IsDuplicateCrNumberException(ex))
+            {
+                _db.Entry(candidate).State = EntityState.Detached;
+                if (attempt == maxCrNumberAttempts)
+                    throw;
+            }
+        }
+
+        if (cr == null)
+            throw new InvalidOperationException("Unable to create project number. Please retry.");
 
         foreach (var pic in model.Pics.Where(p => !string.IsNullOrEmpty(p.EmployeeId)))
         {
@@ -169,10 +188,95 @@ public class ChangeRequestController : Controller
                 Role = pic.Role
             });
         }
+
+        var seenFeatureNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var feature in model.ImportedFeatures)
+        {
+            var featureName = feature.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(featureName) || !seenFeatureNames.Add(featureName))
+                continue;
+
+            _db.ProjectFeatures.Add(new ProjectFeature
+            {
+                ChangeRequestId = cr.Id,
+                Name = featureName,
+                Description = feature.Description?.Trim(),
+                IsAutoDetected = feature.IsAutoDetected
+            });
+        }
+
         await _db.SaveChangesAsync();
 
-        TempData["Success"] = $"Project {crNumber} created.";
+        TempData["Success"] = $"Project {cr.CrNumber} created.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ImportGitHubRepo(string? repoUrl, string? branch)
+    {
+        repoUrl = repoUrl?.Trim();
+        branch = branch?.Trim();
+
+        if (string.IsNullOrWhiteSpace(repoUrl))
+            return BadRequest(new { message = "GitHub repository URL is required." });
+
+        if (!TryParseGitHubRepoUrl(repoUrl, out var owner, out var repo, out var branchFromUrl))
+            return BadRequest(new { message = "Invalid GitHub repository URL. Example: https://github.com/owner/repo" });
+
+        try
+        {
+            var repoInfo = await _gitHub.GetRepositoryInfoAsync(owner, repo);
+
+            var resolvedBranch = !string.IsNullOrWhiteSpace(branch)
+                ? branch
+                : !string.IsNullOrWhiteSpace(branchFromUrl)
+                    ? branchFromUrl
+                    : repoInfo.DefaultBranch;
+
+            var tree = await _gitHub.GetRepoTreeAsync(owner, repo, resolvedBranch);
+            var detectedFeatures = FeatureDetector.DetectFeatures(tree);
+            var languages = await _gitHub.GetRepositoryLanguagesAsync(owner, repo);
+
+            var readme = await _gitHub.GetReadmeContentAsync(owner, repo);
+            var figmaLink = FindFirstMatchingUrl(repoInfo.Homepage, readme, "figma.com");
+            var archSpecLink = FindFirstMatchingUrl(repoInfo.Homepage, readme, "docs.google.com", "confluence", "notion.so", "miro.com");
+            var technologyStack = BuildTechnologyStack(languages);
+
+            var importedTitle = HumanizeRepoName(repoInfo.Name);
+            var readmeDescription = ExtractReadmeDescription(readme);
+            var importedDescription = !string.IsNullOrWhiteSpace(readmeDescription)
+                ? readmeDescription
+                : BuildRepoPurposeSummary(repoInfo.Name, repoInfo.Description, detectedFeatures, technologyStack);
+
+            return Json(new
+            {
+                title = importedTitle,
+                description = importedDescription,
+                gitHubRepoOwner = owner,
+                gitHubRepoName = repo,
+                gitHubRepoUrl = repoInfo.HtmlUrl,
+                gitHubBranch = resolvedBranch,
+                technologyStack,
+                timelineStart = DateTime.Today.ToString("yyyy-MM-dd"),
+                timelineEnd = DateTime.Today.AddMonths(1).ToString("yyyy-MM-dd"),
+                figmaLink,
+                archSpecLink,
+                features = detectedFeatures.Select(f => new
+                {
+                    name = f.Name,
+                    description = f.Description,
+                    isAutoDetected = true
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            var safeMessage = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Unable to import this repository right now."
+                : ex.Message;
+            return BadRequest(new { message = safeMessage });
+        }
     }
 
     [Authorize(Roles = "Admin")]
@@ -200,6 +304,7 @@ public class ChangeRequestController : Controller
             GitHubRepoName = cr.GitHubRepoName,
             GitHubRepoUrl = cr.GitHubRepoUrl,
             GitHubBranch = cr.GitHubBranch,
+            TechnologyStack = cr.TechnologyStack,
             Pics = cr.Pics.Select(p => new PicEntry { EmployeeId = p.EmployeeId, Role = p.Role }).ToList(),
             EmployeeOptions = await GetEmployeeOptions()
         };
@@ -237,6 +342,7 @@ public class ChangeRequestController : Controller
         cr.GitHubRepoName = model.GitHubRepoName;
         cr.GitHubRepoUrl = model.GitHubRepoUrl;
         cr.GitHubBranch = model.GitHubBranch;
+        cr.TechnologyStack = model.TechnologyStack;
         cr.UpdatedAt = DateTime.UtcNow;
 
         _db.ChangeRequestPics.RemoveRange(cr.Pics);
@@ -569,6 +675,7 @@ public class ChangeRequestController : Controller
         model.GitHubRepoOwner = model.GitHubRepoOwner?.Trim();
         model.GitHubRepoName = model.GitHubRepoName?.Trim();
         model.GitHubBranch = model.GitHubBranch?.Trim();
+        model.TechnologyStack = model.TechnologyStack?.Trim();
 
         if (string.IsNullOrWhiteSpace(model.GitHubRepoUrl))
             return;
@@ -583,6 +690,362 @@ public class ChangeRequestController : Controller
         model.GitHubRepoName = repo;
         if (string.IsNullOrWhiteSpace(model.GitHubBranch) && !string.IsNullOrWhiteSpace(branchFromUrl))
             model.GitHubBranch = branchFromUrl;
+    }
+
+    private bool TryResolveGitHubConfig(
+        ChangeRequest project,
+        out string owner,
+        out string repo,
+        out string? branch)
+    {
+        owner = project.GitHubRepoOwner?.Trim() ?? string.Empty;
+        repo = project.GitHubRepoName?.Trim() ?? string.Empty;
+        branch = project.GitHubBranch?.Trim();
+
+        if ((!string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo)) ||
+            string.IsNullOrWhiteSpace(project.GitHubRepoUrl))
+        {
+            return !string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo);
+        }
+
+        if (!TryParseGitHubRepoUrl(project.GitHubRepoUrl, out owner, out repo, out var parsedBranch))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(branch))
+            branch = parsedBranch;
+
+        return true;
+    }
+
+    private static ChangeRequest BuildChangeRequestEntity(
+        ChangeRequestFormViewModel model,
+        string userId,
+        string crNumber)
+    {
+        return new ChangeRequest
+        {
+            CrNumber = crNumber,
+            Title = model.Title,
+            Description = model.Description,
+            Status = model.Status,
+            Priority = model.Priority,
+            Stage = model.Stage,
+            FigmaLink = model.FigmaLink,
+            ArchSpecLink = model.ArchSpecLink,
+            ArchSpecNotes = model.ArchSpecNotes,
+            TimelineStart = model.TimelineStart,
+            TimelineEnd = model.TimelineEnd,
+            GitHubRepoOwner = model.GitHubRepoOwner,
+            GitHubRepoName = model.GitHubRepoName,
+            GitHubRepoUrl = model.GitHubRepoUrl,
+            GitHubBranch = model.GitHubBranch,
+            TechnologyStack = model.TechnologyStack,
+            CreatedById = userId
+        };
+    }
+
+    private async Task<string> GenerateNextCrNumberAsync(int year)
+    {
+        var prefix = $"CR-{year}-";
+        var existingNumbers = await _db.ChangeRequests
+            .Where(c => c.CrNumber.StartsWith(prefix))
+            .Select(c => c.CrNumber)
+            .ToListAsync();
+
+        var maxSequence = 0;
+        foreach (var value in existingNumbers)
+        {
+            if (!TryExtractCrSequence(value, year, out var sequence))
+                continue;
+
+            if (sequence > maxSequence)
+                maxSequence = sequence;
+        }
+
+        return $"{prefix}{(maxSequence + 1):D4}";
+    }
+
+    private static bool TryExtractCrSequence(string crNumber, int year, out int sequence)
+    {
+        sequence = 0;
+        var parts = crNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3)
+            return false;
+        if (!parts[0].Equals("CR", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!int.TryParse(parts[1], out var parsedYear) || parsedYear != year)
+            return false;
+
+        return int.TryParse(parts[2], out sequence);
+    }
+
+    private static bool IsDuplicateCrNumberException(DbUpdateException ex)
+    {
+        if (ex.InnerException is not SqlException sqlEx)
+            return false;
+
+        var isDuplicateIndex = sqlEx.Number == 2601 || sqlEx.Number == 2627;
+        return isDuplicateIndex &&
+               sqlEx.Message.Contains("IX_ChangeRequests_CrNumber", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task RefreshProjectFromGitHubAsync(
+        ChangeRequest project,
+        string owner,
+        string repo,
+        string? branch)
+    {
+        var repoInfo = await _gitHub.GetRepositoryInfoAsync(owner, repo);
+        var resolvedBranch = string.IsNullOrWhiteSpace(branch) ? repoInfo.DefaultBranch : branch;
+
+        var tree = await _gitHub.GetRepoTreeAsync(owner, repo, resolvedBranch);
+        var detectedFeatures = FeatureDetector.DetectFeatures(tree);
+        var languages = await _gitHub.GetRepositoryLanguagesAsync(owner, repo);
+        var readme = await _gitHub.GetReadmeContentAsync(owner, repo);
+
+        var readmeDescription = ExtractReadmeDescription(readme);
+        var technologyStack = BuildTechnologyStack(languages);
+        var description = !string.IsNullOrWhiteSpace(readmeDescription)
+            ? readmeDescription
+            : BuildRepoPurposeSummary(repoInfo.Name, repoInfo.Description, detectedFeatures, technologyStack);
+
+        var figmaLink = FindFirstMatchingUrl(repoInfo.Homepage, readme, "figma.com");
+        var archSpecLink = FindFirstMatchingUrl(repoInfo.Homepage, readme, "docs.google.com", "confluence", "notion.so", "miro.com");
+
+        project.GitHubRepoOwner = owner;
+        project.GitHubRepoName = repo;
+        project.GitHubRepoUrl = repoInfo.HtmlUrl;
+        project.GitHubBranch = resolvedBranch;
+        project.TechnologyStack = technologyStack;
+
+        if (!string.IsNullOrWhiteSpace(description))
+            project.Description = description;
+        if (!string.IsNullOrWhiteSpace(figmaLink))
+            project.FigmaLink = figmaLink;
+        if (!string.IsNullOrWhiteSpace(archSpecLink))
+            project.ArchSpecLink = archSpecLink;
+        if (string.IsNullOrWhiteSpace(project.Title))
+            project.Title = HumanizeRepoName(repoInfo.Name);
+
+        await SyncAutoDetectedFeaturesAsync(project.Id, detectedFeatures);
+        project.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task SyncAutoDetectedFeaturesAsync(
+        int changeRequestId,
+        IReadOnlyCollection<(string Name, string Description)> detectedFeatures)
+    {
+        var allFeatures = await _db.ProjectFeatures
+            .Where(f => f.ChangeRequestId == changeRequestId)
+            .ToListAsync();
+
+        var autoFeatures = allFeatures
+            .Where(f => f.IsAutoDetected)
+            .ToList();
+
+        var normalizedDetected = detectedFeatures
+            .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToDictionary(f => f.Name, f => f.Description, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var feature in autoFeatures)
+        {
+            if (normalizedDetected.TryGetValue(feature.Name, out var description))
+            {
+                feature.Description = description;
+                normalizedDetected.Remove(feature.Name);
+            }
+            else
+            {
+                _db.ProjectFeatures.Remove(feature);
+            }
+        }
+
+        var existingNames = allFeatures
+            .Select(f => f.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, description) in normalizedDetected)
+        {
+            if (existingNames.Contains(name))
+                continue;
+
+            _db.ProjectFeatures.Add(new ProjectFeature
+            {
+                ChangeRequestId = changeRequestId,
+                Name = name,
+                Description = description,
+                IsAutoDetected = true
+            });
+        }
+    }
+
+    private static string HumanizeRepoName(string repoName)
+    {
+        if (string.IsNullOrWhiteSpace(repoName))
+            return repoName;
+
+        var spaced = Regex.Replace(repoName.Trim(), @"[-_\.]+", " ");
+        return Regex.Replace(spaced, @"\s{2,}", " ");
+    }
+
+    private static string BuildRepoPurposeSummary(
+        string repoName,
+        string? repoDescription,
+        IReadOnlyCollection<(string Name, string Description)> features,
+        string? technologyStack)
+    {
+        var cleanRepoName = HumanizeRepoName(repoName);
+        var baseDescription = repoDescription?.Trim();
+        var featureNames = features.Select(f => f.Name).Take(6).ToList();
+        var languageHint = string.IsNullOrWhiteSpace(technologyStack)
+            ? string.Empty
+            : $" Primary technology stack: {technologyStack}.";
+
+        if (!string.IsNullOrWhiteSpace(baseDescription) && featureNames.Count == 0)
+            return $"{baseDescription}{languageHint}";
+
+        if (!string.IsNullOrWhiteSpace(baseDescription) && featureNames.Count > 0)
+            return $"{baseDescription} This repo appears to include: {string.Join(", ", featureNames)}.{languageHint}";
+
+        if (featureNames.Count > 0)
+            return $"{cleanRepoName} appears to be a software project that includes: {string.Join(", ", featureNames)}.{languageHint}";
+
+        return $"{cleanRepoName} appears to be a software repository with application source code and project assets.{languageHint}";
+    }
+
+    private static string? BuildTechnologyStack(IReadOnlyDictionary<string, long> languages)
+    {
+        if (languages.Count == 0)
+            return null;
+
+        var totalBytes = languages.Values.Sum();
+        if (totalBytes <= 0)
+            return string.Join(", ", languages.Keys.OrderBy(k => k).Take(8));
+
+        var topLanguages = languages
+            .OrderByDescending(l => l.Value)
+            .Take(8)
+            .Select(l =>
+            {
+                var pct = (int)Math.Round(l.Value * 100.0 / totalBytes);
+                return pct > 0 ? $"{l.Key} ({pct}%)" : l.Key;
+            });
+
+        return string.Join(", ", topLanguages);
+    }
+
+    private static string? ExtractReadmeDescription(string? readme)
+    {
+        if (string.IsNullOrWhiteSpace(readme))
+            return null;
+
+        var lines = readme.Replace("\r\n", "\n").Split('\n');
+        var paragraphs = new List<string>();
+        var currentParagraph = new List<string>();
+        var inCodeBlock = false;
+
+        void FlushParagraph()
+        {
+            if (currentParagraph.Count == 0)
+                return;
+
+            var paragraph = Regex.Replace(string.Join(" ", currentParagraph), @"\s{2,}", " ").Trim();
+            if (!string.IsNullOrWhiteSpace(paragraph))
+                paragraphs.Add(paragraph);
+
+            currentParagraph.Clear();
+        }
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.Trim();
+
+            if (line.StartsWith("```") || line.StartsWith("~~~"))
+            {
+                inCodeBlock = !inCodeBlock;
+                continue;
+            }
+
+            if (inCodeBlock)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                FlushParagraph();
+                continue;
+            }
+
+            if (IsReadmeNoiseLine(line))
+            {
+                FlushParagraph();
+                continue;
+            }
+
+            var normalizedLine = Regex.Replace(line, @"^\s*>\s*", string.Empty);
+            normalizedLine = Regex.Replace(normalizedLine, @"^\s*[-*+]\s+", string.Empty);
+            normalizedLine = Regex.Replace(normalizedLine, @"^\s*\d+\.\s+", string.Empty);
+
+            if (!string.IsNullOrWhiteSpace(normalizedLine))
+                currentParagraph.Add(normalizedLine);
+        }
+
+        FlushParagraph();
+
+        var best = paragraphs.FirstOrDefault(p => p.Length >= 40) ?? paragraphs.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(best))
+            return null;
+
+        return best.Length > 1500 ? best[..1500].Trim() : best;
+    }
+
+    private static bool IsReadmeNoiseLine(string line)
+    {
+        if (line.StartsWith("#"))
+            return true;
+
+        if (line.StartsWith("[![") || line.StartsWith("![") || line.StartsWith("<!--"))
+            return true;
+
+        if (line.StartsWith("<img", StringComparison.OrdinalIgnoreCase) ||
+            line.StartsWith("<picture", StringComparison.OrdinalIgnoreCase) ||
+            line.StartsWith("<p ", StringComparison.OrdinalIgnoreCase) ||
+            line.StartsWith("<div ", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (line == "---" || line.StartsWith("|"))
+            return true;
+
+        return false;
+    }
+
+    private static string? FindFirstMatchingUrl(string? homepage, string? readme, params string[] domainHints)
+    {
+        var urls = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(homepage))
+            urls.Add(homepage);
+
+        if (!string.IsNullOrWhiteSpace(readme))
+        {
+            var matches = Regex.Matches(readme, "https?://[^\\s\\)\\]\\\"'>]+", RegexOptions.IgnoreCase);
+            urls.AddRange(matches.Select(m => m.Value));
+        }
+
+        foreach (var url in urls)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                continue;
+
+            if (domainHints.Length == 0 ||
+                domainHints.Any(h => uri.Host.Contains(h, StringComparison.OrdinalIgnoreCase)))
+            {
+                return uri.ToString();
+            }
+        }
+
+        return null;
     }
 
     private static bool TryParseGitHubRepoUrl(

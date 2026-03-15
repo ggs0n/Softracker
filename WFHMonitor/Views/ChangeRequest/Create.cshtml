@@ -12,6 +12,54 @@
                     @Html.AntiForgeryToken()
                     <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
+                    <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
+                            <div class="input-group">
+                                <input asp-for="GitHubRepoUrl" class="form-control" placeholder="https://github.com/owner/repo" />
+                                <button type="button" id="importFromGitHub" class="btn btn-outline-primary">
+                                    <i class="bi bi-download me-1"></i>Import Repo
+                                </button>
+                            </div>
+                            <div class="form-text">Owner and repo fields are auto-filled from this URL.</div>
+                            <div id="importStatus" class="small mt-2 d-none"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
+                            <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="GitHubRepoName" class="form-label fw-semibold">Repo Name</label>
+                            <input asp-for="GitHubRepoName" class="form-control" placeholder="e.g. myproject" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
+                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="TechnologyStack" class="form-label fw-semibold">Technology / Languages</label>
+                        <input asp-for="TechnologyStack" class="form-control" placeholder="Auto-filled from GitHub import (e.g. C# (60%), TypeScript (40%))" />
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-semibold mb-0">
+                                <i class="bi bi-list-check me-1 text-primary"></i>Imported Features Checklist
+                            </label>
+                            <span id="importedFeatureCount" class="badge bg-secondary">0</span>
+                        </div>
+                        <div id="importedFeaturesPreview" class="border rounded p-2 bg-light small text-muted">
+                            No imported features yet.
+                        </div>
+                        <div id="importedFeaturesInputs"></div>
+                    </div>
+
+                    <hr class="my-3" />
+
                     <div class="mb-3">
                         <label asp-for="Title" class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
                         <input asp-for="Title" class="form-control" placeholder="Short description of the change..." />
@@ -79,30 +127,6 @@
                     </div>
 
                     <hr class="my-3" />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-12">
-                            <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
-                            <input asp-for="GitHubRepoUrl" class="form-control" placeholder="https://github.com/owner/repo" />
-                            <div class="form-text">Owner and repo fields are auto-filled from this URL.</div>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
-                            <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="GitHubRepoName" class="form-label fw-semibold">Repo Name</label>
-                            <input asp-for="GitHubRepoName" class="form-control" placeholder="e.g. myproject" />
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
-                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
-                    </div>
-
-                    <hr class="my-3" />
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Person in Charge (PIC)</h6>
                         <button type="button" id="addPic" class="btn btn-sm btn-outline-primary">
@@ -143,6 +167,10 @@
         var employeeOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
             Model.EmployeeOptions.Select(o => new { value = o.Value, text = o.Text })
         ));
+        var importedFeatures = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            Model.ImportedFeatures.Select(f => new { name = f.Name, description = f.Description, isAutoDetected = f.IsAutoDetected })
+        ));
+        var importUrl = '@Url.Action("ImportGitHubRepo", "ChangeRequest")';
         var picIndex = 0;
 
         function addPicRow(empId, role) {
@@ -176,11 +204,133 @@
             picIndex = $('#picContainer .pic-row').length;
         }
 
+        function escapeHtml(value) {
+            return $('<div>').text(value || '').html();
+        }
+
+        function setImportStatus(message, type) {
+            var cssClass = type === 'error' ? 'text-danger'
+                : type === 'success' ? 'text-success'
+                : 'text-muted';
+
+            $('#importStatus')
+                .removeClass('d-none text-danger text-success text-muted')
+                .addClass(cssClass)
+                .text(message);
+        }
+
+        function renderImportedFeatures() {
+            var $preview = $('#importedFeaturesPreview');
+            var $inputs = $('#importedFeaturesInputs');
+            $('#importedFeatureCount').text(importedFeatures.length);
+            $inputs.empty();
+
+            if (!importedFeatures.length) {
+                $preview.addClass('text-muted').text('No imported features yet.');
+                return;
+            }
+
+            var rows = importedFeatures.map((feature, index) => {
+                var description = feature.description
+                    ? `<div class="small text-muted">${escapeHtml(feature.description)}</div>`
+                    : '';
+
+                return `<div class="d-flex justify-content-between align-items-start border-bottom py-2">
+                    <div class="me-2">
+                        <div class="fw-semibold">${escapeHtml(feature.name)}</div>
+                        ${description}
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-imported-feature" data-index="${index}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>`;
+            }).join('');
+
+            $preview.removeClass('text-muted').html(rows);
+
+            importedFeatures.forEach((feature, index) => {
+                $('<input>', { type: 'hidden', name: `ImportedFeatures[${index}].Name`, value: feature.name || '' }).appendTo($inputs);
+                $('<input>', { type: 'hidden', name: `ImportedFeatures[${index}].Description`, value: feature.description || '' }).appendTo($inputs);
+                $('<input>', { type: 'hidden', name: `ImportedFeatures[${index}].IsAutoDetected`, value: feature.isAutoDetected ? 'true' : 'false' }).appendTo($inputs);
+            });
+        }
+
         $('#addPic').click(function() { addPicRow('', ''); });
 
         $(document).on('click', '.remove-pic', function() {
             $(this).closest('.pic-row').remove();
             reindexPics();
         });
+
+        $(document).on('click', '.remove-imported-feature', function() {
+            var index = Number($(this).data('index'));
+            if (Number.isNaN(index) || index < 0 || index >= importedFeatures.length) return;
+
+            importedFeatures.splice(index, 1);
+            renderImportedFeatures();
+        });
+
+        $('#importFromGitHub').on('click', async function() {
+            var repoUrl = ($('#GitHubRepoUrl').val() || '').toString().trim();
+            var branch = ($('#GitHubBranch').val() || '').toString().trim();
+            var token = $('#crForm input[name="__RequestVerificationToken"]').val();
+
+            if (!repoUrl) {
+                setImportStatus('Enter a GitHub repository URL first.', 'error');
+                return;
+            }
+
+            var $button = $(this);
+            $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Importing...');
+            setImportStatus('Importing repository metadata and features...', 'info');
+
+            try {
+                var body = new URLSearchParams();
+                body.append('repoUrl', repoUrl);
+                body.append('branch', branch);
+                body.append('__RequestVerificationToken', token);
+
+                var response = await fetch(importUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'Accept': 'application/json'
+                    },
+                    body: body.toString()
+                });
+
+                var payload = await response.json().catch(() => null);
+                if (!response.ok) {
+                    throw new Error(payload?.message || 'Unable to import this repository.');
+                }
+
+                if (payload.title) $('#Title').val(payload.title);
+                if (payload.description) $('#Description').val(payload.description);
+                if (payload.gitHubRepoOwner) $('#GitHubRepoOwner').val(payload.gitHubRepoOwner);
+                if (payload.gitHubRepoName) $('#GitHubRepoName').val(payload.gitHubRepoName);
+                if (payload.gitHubRepoUrl) $('#GitHubRepoUrl').val(payload.gitHubRepoUrl);
+                if (payload.gitHubBranch) $('#GitHubBranch').val(payload.gitHubBranch);
+                $('#TechnologyStack').val(payload.technologyStack || '');
+                if (payload.timelineStart) $('#TimelineStart').val(payload.timelineStart);
+                if (payload.timelineEnd) $('#TimelineEnd').val(payload.timelineEnd);
+                if (payload.figmaLink) $('#FigmaLink').val(payload.figmaLink);
+                if (payload.archSpecLink) $('#ArchSpecLink').val(payload.archSpecLink);
+
+                importedFeatures = (payload.features || []).map(feature => ({
+                    name: (feature.name || '').trim(),
+                    description: (feature.description || '').trim(),
+                    isAutoDetected: true
+                })).filter(feature => feature.name);
+
+                renderImportedFeatures();
+                setImportStatus(`Import successful. ${importedFeatures.length} feature(s) prepared for checklist.`, 'success');
+            } catch (error) {
+                setImportStatus(error.message || 'Unable to import this repository.', 'error');
+            } finally {
+                $button.prop('disabled', false).html('<i class="bi bi-download me-1"></i>Import Repo');
+            }
+        });
+
+        renderImportedFeatures();
     </script>
 }

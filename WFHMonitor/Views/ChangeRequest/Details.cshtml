@@ -6,67 +6,216 @@
     var resolvedRepoBranch = ViewBag.ResolvedGitHubBranch as string;
     var linkedBugs = ViewBag.LinkedBugs as IList<WFHMonitor.Models.BugReport> ?? new List<WFHMonitor.Models.BugReport>();
 
-    var statColors = new Dictionary<string, string> {
-        {"Draft","secondary"}, {"InReview","info"}, {"Approved","primary"},
-        {"InProgress","warning"}, {"Done","success"}, {"Rejected","danger"}
+    var statusClass = new Dictionary<string, string> {
+        {"Draft","detail-status-draft"}, {"InReview","detail-status-review"}, {"Approved","detail-status-approved"},
+        {"InProgress","detail-status-progress"}, {"Done","detail-status-done"}, {"Rejected","detail-status-rejected"}
     };
-    var prioColors = new Dictionary<string, string> {
-        {"Low","success"}, {"Medium","primary"}, {"High","warning"}, {"Critical","danger"}
+    var priorityClass = new Dictionary<string, string> {
+        {"Low","detail-priority-low"}, {"Medium","detail-priority-medium"}, {"High","detail-priority-high"}, {"Critical","detail-priority-critical"}
     };
-    var sColor = statColors.GetValueOrDefault(Model.Status.ToString(), "secondary");
-    var pColor = prioColors.GetValueOrDefault(Model.Priority.ToString(), "secondary");
+    var sClass = statusClass.GetValueOrDefault(Model.Status.ToString(), "detail-status-draft");
+    var pClass = priorityClass.GetValueOrDefault(Model.Priority.ToString(), "detail-priority-medium");
+
+    var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
+    {
+        (WFHMonitor.Models.CrStage.ProjectStart, "Project Start"),
+        (WFHMonitor.Models.CrStage.Development, "Development"),
+        (WFHMonitor.Models.CrStage.Testing, "Testing"),
+        (WFHMonitor.Models.CrStage.Deploy, "Deploy"),
+        (WFHMonitor.Models.CrStage.DeploymentComplete, "Deployment Complete")
+    };
+    var currentStageIndex = stageItems.FindIndex(s => s.Stage == Model.Stage);
 }
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
-        <span class="text-muted small">@Model.CrNumber</span>
-        <h2 class="mb-1 mt-1">@Model.Title</h2>
-        <div class="d-flex gap-2">
-            <span class="badge bg-@sColor">@Model.Status</span>
-            <span class="badge bg-@pColor">@Model.Priority</span>
-            <span class="text-muted small">Created @Model.CreatedAt.ToString("MMM dd, yyyy") by @Model.CreatedBy?.FullName</span>
+<style>
+    .project-detail-shell {
+        background: radial-gradient(circle at top left, #e5f9f3 0%, #f3f5ff 45%, #f4f6fb 100%);
+        border: 1px solid #e5e9f4;
+        border-radius: 18px;
+        padding: 18px;
+    }
+
+    .project-detail-hero {
+        background: linear-gradient(120deg, rgba(228, 247, 241, 0.96), rgba(236, 240, 255, 0.96));
+        border: 1px solid #dce4f1;
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 16px;
+    }
+
+    .project-detail-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .project-detail-kicker {
+        font-size: 0.73rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }
+
+    .project-detail-title {
+        font-size: 2.15rem;
+        font-weight: 800;
+        color: #1f2937;
+        line-height: 1.1;
+    }
+
+    .project-detail-meta {
+        color: #64748b;
+        font-size: 0.84rem;
+        margin-left: 2px;
+    }
+
+    .project-detail-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+    }
+
+    .project-detail-pill {
+        border-radius: 999px;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border: 1px solid transparent;
+        font-weight: 700;
+    }
+
+    .detail-status-draft { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+    .detail-status-review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .detail-status-approved { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+    .detail-status-progress { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+    .detail-status-done { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
+    .detail-status-rejected { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+    .detail-priority-low { background: #e8faf0; color: #0f766e; border-color: #b7f0df; }
+    .detail-priority-medium { background: #e5edff; color: #1d4ed8; border-color: #bfdbfe; }
+    .detail-priority-high { background: #fff4de; color: #b45309; border-color: #fde68a; }
+    .detail-priority-critical { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
+
+    .project-stage-flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+        align-items: center;
+    }
+
+    .project-stage-pill {
+        border-radius: 999px;
+        border: 1px solid #dbe3ef;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 0.74rem;
+        font-weight: 700;
+        padding: 5px 11px;
+    }
+
+    .project-stage-complete {
+        background: #d1fae5;
+        border-color: #a7f3d0;
+        color: #047857;
+    }
+
+    .project-stage-current {
+        background: #dbeafe;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .project-stage-arrow {
+        color: #94a3b8;
+        font-size: 0.73rem;
+    }
+
+    .project-detail-actions {
+        display: flex;
+        gap: 8px;
+        align-items: start;
+    }
+
+    .project-detail-shell .card {
+        border: 1px solid #e4e9f3;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+        border-radius: 14px;
+    }
+
+    .project-detail-shell .card-header {
+        background: #fbfdff !important;
+        border-bottom: 1px solid #edf2f8;
+        color: #334155;
+    }
+
+    .project-detail-shell .list-group-item {
+        border-color: #edf2f8;
+    }
+
+    .project-detail-grid {
+        --bs-gutter-x: 1rem;
+    }
+
+    @@media (max-width: 991px) {
+        .project-detail-title { font-size: 1.65rem; }
+    }
+</style>
+
+<div class="project-detail-shell">
+    @if (ViewBag.SyncWarning != null)
+    {
+        <div class="alert alert-warning small mb-3">
+            <i class="bi bi-exclamation-triangle me-2"></i>Auto-sync warning: @ViewBag.SyncWarning
         </div>
-        @{
-            var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
+    }
+
+    <section class="project-detail-hero">
+        <div class="project-detail-head">
+            <div>
+                <div class="project-detail-kicker">@Model.CrNumber</div>
+                <div class="project-detail-title">@Model.Title</div>
+                <div class="project-detail-pills">
+                    <span class="project-detail-pill @sClass">@Model.Status</span>
+                    <span class="project-detail-pill @pClass">@Model.Priority</span>
+                    <span class="project-detail-meta">Created @Model.CreatedAt.ToString("MMM dd, yyyy") by @Model.CreatedBy?.FullName</span>
+                </div>
+            </div>
+            @if (User.IsInRole("Admin"))
             {
-                (WFHMonitor.Models.CrStage.ProjectStart, "Project Start"),
-                (WFHMonitor.Models.CrStage.Development, "Development"),
-                (WFHMonitor.Models.CrStage.Testing, "Testing"),
-                (WFHMonitor.Models.CrStage.Deploy, "Deploy"),
-                (WFHMonitor.Models.CrStage.DeploymentComplete, "Deployment Complete")
-            };
-            var currentStageIndex = stageItems.FindIndex(s => s.Stage == Model.Stage);
-        }
-        <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-2 text-center">
+                <div class="project-detail-actions">
+                    <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-sm px-3">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </a>
+                    <form asp-action="Delete" asp-route-id="@Model.Id" method="post"
+                          onsubmit="return confirm('Delete @Model.CrNumber?')">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn-outline-danger btn-sm px-3"><i class="bi bi-trash me-1"></i>Delete</button>
+                    </form>
+                </div>
+            }
+        </div>
+
+        <div class="project-stage-flow">
             @for (var i = 0; i < stageItems.Count; i++)
             {
                 var isComplete = i < currentStageIndex;
                 var isCurrent = i == currentStageIndex;
-                var badgeClass = isCurrent ? "bg-primary" : isComplete ? "bg-success" : "bg-light text-muted border";
-                <span class="badge @badgeClass fs-6 px-3 py-2">@stageItems[i].Label</span>
+                var stageClass = isCurrent ? "project-stage-current" : isComplete ? "project-stage-complete" : string.Empty;
+                <span class="project-stage-pill @stageClass">@stageItems[i].Label</span>
                 if (i < stageItems.Count - 1)
                 {
-                    <i class="bi bi-chevron-right text-muted"></i>
+                    <i class="bi bi-chevron-right project-stage-arrow"></i>
                 }
             }
         </div>
-    </div>
-    @if (User.IsInRole("Admin"))
-    {
-        <div class="d-flex gap-2">
-            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">
-                <i class="bi bi-pencil me-1"></i>Edit
-            </a>
-            <form asp-action="Delete" asp-route-id="@Model.Id" method="post"
-                  onsubmit="return confirm('Delete @Model.CrNumber?')">
-                @Html.AntiForgeryToken()
-                <button class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
-            </form>
-        </div>
-    }
-</div>
+    </section>
 
-<div class="row g-4">
+<div class="row g-4 project-detail-grid">
     @* Left column *@
     <div class="col-lg-8">
 
@@ -459,6 +608,24 @@
                 <i class="bi bi-link-45deg me-2"></i>Links
             </div>
             <div class="card-body">
+                <div class="mb-3">
+                    <div class="small text-muted fw-semibold mb-1">Technology / Languages</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.TechnologyStack))
+                    {
+                        var technologies = Model.TechnologyStack.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var tech in technologies)
+                            {
+                                <span class="badge rounded-pill text-bg-light border">@tech</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-0">No technology data.</p>
+                    }
+                </div>
+
                 @if (!string.IsNullOrEmpty(Model.FigmaLink))
                 {
                     <a href="@Model.FigmaLink" target="_blank" class="btn btn-sm btn-outline-secondary w-100 mb-2 text-start">
@@ -625,4 +792,5 @@
     <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-2"></i>Back to List
     </a>
+</div>
 </div>

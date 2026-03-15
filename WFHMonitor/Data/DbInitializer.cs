@@ -83,6 +83,8 @@ public static class DbInitializer
         await db.Database.ExecuteSqlRawAsync("""
             IF COL_LENGTH('ChangeRequests', 'GitHubRepoUrl') IS NULL
                 ALTER TABLE [ChangeRequests] ADD [GitHubRepoUrl] nvarchar(500) NULL;
+            IF COL_LENGTH('ChangeRequests', 'TechnologyStack') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [TechnologyStack] nvarchar(800) NULL;
             """);
     }
 }

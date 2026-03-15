@@ -2,132 +2,550 @@
 @{ ViewData["Title"] = "Projects"; }
 
 @{
-    var statCls = new Dictionary<string, string> {
-        {"Draft","dp-badge-slate"}, {"InReview","dp-badge-sky"}, {"Approved","dp-badge-indigo"},
-        {"InProgress","dp-badge-amber"}, {"Done","dp-badge-green"}, {"Rejected","dp-badge-red"}
+    var statusClass = new Dictionary<string, string> {
+        {"Draft","status-draft"}, {"InReview","status-review"}, {"Approved","status-approved"},
+        {"InProgress","status-progress"}, {"Done","status-done"}, {"Rejected","status-rejected"}
     };
-    var prioCls = new Dictionary<string, string> {
-        {"Low","dp-badge-green"}, {"Medium","dp-badge-indigo"}, {"High","dp-badge-amber"}, {"Critical","dp-badge-red"}
+    var priorityClass = new Dictionary<string, string> {
+        {"Low","priority-low"}, {"Medium","priority-medium"}, {"High","priority-high"}, {"Critical","priority-critical"}
+    };
+    var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
+    {
+        (WFHMonitor.Models.CrStage.ProjectStart, "Project Start"),
+        (WFHMonitor.Models.CrStage.Development, "Development"),
+        (WFHMonitor.Models.CrStage.Testing, "Testing"),
+        (WFHMonitor.Models.CrStage.Deploy, "Deploy"),
+        (WFHMonitor.Models.CrStage.DeploymentComplete, "Deployment Complete")
     };
 }
 
-<div class="mod-header">
-    <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-file-earmark-diff" style="color:#818cf8"></i> Projects</h1>
-        <p class="mod-subtitle">All projects across the team</p>
-    </div>
-    @if (User.IsInRole("Admin"))
-    {
-        <a asp-action="Create" class="dp-btn-primary">
-            <i class="bi bi-plus-circle"></i> New Project
-        </a>
+<style>
+    .projects-page {
+        background: radial-gradient(circle at top left, #dff7f3 0%, #f6f8ff 45%, #f4f6fb 100%);
+        border: 1px solid #e6ebf5;
+        border-radius: 18px;
+        padding: 20px;
     }
-</div>
 
-<div class="dp" style="--dp-color:#6366f1">
-    <div class="dp-header">
-        <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
-            <i class="bi bi-folder2-open"></i>
+    .projects-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+        padding: 18px;
+        border-radius: 16px;
+        background: linear-gradient(120deg, rgba(228, 247, 241, 0.95), rgba(237, 240, 255, 0.95));
+        border: 1px solid #dde7f4;
+    }
+
+    .projects-kicker {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .projects-title {
+        margin: 2px 0 4px;
+        font-size: 1.7rem;
+        font-weight: 800;
+        color: #1f2937;
+    }
+
+    .projects-subtitle {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    .projects-hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .projects-total {
+        font-size: 0.75rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 5px 10px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #dbe3ef;
+    }
+
+    .projects-list {
+        display: grid;
+        gap: 14px;
+    }
+
+    .project-card {
+        background: #fff;
+        border: 1px solid #e5eaf3;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    .project-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #edf2f9;
+        background: #fbfdff;
+    }
+
+    .project-number {
+        font-family: Consolas, Monaco, monospace;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #2563eb;
+    }
+
+    .project-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .project-action {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1px solid #d7deea;
+        color: #475569;
+        background: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+
+    .project-action:hover {
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    .project-action-danger:hover {
+        border-color: #fecaca;
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .project-body {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 14px;
+        padding: 16px;
+    }
+
+    .project-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .project-title-link {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #1f2937;
+        text-decoration: none;
+    }
+
+    .project-title-link:hover {
+        color: #1d4ed8;
+    }
+
+    .project-badges {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0 2px;
+    }
+
+    .project-pill {
+        font-size: 0.74rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 4px 10px;
+        border: 1px solid transparent;
+    }
+
+    .status-draft { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+    .status-review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .status-approved { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+    .status-progress { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+    .status-done { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
+    .status-rejected { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+    .priority-low { background: #e8faf0; color: #0f766e; border-color: #b7f0df; }
+    .priority-medium { background: #e5edff; color: #1d4ed8; border-color: #bfdbfe; }
+    .priority-high { background: #fff4de; color: #b45309; border-color: #fde68a; }
+    .priority-critical { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
+
+    .project-meta {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 10px;
+    }
+
+    .project-stage-flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .stage-pill {
+        font-size: 0.7rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 4px 10px;
+        border: 1px solid #dbe3ef;
+        background: #f8fafc;
+        color: #64748b;
+    }
+
+    .stage-pill-complete {
+        background: #d1fae5;
+        color: #047857;
+        border-color: #a7f3d0;
+    }
+
+    .stage-pill-current {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
+
+    .stage-arrow {
+        color: #94a3b8;
+        font-size: 0.7rem;
+    }
+
+    .project-summary {
+        color: #475569;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        margin: 0;
+        white-space: pre-wrap;
+    }
+
+    .project-side {
+        border-left: 1px solid #edf2f7;
+        padding-left: 14px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+    }
+
+    .side-block {
+        border: 1px solid #edf2f7;
+        border-radius: 12px;
+        padding: 10px 11px;
+        background: #fafcff;
+    }
+
+    .side-title {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+        margin-bottom: 7px;
+    }
+
+    .side-text {
+        font-size: 0.82rem;
+        color: #334155;
+    }
+
+    .side-muted {
+        font-size: 0.78rem;
+        color: #94a3b8;
+    }
+
+    .side-link {
+        font-size: 0.78rem;
+        text-decoration: none;
+    }
+
+    .side-pics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .pic-pill {
+        font-size: 0.72rem;
+        background: #eef2f7;
+        color: #475569;
+        border-radius: 999px;
+        padding: 3px 8px;
+    }
+
+    .feature-progress-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: #334155;
+        margin-bottom: 5px;
+    }
+
+    .feature-progress {
+        height: 7px;
+        background: #edf2f7;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .feature-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #34d399, #3b82f6);
+    }
+
+    .projects-empty {
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #64748b;
+        border-radius: 14px;
+        text-align: center;
+        padding: 42px 16px;
+    }
+
+    @@media (max-width: 1199px) {
+        .project-body {
+            grid-template-columns: 1fr;
+        }
+
+        .project-side {
+            border-left: none;
+            border-top: 1px solid #edf2f7;
+            padding-left: 0;
+            padding-top: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .projects-page { padding: 14px; }
+        .projects-hero { padding: 14px; }
+        .projects-title { font-size: 1.35rem; }
+        .project-title-link { font-size: 1.1rem; }
+        .project-side { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="projects-page">
+    <div class="projects-hero">
+        <div>
+            <div class="projects-kicker"><i class="bi bi-grid-1x2-fill me-1"></i>Project Workspace</div>
+            <h1 class="projects-title">Projects</h1>
+            <p class="projects-subtitle">Track stage, ownership, and checklist progress in one view.</p>
         </div>
-        <span class="dp-header-title">All Projects</span>
-        <span class="dp-header-count">@Model.Count total</span>
+        <div class="projects-hero-actions">
+            <span class="projects-total">@Model.Count total</span>
+            @if (User.IsInRole("Admin"))
+            {
+                <a asp-action="Create" class="dp-btn-primary">
+                    <i class="bi bi-plus-circle"></i> New Project
+                </a>
+            }
+        </div>
     </div>
 
     @if (!Model.Any())
     {
-        <div class="dp-empty">
-            <i class="bi bi-file-earmark-diff"></i>
-            No projects yet
+        <div class="projects-empty">
+            <div class="mb-2"><i class="bi bi-inboxes fs-2"></i></div>
+            <div class="fw-semibold">No projects yet.</div>
             @if (User.IsInRole("Admin"))
             {
-                <a asp-action="Create" class="dp-btn-primary mt-2"><i class="bi bi-plus-circle"></i> Create First Project</a>
+                <a asp-action="Create" class="dp-btn-primary mt-3">
+                    <i class="bi bi-plus-circle"></i> Create First Project
+                </a>
             }
         </div>
     }
     else
     {
-        <div class="table-responsive">
-            <table class="dp-table">
-                <thead>
-                    <tr>
-                        <th>Project #</th>
-                        <th>Title</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>GitHub</th>
-                        <th>PIC</th>
-                        <th>Timeline</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var cr in Model)
-                    {
-                        var sc = statCls.GetValueOrDefault(cr.Status.ToString(), "dp-badge-slate");
-                        var pc = prioCls.GetValueOrDefault(cr.Priority.ToString(), "dp-badge-slate");
-                        <tr>
-                            <td class="dp-cell-mono">@cr.CrNumber</td>
-                            <td class="dp-cell-title">
-                                <a asp-action="Details" asp-route-id="@cr.Id">@cr.Title</a>
-                                @if (!string.IsNullOrEmpty(cr.FigmaLink))
+        <div class="projects-list">
+            @foreach (var cr in Model)
+            {
+                var sc = statusClass.GetValueOrDefault(cr.Status.ToString(), "status-draft");
+                var pc = priorityClass.GetValueOrDefault(cr.Priority.ToString(), "priority-medium");
+                var totalFeatures = cr.Features.Count;
+                var completedFeatures = cr.Features.Count(f => f.IsCompleted);
+                var featurePercent = totalFeatures == 0 ? 0 : (int)Math.Round(completedFeatures * 100.0 / totalFeatures);
+                var currentStageIndex = stageItems.FindIndex(s => s.Stage == cr.Stage);
+                if (currentStageIndex < 0) currentStageIndex = 0;
+
+                var summary = string.IsNullOrWhiteSpace(cr.Description)
+                    ? null
+                    : (cr.Description!.Length > 220 ? $"{cr.Description[..220]}..." : cr.Description);
+
+                <article class="project-card">
+                    <div class="project-card-head">
+                        <span class="project-number">@cr.CrNumber</span>
+                        <div class="project-actions">
+                            <a asp-action="Details" asp-route-id="@cr.Id" class="project-action" title="View">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <a asp-action="Edit" asp-route-id="@cr.Id" class="project-action" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form asp-action="Delete" asp-route-id="@cr.Id" method="post" class="d-inline"
+                                      onsubmit="return confirm('Delete @cr.CrNumber?')">
+                                    @Html.AntiForgeryToken()
+                                    <button class="project-action project-action-danger" title="Delete" type="submit">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="project-body">
+                        <div>
+                            <div class="project-title-row">
+                                <a asp-action="Details" asp-route-id="@cr.Id" class="project-title-link">@cr.Title</a>
+                                @if (!string.IsNullOrWhiteSpace(cr.FigmaLink))
                                 {
-                                    <a href="@cr.FigmaLink" target="_blank" class="ms-2 dp-cell-muted" title="Figma">
+                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="project-action" title="Open Figma">
                                         <i class="bi bi-box-arrow-up-right"></i>
                                     </a>
                                 }
-                            </td>
-                            <td><span class="dp-badge @sc">@cr.Status</span></td>
-                            <td><span class="dp-badge @pc">@cr.Priority</span></td>
-                            <td>
-                                @if (!string.IsNullOrWhiteSpace(cr.GitHubRepoUrl))
+                            </div>
+
+                            <div class="project-badges">
+                                <span class="project-pill @sc">@cr.Status</span>
+                                <span class="project-pill @pc">@cr.Priority</span>
+                            </div>
+
+                            <div class="project-meta">
+                                Created @cr.CreatedAt.ToString("MMM dd, yyyy") by @(cr.CreatedBy?.FullName ?? "Unknown")
+                            </div>
+
+                            <div class="project-stage-flow">
+                                @for (var i = 0; i < stageItems.Count; i++)
                                 {
-                                    <a href="@cr.GitHubRepoUrl" target="_blank" rel="noopener" class="dp-btn" title="Open repo">
-                                        <i class="bi bi-github"></i>
-                                    </a>
+                                    var stageClass = i == currentStageIndex ? "stage-pill-current" : i < currentStageIndex ? "stage-pill-complete" : string.Empty;
+                                    <span class="stage-pill @stageClass">@stageItems[i].Label</span>
+                                    if (i < stageItems.Count - 1)
+                                    {
+                                        <i class="bi bi-chevron-right stage-arrow"></i>
+                                    }
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(summary))
+                            {
+                                <p class="project-summary">@summary</p>
+                            }
+                        </div>
+
+                        <aside class="project-side">
+                            <div class="side-block">
+                                <div class="side-title">Features Checklist</div>
+                                @if (totalFeatures == 0)
+                                {
+                                    <div class="side-muted">No features tracked.</div>
                                 }
                                 else
                                 {
-                                    <span class="dp-cell-muted">—</span>
+                                    <div class="feature-progress-label">
+                                        <span>@completedFeatures / @totalFeatures</span>
+                                        <span>@featurePercent%</span>
+                                    </div>
+                                    <div class="feature-progress">
+                                        <div class="feature-progress-bar" style="width:@featurePercent%"></div>
+                                    </div>
                                 }
-                            </td>
-                            <td>
-                                @foreach (var pic in cr.Pics.Take(3))
-                                {
-                                    <span class="dp-badge dp-badge-slate me-1">@pic.Employee?.FullName</span>
-                                }
-                                @if (cr.Pics.Count > 3)
-                                {
-                                    <span class="dp-cell-muted">+@(cr.Pics.Count - 3)</span>
-                                }
-                            </td>
-                            <td class="dp-cell-muted" style="font-size:0.75rem;white-space:nowrap">
+                            </div>
+
+                            <div class="side-block">
+                                <div class="side-title">Timeline</div>
                                 @if (cr.TimelineStart.HasValue || cr.TimelineEnd.HasValue)
                                 {
-                                    @(cr.TimelineStart?.ToString("MMM dd") ?? "?")<span class="mx-1" style="color:#334155">→</span>@(cr.TimelineEnd?.ToString("MMM dd") ?? "?")
+                                    <div class="side-text">
+                                        @(cr.TimelineStart?.ToString("MMM dd, yyyy") ?? "?")
+                                        <i class="bi bi-arrow-right mx-1"></i>
+                                        @(cr.TimelineEnd?.ToString("MMM dd, yyyy") ?? "?")
+                                    </div>
                                 }
-                            </td>
-                            <td class="text-end">
-                                <div class="d-inline-flex gap-1">
-                                    <a asp-action="Details" asp-route-id="@cr.Id" class="dp-btn" title="View">
-                                        <i class="bi bi-eye"></i>
+                                else
+                                {
+                                    <div class="side-muted">No timeline set.</div>
+                                }
+                            </div>
+
+                            <div class="side-block">
+                                <div class="side-title">Technology / Languages</div>
+                                @if (!string.IsNullOrWhiteSpace(cr.TechnologyStack))
+                                {
+                                    <div class="side-text">@cr.TechnologyStack</div>
+                                }
+                                else
+                                {
+                                    <div class="side-muted">No technology data.</div>
+                                }
+                            </div>
+
+                            <div class="side-block">
+                                <div class="side-title">Links</div>
+                                @if (!string.IsNullOrWhiteSpace(cr.GitHubRepoUrl))
+                                {
+                                    <a href="@cr.GitHubRepoUrl" target="_blank" rel="noopener" class="side-link d-block">
+                                        <i class="bi bi-github me-1"></i>Open Repository
                                     </a>
-                                    @if (User.IsInRole("Admin"))
-                                    {
-                                        <a asp-action="Edit" asp-route-id="@cr.Id" class="dp-btn dp-btn-warn" title="Edit">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form asp-action="Delete" asp-route-id="@cr.Id" method="post" class="d-inline"
-                                              onsubmit="return confirm('Delete @cr.CrNumber?')">
-                                            @Html.AntiForgeryToken()
-                                            <button class="dp-btn dp-btn-danger" title="Delete"><i class="bi bi-trash"></i></button>
-                                        </form>
-                                    }
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(cr.FigmaLink))
+                                {
+                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="side-link d-block">
+                                        <i class="bi bi-vector-pen me-1"></i>Open Figma
+                                    </a>
+                                }
+                                @if (string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) && string.IsNullOrWhiteSpace(cr.FigmaLink))
+                                {
+                                    <div class="side-muted">No links attached.</div>
+                                }
+                            </div>
+
+                            <div class="side-block">
+                                <div class="side-title">Person In Charge</div>
+                                @if (cr.Pics.Any())
+                                {
+                                    <div class="side-pics">
+                                        @foreach (var pic in cr.Pics.Take(3))
+                                        {
+                                            <span class="pic-pill">@pic.Employee?.FullName</span>
+                                        }
+                                        @if (cr.Pics.Count > 3)
+                                        {
+                                            <span class="pic-pill">+@(cr.Pics.Count - 3)</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="side-muted">No PIC assigned.</div>
+                                }
+                            </div>
+                        </aside>
+                    </div>
+                </article>
+            }
         </div>
     }
 </div>

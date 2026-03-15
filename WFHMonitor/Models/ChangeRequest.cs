@@ -85,6 +85,10 @@ public class ChangeRequest
     [Display(Name = "GitHub Branch")]
     public string? GitHubBranch { get; set; }
 
+    [MaxLength(800)]
+    [Display(Name = "Technology / Languages")]
+    public string? TechnologyStack { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

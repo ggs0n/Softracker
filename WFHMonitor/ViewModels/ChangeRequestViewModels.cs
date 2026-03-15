@@ -54,8 +54,15 @@ public class ChangeRequestFormViewModel
     [Display(Name = "GitHub Branch")]
     public string? GitHubBranch { get; set; }
 
+    [MaxLength(800)]
+    [Display(Name = "Technology / Languages")]
+    public string? TechnologyStack { get; set; }
+
     [Display(Name = "Person in Charge (PIC)")]
     public List<PicEntry> Pics { get; set; } = new();
+
+    [Display(Name = "Imported Features")]
+    public List<ImportedFeatureEntry> ImportedFeatures { get; set; } = new();
 
     // for populating dropdown
     public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> EmployeeOptions { get; set; } = new();
@@ -66,4 +73,15 @@ public class PicEntry
     public string EmployeeId { get; set; } = string.Empty;
     [MaxLength(100)]
     public string? Role { get; set; }
+}
+
+public class ImportedFeatureEntry
+{
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    public bool IsAutoDetected { get; set; } = true;
 }
