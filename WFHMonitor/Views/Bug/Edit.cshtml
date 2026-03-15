@@ -108,8 +108,14 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        function isAgentSelected() {
+            const value = $('#assigneeType').val();
+            // Enum select can post either name ("Agent") or numeric value ("1")
+            return value === 'Agent' || value === '1';
+        }
+
         function toggleAssigneeFields() {
-            var isAgent = $('#assigneeType').val() === 'Agent';
+            var isAgent = isAgentSelected();
             $('#developerAssignGroup').toggleClass('d-none', isAgent);
             $('#agentAssignGroup').toggleClass('d-none', !isAgent);
             $('#agentStatusGroup').toggleClass('d-none', !isAgent);
