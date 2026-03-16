@@ -313,6 +313,24 @@
         background: linear-gradient(90deg, #34d399, #3b82f6);
     }
 
+    .feature-preview-list {
+        margin-top: 8px;
+        display: grid;
+        gap: 4px;
+    }
+
+    .feature-preview-item {
+        font-size: 0.76rem;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .feature-preview-item i {
+        color: #94a3b8;
+    }
+
     .projects-empty {
         border: 1px dashed #cbd5e1;
         background: #f8fafc;
@@ -464,6 +482,10 @@
                                 }
                                 else
                                 {
+                                    var featurePreview = cr.Features
+                                        .OrderBy(f => f.Name)
+                                        .Take(3)
+                                        .ToList();
                                     <div class="feature-progress-label">
                                         <span>@completedFeatures / @totalFeatures</span>
                                         <span>@featurePercent%</span>
@@ -471,7 +493,23 @@
                                     <div class="feature-progress">
                                         <div class="feature-progress-bar" style="width:@featurePercent%"></div>
                                     </div>
+                                    <div class="feature-preview-list">
+                                        @foreach (var feature in featurePreview)
+                                        {
+                                            <div class="feature-preview-item">
+                                                <i class="bi @(feature.IsCompleted ? "bi-check-circle-fill text-success" : "bi-circle")"></i>
+                                                <span>@feature.Name</span>
+                                            </div>
+                                        }
+                                        @if (totalFeatures > featurePreview.Count)
+                                        {
+                                            <div class="side-muted">+@(totalFeatures - featurePreview.Count) more feature(s)</div>
+                                        }
+                                    </div>
                                 }
+                                <a asp-action="Features" asp-route-projectId="@cr.Id" class="side-link d-block mt-2">
+                                    <i class="bi bi-arrow-up-right-square me-1"></i>Open Feature View
+                                </a>
                             </div>
 
                             <div class="side-block">

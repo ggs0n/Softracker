@@ -229,122 +229,6 @@
                 <div class="card-body" style="white-space:pre-wrap;">@Model.Description</div>
             </div>
         }
-
-        @* Architect Spec Preview *@
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-diagram-3 me-2"></i>Solution Architect Spec
-            </div>
-            <div class="card-body">
-                @if (!string.IsNullOrEmpty(Model.ArchSpecLink))
-                {
-                    <div class="mb-3">
-                        <span class="text-muted small d-block mb-1">Spec / Diagram Link</span>
-                        <a href="@Model.ArchSpecLink" target="_blank" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-box-arrow-up-right me-2"></i>Open SA Spec / Diagram
-                        </a>
-                    </div>
-                }
-                @if (!string.IsNullOrEmpty(Model.ArchSpecNotes))
-                {
-                    <div class="border rounded p-3 bg-light small" style="white-space:pre-wrap; font-family:monospace;">@Model.ArchSpecNotes</div>
-                }
-                @if (string.IsNullOrEmpty(Model.ArchSpecLink) && string.IsNullOrEmpty(Model.ArchSpecNotes))
-                {
-                    <p class="text-muted fst-italic mb-0">No architect spec attached.</p>
-                }
-            </div>
-        </div>
-
-        @* Architect Spec Images *@
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-images me-2"></i>Architect Spec Images</span>
-                @if (User.IsInRole("Admin"))
-                {
-                    <button class="btn btn-sm btn-outline-primary" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#uploadForm">
-                        <i class="bi bi-upload me-1"></i>Upload Image
-                    </button>
-                }
-            </div>
-
-            @if (User.IsInRole("Admin"))
-            {
-                <div class="collapse" id="uploadForm">
-                    <div class="card-body border-bottom">
-                        <form asp-action="UploadImage" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
-                            @Html.AntiForgeryToken()
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-5">
-                                    <label class="form-label fw-semibold small">Image File <span class="text-danger">*</span></label>
-                                    <input type="file" name="file" accept="image/*" class="form-control form-control-sm" required />
-                                    <div class="text-muted" style="font-size:0.72rem;">JPG, PNG, GIF, WEBP — max 10 MB</div>
-                                </div>
-                                <div class="col-md-5">
-                                    <label class="form-label fw-semibold small">Caption</label>
-                                    <input type="text" name="caption" class="form-control form-control-sm" placeholder="e.g. System Architecture Overview" maxlength="500" />
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="submit" class="btn btn-sm btn-primary w-100">
-                                        <i class="bi bi-upload me-1"></i>Upload
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            }
-
-            <div class="card-body @(!Model.ArchSpecImages.Any() ? "" : "p-0")">
-                @if (!Model.ArchSpecImages.Any())
-                {
-                    <p class="text-muted fst-italic mb-0">No images uploaded yet.</p>
-                }
-                else
-                {
-                    <div class="row g-0">
-                        @foreach (var img in Model.ArchSpecImages)
-                        {
-                            <div class="col-md-6 col-lg-4 p-2">
-                                <div class="card h-100 border">
-                                    <a href="/uploads/archspec/@img.FileName" target="_blank"
-                                       data-bs-toggle="modal" data-bs-target="#imgModal"
-                                       data-img="/uploads/archspec/@img.FileName"
-                                       data-caption="@img.Caption">
-                                        <img src="/uploads/archspec/@img.FileName"
-                                             class="card-img-top img-fluid"
-                                             style="height:auto; object-fit:contain; cursor:zoom-in; background:#f8f9fa;"
-                                             alt="@img.Caption" />
-                                    </a>
-                                    @if (!string.IsNullOrEmpty(img.Caption))
-                                    {
-                                        <div class="card-body py-2 px-3">
-                                            <p class="card-text small mb-0">@img.Caption</p>
-                                        </div>
-                                    }
-                                    @if (User.IsInRole("Admin"))
-                                    {
-                                        <div class="card-footer p-1 text-end bg-transparent border-top">
-                                            <form asp-action="DeleteImage" method="post" class="d-inline"
-                                                  onsubmit="return confirm('Delete this image?')">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="imageId" value="@img.Id" />
-                                                <input type="hidden" name="crId" value="@Model.Id" />
-                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            </form>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
-
         @* Additional Documents *@
         <div class="card mb-4">
             <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
@@ -417,132 +301,142 @@
             </div>
         </div>
 
-        @* Features Checklist *@
+        @* Project Features *@
         @{
             var features = Model.Features.OrderBy(f => f.Name).ToList();
-            var completedCount = features.Count(f => f.IsCompleted);
-            var featurePercent = features.Count == 0 ? 0 : (int)Math.Round(completedCount * 100.0 / features.Count);
-            var hasGitHub = !string.IsNullOrEmpty(ViewBag.ResolvedGitHubOwner as string)
-                            && !string.IsNullOrEmpty(ViewBag.ResolvedGitHubRepo as string);
         }
-        <div class="card mb-4">
+        <div class="card mb-4" id="projectFeaturesCard">
             <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
                 <span>
-                    <i class="bi bi-list-check me-2"></i>Features Checklist
-                    <span class="badge bg-secondary ms-1">@completedCount/@features.Count</span>
+                    <i class="bi bi-list-check me-2"></i>Project Features
+                    <span class="badge bg-secondary ms-1">@features.Count</span>
                 </span>
                 <div class="d-flex gap-2">
-                    @if (User.IsInRole("Admin") && hasGitHub)
-                    {
-                        <form asp-action="ScanFeatures" asp-route-id="@Model.Id" method="post" class="d-inline">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-outline-success">
-                                <i class="bi bi-radar me-1"></i>Scan Repo
-                            </button>
-                        </form>
-                    }
+                    <a asp-action="Features" asp-route-projectId="@Model.Id" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-grid me-1"></i>Feature View
+                    </a>
                     @if (User.IsInRole("Admin"))
                     {
-                        <button class="btn btn-sm btn-outline-primary" type="button"
-                                data-bs-toggle="collapse" data-bs-target="#addFeatureForm">
+                        <a asp-action="CreateFeature"
+                           asp-route-projectId="@Model.Id"
+                           asp-route-returnUrl="@($"{Context.Request.Path}{Context.Request.QueryString}")"
+                           class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-plus-lg me-1"></i>Add Feature
-                        </button>
+                        </a>
                     }
                 </div>
             </div>
 
-            @if (User.IsInRole("Admin"))
-            {
-                <div class="collapse" id="addFeatureForm">
-                    <div class="card-body border-bottom">
-                        <form asp-action="AddFeature" method="post">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="crId" value="@Model.Id" />
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold small">Feature Name <span class="text-danger">*</span></label>
-                                    <input type="text" name="name" class="form-control form-control-sm"
-                                           placeholder="e.g. Shopping Cart" maxlength="200" required />
-                                </div>
-                                <div class="col-md-5">
-                                    <label class="form-label fw-semibold small">Description</label>
-                                    <input type="text" name="description" class="form-control form-control-sm"
-                                           placeholder="Optional notes" maxlength="500" />
-                                </div>
-                                <div class="col-md-3">
-                                    <button type="submit" class="btn btn-sm btn-primary w-100">
-                                        <i class="bi bi-plus-lg me-1"></i>Add
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            }
-
             <div class="card-body">
                 @if (features.Count > 0)
                 {
-                    <div class="d-flex align-items-center gap-2 mb-3">
-                        <div class="progress flex-grow-1" style="height:8px">
-                            <div class="progress-bar @(featurePercent == 100 ? "bg-success" : featurePercent >= 50 ? "bg-primary" : "bg-warning")"
-                                 role="progressbar" style="width:@(featurePercent)%"></div>
-                        </div>
-                        <small class="text-nowrap fw-semibold">@featurePercent%</small>
-                    </div>
-
-                    <ul class="list-group list-group-flush">
-                        @foreach (var feature in features)
-                        {
-                            <li class="list-group-item d-flex align-items-center justify-content-between px-0 py-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <form asp-action="ToggleFeature" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="featureId" value="@feature.Id" />
-                                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
-                                                title="Toggle completion">
-                                            @if (feature.IsCompleted)
-                                            {
-                                                <i class="bi bi-check-square-fill text-success fs-5"></i>
-                                            }
-                                            else
-                                            {
-                                                <i class="bi bi-square text-muted fs-5"></i>
-                                            }
-                                        </button>
-                                    </form>
-                                    <div>
-                                        <span class="@(feature.IsCompleted ? "text-decoration-line-through text-muted" : "fw-semibold")">
-                                            @feature.Name
-                                        </span>
-                                        @if (feature.IsAutoDetected)
-                                        {
-                                            <span class="badge bg-info ms-1" style="font-size:0.65rem">Auto</span>
-                                        }
-                                        @if (!string.IsNullOrEmpty(feature.Description))
-                                        {
-                                            <div class="text-muted small">@feature.Description</div>
-                                        }
-                                    </div>
-                                </div>
-                                @if (User.IsInRole("Admin"))
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Stage</th>
+                                    <th>Developer</th>
+                                    <th>Timeline</th>
+                                    @if (User.IsInRole("Admin"))
+                                    {
+                                        <th class="text-end">Action</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var feature in features)
                                 {
-                                    <form asp-action="DeleteFeature" method="post" class="d-inline"
-                                          onsubmit="return confirm('Remove this feature?')">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="featureId" value="@feature.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
+                                    var timelineText = feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue
+                                        ? $"{feature.TimelineStart?.ToString("dd MMM yyyy") ?? "-"} to {feature.TimelineEnd?.ToString("dd MMM yyyy") ?? "-"}"
+                                        : "-";
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@feature.Name</div>
+                                            @if (!string.IsNullOrWhiteSpace(feature.Description))
+                                            {
+                                                <div class="text-muted small">@feature.Description</div>
+                                            }
+                                        </td>
+                                        <td><span class="badge bg-secondary">@feature.Status</span></td>
+                                        <td><span class="badge bg-info text-dark">@feature.Priority</span></td>
+                                        <td><span class="badge bg-light text-dark border">@feature.Stage</span></td>
+                                        <td>@(feature.AssignedDeveloper?.FullName ?? "Unassigned")</td>
+                                        <td class="text-muted small">@timelineText</td>
+                                        @if (User.IsInRole("Admin"))
+                                        {
+                                            <td class="text-end">
+                                                <a asp-action="EditFeature"
+                                                   asp-route-featureId="@feature.Id"
+                                                   asp-route-returnUrl="@($"{Context.Request.Path}{Context.Request.QueryString}")"
+                                                   class="btn btn-sm btn-outline-warning py-0 px-2 me-1"
+                                                   title="Edit feature">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                <form asp-action="DeleteFeature" method="post" class="d-inline"
+                                                      onsubmit="return confirm('Remove this feature?')">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="featureId" value="@feature.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        }
+                                    </tr>
                                 }
-                            </li>
-                        }
-                    </ul>
+                            </tbody>
+                        </table>
+                    </div>
                 }
                 else
                 {
-                    <p class="text-muted fst-italic mb-0">No features tracked yet. Use "Scan Repo" or "Add Feature" to get started.</p>
+                    <p class="text-muted fst-italic mb-0">No features tracked yet. Use "Add Feature" to get started.</p>
+                }
+            </div>
+        </div>
+
+        @* Repository Scan Features *@
+        @{
+            var repositoryFeatures = Model.RepositoryFeatures.OrderBy(f => f.Name).ToList();
+        }
+        <div class="card mb-4" id="repositoryFeaturesCard">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-github me-2"></i>Repository Scan Features
+                    <span class="badge bg-secondary ms-1">@repositoryFeatures.Count</span>
+                </span>
+            </div>
+            <div class="card-body">
+                @if (repositoryFeatures.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var feature in repositoryFeatures)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@feature.Name</td>
+                                        <td class="text-muted">@(string.IsNullOrWhiteSpace(feature.Description) ? "-" : feature.Description)</td>
+                                        <td class="text-muted small">@feature.UpdatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted fst-italic mb-0">No repository scan features yet.</p>
                 }
             </div>
         </div>
@@ -794,3 +688,4 @@
     </a>
 </div>
 </div>
+

@@ -40,27 +40,13 @@
                     </div>
 
                     <hr class="my-3" />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links & Specs</h6>
+                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links</h6>
 
                     <div class="mb-3">
                         <label asp-for="FigmaLink" class="form-label fw-semibold">
                             <i class="bi bi-vector-pen me-1 text-muted"></i>Figma Link
                         </label>
                         <input asp-for="FigmaLink" class="form-control" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ArchSpecLink" class="form-label fw-semibold">
-                            <i class="bi bi-diagram-3 me-1 text-muted"></i>SA Spec / Diagram Link
-                        </label>
-                        <input asp-for="ArchSpecLink" class="form-control" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ArchSpecNotes" class="form-label fw-semibold">
-                            <i class="bi bi-card-text me-1 text-muted"></i>Architect Spec Preview Notes
-                        </label>
-                        <textarea asp-for="ArchSpecNotes" class="form-control" rows="3"></textarea>
                     </div>
 
                     <hr class="my-3" />
@@ -124,34 +110,6 @@
             </div>
         </div>
 
-        <div class="card mt-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-images me-2"></i>Architect Spec Images
-            </div>
-            <div class="card-body">
-                <form asp-action="UploadImage" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="returnUrl" value="@Url.Action("Edit", new { id = Model.Id })" />
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-5">
-                            <label class="form-label fw-semibold small">Image File <span class="text-danger">*</span></label>
-                            <input type="file" name="file" accept="image/*" class="form-control form-control-sm" required />
-                            <div class="text-muted" style="font-size:0.72rem;">JPG, PNG, GIF, WEBP - max 10 MB</div>
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label fw-semibold small">Caption</label>
-                            <input type="text" name="caption" class="form-control form-control-sm" placeholder="e.g. System Architecture Overview" maxlength="500" />
-                        </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-sm btn-primary w-100">
-                                <i class="bi bi-upload me-1"></i>Upload
-                            </button>
-                        </div>
-                    </div>
-                </form>
-                <div class="text-muted small mt-2">Uploaded images are visible to all users on the details page.</div>
-            </div>
-        </div>
     </div>
 </div>
 

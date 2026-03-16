@@ -61,7 +61,7 @@ public class ChangeRequestFormViewModel
     [Display(Name = "Person in Charge (PIC)")]
     public List<PicEntry> Pics { get; set; } = new();
 
-    [Display(Name = "Imported Features")]
+    [Display(Name = "Repository Scan Features")]
     public List<ImportedFeatureEntry> ImportedFeatures { get; set; } = new();
 
     // for populating dropdown
@@ -84,4 +84,46 @@ public class ImportedFeatureEntry
     public string? Description { get; set; }
 
     public bool IsAutoDetected { get; set; } = true;
+}
+
+public class CreateProjectFeatureViewModel
+{
+    public int? FeatureId { get; set; }
+
+    [Display(Name = "Related Project")]
+    [Required]
+    public int ChangeRequestId { get; set; }
+
+    [Display(Name = "Feature / Change Title")]
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [Display(Name = "Description")]
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    [Display(Name = "Status")]
+    public CrStatus Status { get; set; } = CrStatus.Draft;
+
+    [Display(Name = "Priority")]
+    public CrPriority Priority { get; set; } = CrPriority.Medium;
+
+    [Display(Name = "Stage")]
+    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+
+    [DataType(DataType.Date)]
+    [Display(Name = "Start Date")]
+    public DateTime? TimelineStart { get; set; }
+
+    [DataType(DataType.Date)]
+    [Display(Name = "End Date")]
+    public DateTime? TimelineEnd { get; set; }
+
+    [Display(Name = "Assigned Developer")]
+    public string? AssignedDeveloperId { get; set; }
+
+    public string? ReturnUrl { get; set; }
+
+    public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ProjectOptions { get; set; } = new();
+    public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> DeveloperOptions { get; set; } = new();
 }

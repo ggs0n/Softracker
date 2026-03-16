@@ -100,6 +100,44 @@ body {
   flex-shrink: 0;
 }
 
+.sidebar-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sidebar-group-toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-group-chevron {
+  font-size: 0.72rem;
+  transition: transform 0.18s ease;
+}
+
+.sidebar-group-toggle[aria-expanded="true"] .sidebar-group-chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar-subnav {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 6px 24px;
+}
+
+.sidebar-subnav li a {
+  font-size: 0.82rem;
+  padding: 8px 10px;
+}
+
+.sidebar-subnav li a i {
+  font-size: 0.9rem;
+  width: 18px;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding: 14px 10px;

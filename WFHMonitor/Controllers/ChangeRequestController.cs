@@ -17,6 +17,8 @@ namespace WFHMonitor.Controllers;
 [Authorize]
 public class ChangeRequestController : Controller
 {
+    private const int FreeChangeRequestLimit = 5;
+
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IGitHubService _gitHub;
@@ -43,20 +45,219 @@ public class ChangeRequestController : Controller
             .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
-        List<ChangeRequest> crs;
-        if (User.IsInRole("Developer"))
-        {
-            var userId = _userManager.GetUserId(User);
-            crs = await query
-                .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
-                .ToListAsync();
-        }
-        else
-        {
-            crs = await query.ToListAsync();
-        }
+        var crs = await GetVisibleProjectsAsync(query);
 
         return View(crs);
+    }
+
+    public async Task<IActionResult> Features(int? projectId)
+    {
+        var query = _db.ChangeRequests
+            .Include(c => c.Features.OrderBy(f => f.Name))
+                .ThenInclude(f => f.AssignedDeveloper)
+            .OrderByDescending(c => c.CreatedAt)
+            .AsNoTracking();
+
+        if (projectId.HasValue)
+            query = query.Where(c => c.Id == projectId.Value);
+
+        var projects = await GetVisibleProjectsAsync(query);
+        if (projectId.HasValue && projects.Count == 0)
+            return NotFound();
+
+        return View(projects);
+    }
+
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> CreateFeature(int? projectId, string? returnUrl)
+    {
+        var vm = new CreateProjectFeatureViewModel
+        {
+            ChangeRequestId = projectId ?? 0,
+            ReturnUrl = returnUrl,
+            ProjectOptions = await GetProjectOptionsAsync(),
+            DeveloperOptions = await GetDeveloperOptionsAsync()
+        };
+
+        return View(vm);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> CreateFeature(CreateProjectFeatureViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            model.ProjectOptions = await GetEditableProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        var projectExists = await _db.ChangeRequests
+            .AnyAsync(c => c.Id == model.ChangeRequestId);
+
+        if (!projectExists)
+        {
+            ModelState.AddModelError(nameof(model.ChangeRequestId), "Selected project not found.");
+            model.ProjectOptions = await GetProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.AssignedDeveloperId))
+        {
+            var assignedUser = await _userManager.FindByIdAsync(model.AssignedDeveloperId);
+            if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+            {
+                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected developer not found.");
+                model.ProjectOptions = await GetEditableProjectOptionsAsync();
+                model.DeveloperOptions = await GetDeveloperOptionsAsync();
+                return View(model);
+            }
+        }
+
+        var normalizedName = model.Name.Trim();
+        var existsWithSameName = await _db.ProjectFeatures
+            .AnyAsync(f => f.ChangeRequestId == model.ChangeRequestId
+                && f.Name.ToLower() == normalizedName.ToLower());
+
+        if (existsWithSameName)
+        {
+            ModelState.AddModelError(nameof(model.Name), "This feature already exists for the selected project.");
+            model.ProjectOptions = await GetProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        var isCompleted = model.Status == CrStatus.Done;
+
+        _db.ProjectFeatures.Add(new ProjectFeature
+        {
+            ChangeRequestId = model.ChangeRequestId,
+            Name = normalizedName,
+            Description = model.Description?.Trim(),
+            Status = model.Status,
+            Priority = model.Priority,
+            Stage = model.Stage,
+            TimelineStart = model.TimelineStart,
+            TimelineEnd = model.TimelineEnd,
+            AssignedDeveloperId = string.IsNullOrWhiteSpace(model.AssignedDeveloperId)
+                ? null
+                : model.AssignedDeveloperId.Trim(),
+            IsCompleted = isCompleted,
+            IsAutoDetected = false
+        });
+
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Feature \"{normalizedName}\" created.";
+
+        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+            return LocalRedirect(model.ReturnUrl);
+
+        return RedirectToAction(nameof(Features), new { projectId = model.ChangeRequestId });
+    }
+
+    [Authorize(Roles = "Admin,Developer")]
+    public async Task<IActionResult> EditFeature(int featureId, string? returnUrl)
+    {
+        var feature = await _db.ProjectFeatures
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == featureId);
+        if (feature == null) return NotFound();
+        if (!await CanEditFeatureProjectAsync(feature.ChangeRequestId)) return Forbid();
+
+        var vm = new CreateProjectFeatureViewModel
+        {
+            FeatureId = feature.Id,
+            ChangeRequestId = feature.ChangeRequestId,
+            Name = feature.Name,
+            Description = feature.Description,
+            Status = feature.Status,
+            Priority = feature.Priority,
+            Stage = feature.Stage,
+            TimelineStart = feature.TimelineStart,
+            TimelineEnd = feature.TimelineEnd,
+            AssignedDeveloperId = feature.AssignedDeveloperId,
+            ReturnUrl = returnUrl,
+            ProjectOptions = await GetEditableProjectOptionsAsync(),
+            DeveloperOptions = await GetDeveloperOptionsAsync()
+        };
+
+        return View(vm);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Developer")]
+    public async Task<IActionResult> EditFeature(CreateProjectFeatureViewModel model)
+    {
+        if (model.FeatureId is null or <= 0)
+            return NotFound();
+
+        if (!ModelState.IsValid)
+        {
+            model.ProjectOptions = await GetProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        var feature = await _db.ProjectFeatures.FindAsync(model.FeatureId.Value);
+        if (feature == null) return NotFound();
+        if (!await CanEditFeatureProjectAsync(feature.ChangeRequestId)) return Forbid();
+
+        var projectExists = await CanEditFeatureProjectAsync(model.ChangeRequestId);
+        if (!projectExists)
+        {
+            ModelState.AddModelError(nameof(model.ChangeRequestId), "Selected project not found.");
+            model.ProjectOptions = await GetEditableProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.AssignedDeveloperId))
+        {
+            var assignedUser = await _userManager.FindByIdAsync(model.AssignedDeveloperId);
+            if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+            {
+                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected developer not found.");
+                model.ProjectOptions = await GetProjectOptionsAsync();
+                model.DeveloperOptions = await GetDeveloperOptionsAsync();
+                return View(model);
+            }
+        }
+
+        var normalizedName = model.Name.Trim();
+        var existsWithSameName = await _db.ProjectFeatures
+            .AnyAsync(f => f.Id != model.FeatureId.Value
+                && f.ChangeRequestId == model.ChangeRequestId
+                && f.Name.ToLower() == normalizedName.ToLower());
+        if (existsWithSameName)
+        {
+            ModelState.AddModelError(nameof(model.Name), "This feature already exists for the selected project.");
+            model.ProjectOptions = await GetEditableProjectOptionsAsync();
+            model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            return View(model);
+        }
+
+        feature.ChangeRequestId = model.ChangeRequestId;
+        feature.Name = normalizedName;
+        feature.Description = model.Description?.Trim();
+        feature.Status = model.Status;
+        feature.Priority = model.Priority;
+        feature.Stage = model.Stage;
+        feature.TimelineStart = model.TimelineStart;
+        feature.TimelineEnd = model.TimelineEnd;
+        feature.AssignedDeveloperId = string.IsNullOrWhiteSpace(model.AssignedDeveloperId)
+            ? null
+            : model.AssignedDeveloperId.Trim();
+        feature.IsCompleted = model.Status == CrStatus.Done;
+
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Feature \"{feature.Name}\" updated.";
+
+        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+            return LocalRedirect(model.ReturnUrl);
+
+        return RedirectToAction(nameof(Features), new { projectId = model.ChangeRequestId });
     }
 
     public async Task<IActionResult> Details(int id)
@@ -84,6 +285,8 @@ public class ChangeRequestController : Controller
             .Include(c => c.ArchSpecImages.OrderBy(i => i.SortOrder))
             .Include(c => c.Documents.OrderBy(d => d.UploadedAt))
             .Include(c => c.Features.OrderBy(f => f.Name))
+                .ThenInclude(f => f.AssignedDeveloper)
+            .Include(c => c.RepositoryFeatures.OrderBy(f => f.Name))
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
@@ -132,6 +335,13 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create()
     {
+        var userId = _userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId) && await HasReachedFreeChangeRequestLimitAsync(userId))
+        {
+            TempData["Error"] = $"Free plan allows up to {FreeChangeRequestLimit} change requests. Upgrade to Pro to create more.";
+            return RedirectToAction("Index", "Payment");
+        }
+
         var vm = new ChangeRequestFormViewModel
         {
             EmployeeOptions = await GetEmployeeOptions()
@@ -144,6 +354,13 @@ public class ChangeRequestController : Controller
     public async Task<IActionResult> Create(ChangeRequestFormViewModel model)
     {
         ApplyGitHubRepoFromUrl(model);
+        var userId = _userManager.GetUserId(User)!;
+
+        if (await HasReachedFreeChangeRequestLimitAsync(userId))
+        {
+            TempData["Error"] = $"Free plan allows up to {FreeChangeRequestLimit} change requests. Upgrade to Pro to continue.";
+            return RedirectToAction("Index", "Payment");
+        }
 
         if (!ModelState.IsValid)
         {
@@ -151,7 +368,6 @@ public class ChangeRequestController : Controller
             return View(model);
         }
 
-        var userId = _userManager.GetUserId(User)!;
         var currentYear = DateTime.UtcNow.Year;
         ChangeRequest? cr = null;
         const int maxCrNumberAttempts = 6;
@@ -196,12 +412,12 @@ public class ChangeRequestController : Controller
             if (string.IsNullOrWhiteSpace(featureName) || !seenFeatureNames.Add(featureName))
                 continue;
 
-            _db.ProjectFeatures.Add(new ProjectFeature
+            _db.RepositoryFeatures.Add(new RepositoryFeature
             {
                 ChangeRequestId = cr.Id,
                 Name = featureName,
                 Description = feature.Description?.Trim(),
-                IsAutoDetected = feature.IsAutoDetected
+                UpdatedAt = DateTime.UtcNow
             });
         }
 
@@ -556,31 +772,32 @@ public class ChangeRequestController : Controller
             var tree = await _gitHub.GetRepoTreeAsync(owner, repo, branch);
             var detected = FeatureDetector.DetectFeatures(tree);
 
-            var existingNames = await _db.ProjectFeatures
+            var existingNames = await _db.RepositoryFeatures
                 .Where(f => f.ChangeRequestId == id)
                 .Select(f => f.Name)
                 .ToListAsync();
+            var knownNames = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var added = 0;
             foreach (var (name, description) in detected)
             {
-                if (existingNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                if (!knownNames.Add(name))
                     continue;
 
-                _db.ProjectFeatures.Add(new ProjectFeature
+                _db.RepositoryFeatures.Add(new RepositoryFeature
                 {
                     ChangeRequestId = id,
                     Name = name,
                     Description = description,
-                    IsAutoDetected = true
+                    UpdatedAt = DateTime.UtcNow
                 });
                 added++;
             }
 
             await _db.SaveChangesAsync();
             TempData["Success"] = added > 0
-                ? $"Scan complete — {added} feature(s) detected and added."
-                : "Scan complete — no new features detected.";
+                ? $"Scan complete - {added} repository feature(s) detected and added."
+                : "Scan complete - no new repository features detected.";
         }
         catch (Exception ex)
         {
@@ -607,7 +824,11 @@ public class ChangeRequestController : Controller
         {
             ChangeRequestId = crId,
             Name = name.Trim(),
-            Description = description?.Trim()
+            Description = description?.Trim(),
+            Status = CrStatus.Draft,
+            Priority = CrPriority.Medium,
+            Stage = CrStage.ProjectStart,
+            IsCompleted = false
         });
         await _db.SaveChangesAsync();
 
@@ -616,20 +837,24 @@ public class ChangeRequestController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ToggleFeature(int featureId)
+    public async Task<IActionResult> ToggleFeature(int featureId, string? returnUrl)
     {
         var feature = await _db.ProjectFeatures.FindAsync(featureId);
         if (feature == null) return NotFound();
 
         feature.IsCompleted = !feature.IsCompleted;
+        feature.Status = feature.IsCompleted ? CrStatus.Done : CrStatus.InProgress;
         await _db.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
 
         return RedirectToAction(nameof(Details), new { id = feature.ChangeRequestId });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> DeleteFeature(int featureId)
+    public async Task<IActionResult> DeleteFeature(int featureId, string? returnUrl)
     {
         var feature = await _db.ProjectFeatures.FindAsync(featureId);
         if (feature == null) return NotFound();
@@ -639,8 +864,38 @@ public class ChangeRequestController : Controller
         await _db.SaveChangesAsync();
 
         TempData["Success"] = "Feature removed.";
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
+
         return RedirectToAction(nameof(Details), new { id = crId });
     }
+
+    private async Task<List<ChangeRequest>> GetVisibleProjectsAsync(IQueryable<ChangeRequest> query)
+    {
+        if (!User.IsInRole("Developer"))
+            return await query.ToListAsync();
+
+        var userId = _userManager.GetUserId(User);
+        return await query
+            .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
+            .ToListAsync();
+    }
+
+    private async Task<bool> HasReachedFreeChangeRequestLimitAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null || HasActiveProAccess(user))
+            return false;
+
+        var currentCount = await _db.ChangeRequests
+            .CountAsync(c => c.CreatedById == userId);
+
+        return currentCount >= FreeChangeRequestLimit;
+    }
+
+    private static bool HasActiveProAccess(ApplicationUser user) =>
+        user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
 
     private void DeleteImageFile(string fileName, IWebHostEnvironment environment)
     {
@@ -666,6 +921,52 @@ public class ChangeRequestController : Controller
             .Concat(developers.Select(e => new SelectListItem($"{e.FullName} (Developer)", e.Id)))
             .Concat(agents.Select(e => new SelectListItem($"{e.FullName} (Agent)", e.Id)))
             .OrderBy(e => e.Text)
+            .ToList();
+    }
+
+    private async Task<List<SelectListItem>> GetProjectOptionsAsync()
+    {
+        return await _db.ChangeRequests
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
+            .ToListAsync();
+    }
+
+    private async Task<List<SelectListItem>> GetEditableProjectOptionsAsync()
+    {
+        if (User.IsInRole("Admin"))
+            return await GetProjectOptionsAsync();
+
+        if (!User.IsInRole("Developer"))
+            return [];
+
+        var userId = _userManager.GetUserId(User);
+        return await _db.ChangeRequests
+            .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
+            .ToListAsync();
+    }
+
+    private async Task<bool> CanEditFeatureProjectAsync(int changeRequestId)
+    {
+        if (User.IsInRole("Admin"))
+            return await _db.ChangeRequests.AnyAsync(c => c.Id == changeRequestId);
+
+        if (!User.IsInRole("Developer"))
+            return false;
+
+        var userId = _userManager.GetUserId(User);
+        return await _db.ChangeRequestPics
+            .AnyAsync(p => p.ChangeRequestId == changeRequestId && p.EmployeeId == userId);
+    }
+
+    private async Task<List<SelectListItem>> GetDeveloperOptionsAsync()
+    {
+        var developers = await _userManager.GetUsersInRoleAsync("Developer");
+        return developers
+            .OrderBy(d => d.FullName)
+            .Select(d => new SelectListItem(d.FullName, d.Id))
             .ToList();
     }
 
@@ -827,38 +1128,35 @@ public class ChangeRequestController : Controller
         if (string.IsNullOrWhiteSpace(project.Title))
             project.Title = HumanizeRepoName(repoInfo.Name);
 
-        await SyncAutoDetectedFeaturesAsync(project.Id, detectedFeatures);
+        await SyncRepositoryFeaturesAsync(project.Id, detectedFeatures);
         project.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
     }
 
-    private async Task SyncAutoDetectedFeaturesAsync(
+    private async Task SyncRepositoryFeaturesAsync(
         int changeRequestId,
         IReadOnlyCollection<(string Name, string Description)> detectedFeatures)
     {
-        var allFeatures = await _db.ProjectFeatures
+        var allFeatures = await _db.RepositoryFeatures
             .Where(f => f.ChangeRequestId == changeRequestId)
             .ToListAsync();
-
-        var autoFeatures = allFeatures
-            .Where(f => f.IsAutoDetected)
-            .ToList();
 
         var normalizedDetected = detectedFeatures
             .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToDictionary(f => f.Name, f => f.Description, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var feature in autoFeatures)
+        foreach (var feature in allFeatures)
         {
             if (normalizedDetected.TryGetValue(feature.Name, out var description))
             {
                 feature.Description = description;
+                feature.UpdatedAt = DateTime.UtcNow;
                 normalizedDetected.Remove(feature.Name);
             }
             else
             {
-                _db.ProjectFeatures.Remove(feature);
+                _db.RepositoryFeatures.Remove(feature);
             }
         }
 
@@ -871,12 +1169,12 @@ public class ChangeRequestController : Controller
             if (existingNames.Contains(name))
                 continue;
 
-            _db.ProjectFeatures.Add(new ProjectFeature
+            _db.RepositoryFeatures.Add(new RepositoryFeature
             {
                 ChangeRequestId = changeRequestId,
                 Name = name,
                 Description = description,
-                IsAutoDetected = true
+                UpdatedAt = DateTime.UtcNow
             });
         }
     }
@@ -1085,3 +1383,4 @@ public class ChangeRequestController : Controller
         return true;
     }
 }
+

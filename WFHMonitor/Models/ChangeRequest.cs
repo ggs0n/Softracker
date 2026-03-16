@@ -100,6 +100,7 @@ public class ChangeRequest
     public ICollection<ArchSpecImage> ArchSpecImages { get; set; } = new List<ArchSpecImage>();
     public ICollection<ChangeRequestDocument> Documents { get; set; } = new List<ChangeRequestDocument>();
     public ICollection<ProjectFeature> Features { get; set; } = new List<ProjectFeature>();
+    public ICollection<RepositoryFeature> RepositoryFeatures { get; set; } = new List<RepositoryFeature>();
 }
 
 public class ArchSpecImage
@@ -168,8 +169,40 @@ public class ProjectFeature
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    public CrStatus Status { get; set; } = CrStatus.Draft;
+    public CrPriority Priority { get; set; } = CrPriority.Medium;
+    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+
+    [DataType(DataType.Date)]
+    public DateTime? TimelineStart { get; set; }
+
+    [DataType(DataType.Date)]
+    public DateTime? TimelineEnd { get; set; }
+
+    [ForeignKey(nameof(AssignedDeveloper))]
+    public string? AssignedDeveloperId { get; set; }
+    public ApplicationUser? AssignedDeveloper { get; set; }
+
     public bool IsCompleted { get; set; }
     public bool IsAutoDetected { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class RepositoryFeature
+{
+    public int Id { get; set; }
+
+    [ForeignKey(nameof(ChangeRequest))]
+    public int ChangeRequestId { get; set; }
+    public ChangeRequest? ChangeRequest { get; set; }
+
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

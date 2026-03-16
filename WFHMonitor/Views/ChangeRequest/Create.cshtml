@@ -48,12 +48,12 @@
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="form-label fw-semibold mb-0">
-                                <i class="bi bi-list-check me-1 text-primary"></i>Imported Features Checklist
+                                <i class="bi bi-github me-1 text-primary"></i>Repository Scan Features
                             </label>
                             <span id="importedFeatureCount" class="badge bg-secondary">0</span>
                         </div>
                         <div id="importedFeaturesPreview" class="border rounded p-2 bg-light small text-muted">
-                            No imported features yet.
+                            No repository scan features yet.
                         </div>
                         <div id="importedFeaturesInputs"></div>
                     </div>
@@ -88,7 +88,7 @@
                     </div>
 
                     <hr class="my-3" />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links & Specs</h6>
+                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links</h6>
 
                     <div class="mb-3">
                         <label asp-for="FigmaLink" class="form-label fw-semibold">
@@ -97,20 +97,6 @@
                         <input asp-for="FigmaLink" class="form-control" placeholder="https://figma.com/file/..." />
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="ArchSpecLink" class="form-label fw-semibold">
-                            <i class="bi bi-diagram-3 me-1 text-muted"></i>SA Spec / Diagram Link
-                        </label>
-                        <input asp-for="ArchSpecLink" class="form-control" placeholder="https://docs.google.com/..." />
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ArchSpecNotes" class="form-label fw-semibold">
-                            <i class="bi bi-card-text me-1 text-muted"></i>Architect Spec Preview Notes
-                        </label>
-                        <textarea asp-for="ArchSpecNotes" class="form-control" rows="3"
-                                  placeholder="Paste key highlights or diagram descriptions here..."></textarea>
-                    </div>
 
                     <hr class="my-3" />
                     <h6 class="fw-bold mb-3"><i class="bi bi-calendar-range me-2 text-primary"></i>Timeline</h6>
@@ -226,7 +212,7 @@
             $inputs.empty();
 
             if (!importedFeatures.length) {
-                $preview.addClass('text-muted').text('No imported features yet.');
+                $preview.addClass('text-muted').text('No repository scan features yet.');
                 return;
             }
 
@@ -314,8 +300,6 @@
                 if (payload.timelineStart) $('#TimelineStart').val(payload.timelineStart);
                 if (payload.timelineEnd) $('#TimelineEnd').val(payload.timelineEnd);
                 if (payload.figmaLink) $('#FigmaLink').val(payload.figmaLink);
-                if (payload.archSpecLink) $('#ArchSpecLink').val(payload.archSpecLink);
-
                 importedFeatures = (payload.features || []).map(feature => ({
                     name: (feature.name || '').trim(),
                     description: (feature.description || '').trim(),

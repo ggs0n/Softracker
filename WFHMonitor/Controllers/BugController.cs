@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services.Interfaces;
 using WFHMonitor.ViewModels;
@@ -10,11 +12,18 @@ namespace WFHMonitor.Controllers;
 [Authorize(Roles = "Admin,Tester,Developer")]
 public class BugController : Controller
 {
+    private const int FreeBugLimit = 5;
+
+    private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IBugService _bugService;
 
-    public BugController(UserManager<ApplicationUser> userManager, IBugService bugService)
+    public BugController(
+        ApplicationDbContext db,
+        UserManager<ApplicationUser> userManager,
+        IBugService bugService)
     {
+        _db = db;
         _userManager = userManager;
         _bugService = bugService;
     }
@@ -60,6 +69,13 @@ public class BugController : Controller
     [Authorize(Roles = "Admin,Tester")]
     public async Task<IActionResult> Create()
     {
+        var userId = _userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId) && await HasReachedFreeBugLimitAsync(userId))
+        {
+            TempData["Error"] = $"Free plan allows up to {FreeBugLimit} bug reports. Upgrade to Pro to create more.";
+            return RedirectToAction("Index", "Payment");
+        }
+
         var vm = new BugFormViewModel();
         await _bugService.PopulateFormOptionsAsync(vm);
         return View(vm);
@@ -69,6 +85,13 @@ public class BugController : Controller
     [Authorize(Roles = "Admin,Tester")]
     public async Task<IActionResult> Create(BugFormViewModel model)
     {
+        var userId = _userManager.GetUserId(User)!;
+        if (await HasReachedFreeBugLimitAsync(userId))
+        {
+            TempData["Error"] = $"Free plan allows up to {FreeBugLimit} bug reports. Upgrade to Pro to continue.";
+            return RedirectToAction("Index", "Payment");
+        }
+
         if (model.AssigneeType == BugAssigneeType.Agent && string.IsNullOrWhiteSpace(model.AssignedAgentId))
             ModelState.AddModelError(nameof(model.AssignedAgentId), "Please select an agent.");
 
@@ -77,7 +100,6 @@ public class BugController : Controller
 
         try
         {
-            var userId = _userManager.GetUserId(User)!;
             var result = await _bugService.CreateAsync(model, userId);
             if (!result.Succeeded)
                 return await ReturnBugFormWithOptions(model, result.Error);
@@ -236,4 +258,19 @@ public class BugController : Controller
         TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded ? successMessage : result.Error;
         return RedirectToLocal(returnUrl, bugId);
     }
+
+    private async Task<bool> HasReachedFreeBugLimitAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null || HasActiveProAccess(user))
+            return false;
+
+        var currentCount = await _db.BugReports
+            .CountAsync(b => b.CreatedById == userId);
+
+        return currentCount >= FreeBugLimit;
+    }
+
+    private static bool HasActiveProAccess(ApplicationUser user) =>
+        user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
 }

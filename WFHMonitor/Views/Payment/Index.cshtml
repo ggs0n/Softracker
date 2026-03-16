@@ -1,0 +1,293 @@
+@model WFHMonitor.ViewModels.PaymentPlansViewModel
+@{
+    ViewData["Title"] = "Payment";
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var hasProAccess = Model.CurrentPlan == SubscriptionPlan.Pro && Model.IsProSubscriptionActive;
+}
+
+<style>
+    .plan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+    .plan-card {
+        background: linear-gradient(160deg, #0f172a 0%, #1a1f3a 100%);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        color: #e2e8f0;
+        overflow: hidden;
+    }
+    .plan-card::before {
+        content: "";
+        display: block;
+        height: 3px;
+        background: var(--pc-color, #6366f1);
+    }
+    .plan-body { padding: 18px; }
+    .plan-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #94a3b8;
+        font-weight: 700;
+    }
+    .plan-price {
+        margin-top: 8px;
+        font-size: 2rem;
+        line-height: 1;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+    .plan-period {
+        font-size: 0.72rem;
+        color: #64748b;
+        margin-top: 4px;
+    }
+    .plan-list {
+        list-style: none;
+        margin: 14px 0 16px;
+        padding: 0;
+    }
+    .plan-list li {
+        font-size: 0.8rem;
+        color: #cbd5e1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .plan-list i {
+        color: #10b981;
+        font-size: 0.85rem;
+    }
+    .plan-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .plan-current {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(16,185,129,0.25);
+        background: rgba(16,185,129,0.15);
+        color: #34d399;
+    }
+    .usage-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .usage-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        font-size: 0.8rem;
+        color: #cbd5e1;
+    }
+    .usage-list li:last-child { border-bottom: none; }
+    .plan-pay-note {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        margin-top: 8px;
+    }
+</style>
+
+<div class="mod-header mb-4">
+    <div class="mod-header-left">
+        <h1 class="mod-title"><i class="bi bi-credit-card-2-front" style="color:#8b5cf6"></i> Subscription Plans</h1>
+        <p class="mod-subtitle">Choose Free or Pro and manage your creation limits</p>
+    </div>
+    @if (hasProAccess)
+    {
+        <span class="dp-badge dp-badge-green">Current: Pro (Active)</span>
+    }
+    else if (Model.RequiresProPayment)
+    {
+        <span class="dp-badge dp-badge-amber">Current: Pro (Payment Pending)</span>
+    }
+    else
+    {
+        <span class="dp-badge dp-badge-slate">Current: Free</span>
+    }
+</div>
+
+<div class="plan-grid">
+    <div class="plan-card" style="--pc-color:#64748b">
+        <div class="plan-body">
+            <div class="plan-name"><i class="bi bi-stars"></i> Free</div>
+            <div class="plan-price">$0</div>
+            <div class="plan-period">per user / month</div>
+            <ul class="plan-list">
+                <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeCrLimit change requests</li>
+                <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeBugLimit bug reports</li>
+                <li><i class="bi bi-check-circle-fill"></i> Core task and project management</li>
+                <li><i class="bi bi-check-circle-fill"></i> Community support</li>
+            </ul>
+            <div class="plan-actions">
+                @if (Model.CurrentPlan == SubscriptionPlan.Free)
+                {
+                    <span class="plan-current">Current Plan</span>
+                }
+                else
+                {
+                    <form asp-controller="Payment" asp-action="ChoosePlan" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="plan" value="@SubscriptionPlan.Free" />
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="dp-btn-primary" style="background:#64748b">
+                            <i class="bi bi-arrow-repeat"></i> Choose Free
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="plan-card" style="--pc-color:#8b5cf6">
+        <div class="plan-body">
+            <div class="plan-name"><i class="bi bi-gem"></i> Pro</div>
+            <div class="plan-price">$29</div>
+            <div class="plan-period">per user / month</div>
+            <ul class="plan-list">
+                <li><i class="bi bi-check-circle-fill"></i> Unlimited change requests</li>
+                <li><i class="bi bi-check-circle-fill"></i> Unlimited bug reports</li>
+                <li><i class="bi bi-check-circle-fill"></i> Full monitor and integrations</li>
+                <li><i class="bi bi-check-circle-fill"></i> Priority support</li>
+            </ul>
+            <div class="plan-actions">
+                @if (hasProAccess)
+                {
+                    <span class="plan-current">Current Plan</span>
+                }
+                else if (Model.RequiresProPayment)
+                {
+                    <form asp-controller="Payment" asp-action="StartProCheckout" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="dp-btn-primary" @(Model.CanStartProCheckout ? null : "disabled")>
+                            <i class="bi bi-credit-card"></i> Pay with Stripe
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <form asp-controller="Payment" asp-action="ChoosePlan" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="plan" value="@SubscriptionPlan.Pro" />
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="dp-btn-primary">
+                            <i class="bi bi-lightning-charge-fill"></i> Choose Pro
+                        </button>
+                    </form>
+                }
+            </div>
+            @if (Model.RequiresProPayment)
+            {
+                <div class="plan-pay-note">
+                    @if (Model.CanStartProCheckout)
+                    {
+                        <span>Complete Stripe payment to unlock unlimited CR and Bug creation.</span>
+                    }
+                    else
+                    {
+                        <span>Stripe billing is not configured yet. Ask admin to set StripeBilling settings.</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="dp mb-3" style="--dp-color:#14b8a6">
+    <div class="dp-header">
+        <div class="dp-header-icon" style="background:rgba(20,184,166,0.14);color:#2dd4bf">
+            <i class="bi bi-speedometer2"></i>
+        </div>
+        <span class="dp-header-title">Your Usage</span>
+    </div>
+    <div style="padding:0 18px 12px">
+        <ul class="usage-list">
+            <li>
+                <span>Change Requests Created</span>
+                <span class="dp-badge @(Model.IsFreeCrLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
+                    @Model.CurrentCrCount / @(hasProAccess ? "Unlimited" : Model.FreeCrLimit)
+                </span>
+            </li>
+            <li>
+                <span>Bug Reports Created</span>
+                <span class="dp-badge @(Model.IsFreeBugLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
+                    @Model.CurrentBugCount / @(hasProAccess ? "Unlimited" : Model.FreeBugLimit)
+                </span>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<div class="dp" style="--dp-color:#8b5cf6">
+    <div class="dp-header">
+        <div class="dp-header-icon" style="background:rgba(139,92,246,0.15);color:#a78bfa">
+            <i class="bi bi-ui-checks-grid"></i>
+        </div>
+        <span class="dp-header-title">Plan Comparison</span>
+    </div>
+    <div class="table-responsive">
+        <table class="dp-table">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th class="text-center">Free</th>
+                    <th class="text-center">Pro</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="dp-cell-title">Change Request Creation</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeCrLimit</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Bug Creation</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeBugLimit</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Pro Activation</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-slate">N/A</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Stripe Payment Required</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Task Board</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Project & Bug Tracking</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Deployment Monitor Features</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-slate">Limited</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Full</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Support</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-slate">Community</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-amber">Priority</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

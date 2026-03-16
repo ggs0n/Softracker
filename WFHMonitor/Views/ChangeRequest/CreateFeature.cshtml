@@ -1,0 +1,96 @@
+@model WFHMonitor.ViewModels.CreateProjectFeatureViewModel
+@{ ViewData["Title"] = "Add New Feature"; }
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Add New Feature (Under Project)</h5>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="CreateFeature" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Related Project <span class="text-danger">*</span></label>
+                        <select asp-for="ChangeRequestId" asp-items="Model.ProjectOptions" class="form-select">
+                            <option value="">-- Select Project --</option>
+                        </select>
+                        <span asp-validation-for="ChangeRequestId" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Name" class="form-label fw-semibold">Feature Title <span class="text-danger">*</span></label>
+                        <input asp-for="Name" class="form-control" placeholder="e.g. Approval Workflow with Email Notification" />
+                        <span asp-validation-for="Name" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="4"
+                                  placeholder="Describe the scope and objective of this feature..."></textarea>
+                        <span asp-validation-for="Description" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
+                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="form-select"></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="Priority" class="form-label fw-semibold">Priority</label>
+                            <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="form-select"></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
+                            <select asp-for="Stage" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStage>()" class="form-select"></select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="TimelineStart" class="form-label fw-semibold">Start Date</label>
+                            <input asp-for="TimelineStart" type="date" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="TimelineEnd" class="form-label fw-semibold">End Date</label>
+                            <input asp-for="TimelineEnd" type="date" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assigned Developer</label>
+                        <select asp-for="AssignedDeveloperId" asp-items="Model.DeveloperOptions" class="form-select">
+                            <option value="">-- Select Developer --</option>
+                        </select>
+                        <span asp-validation-for="AssignedDeveloperId" class="text-danger small"></span>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-2"></i>Create Feature
+                        </button>
+                        <a asp-action="Features" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Rule</h6>
+            </div>
+            <div class="card-body small text-muted">
+                New features must always be tied to a project. Admin can assign developer ownership and project-like planning fields.
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,139 @@
+@model List<WFHMonitor.Models.ChangeRequest>
+@{
+    ViewData["Title"] = "Features";
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+
+    var projects = Model
+        .SelectMany(p => p.Features.Select(f => new { Project = p, Feature = f }))
+        .OrderByDescending(x => x.Feature.CreatedAt)
+        .ToList();
+}
+
+<div class="mod-header mb-4">
+    <div class="mod-header-left">
+        <h1 class="mod-title"><i class="bi bi-list-check" style="color:#38bdf8"></i> Features</h1>
+        <p class="mod-subtitle">Admin manages project-tied features with project-like fields and developer assignment</p>
+    </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-action="CreateFeature" asp-route-returnUrl="@returnUrl" class="dp-btn-primary">
+            <i class="bi bi-plus-circle"></i> Add New Feature
+        </a>
+    }
+</div>
+
+<div class="dp" style="--dp-color:#38bdf8">
+    <div class="dp-header">
+        <div class="dp-header-icon" style="background:rgba(56,189,248,0.14);color:#38bdf8">
+            <i class="bi bi-kanban"></i>
+        </div>
+        <span class="dp-header-title">Project Features</span>
+        <span class="dp-header-count">@projects.Count</span>
+    </div>
+
+    @if (!projects.Any())
+    {
+        <div class="dp-empty">
+            <i class="bi bi-inboxes"></i>
+            No features added yet.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="dp-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Stage</th>
+                        <th>Developer</th>
+                        <th>Timeline</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in projects)
+                    {
+                        var feature = item.Feature;
+                        var project = item.Project;
+
+                        var statusBadge = feature.Status switch
+                        {
+                            WFHMonitor.Models.CrStatus.Done => "dp-badge dp-badge-green",
+                            WFHMonitor.Models.CrStatus.InProgress => "dp-badge dp-badge-indigo",
+                            WFHMonitor.Models.CrStatus.InReview => "dp-badge dp-badge-sky",
+                            WFHMonitor.Models.CrStatus.Rejected => "dp-badge dp-badge-red",
+                            _ => "dp-badge dp-badge-slate"
+                        };
+
+                        var priorityBadge = feature.Priority switch
+                        {
+                            WFHMonitor.Models.CrPriority.Critical => "dp-badge dp-badge-red",
+                            WFHMonitor.Models.CrPriority.High => "dp-badge dp-badge-amber",
+                            WFHMonitor.Models.CrPriority.Medium => "dp-badge dp-badge-indigo",
+                            _ => "dp-badge dp-badge-slate"
+                        };
+
+                        var timelineText = feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue
+                            ? $"{feature.TimelineStart?.ToString("dd MMM yyyy") ?? "-"} to {feature.TimelineEnd?.ToString("dd MMM yyyy") ?? "-"}"
+                            : "-";
+
+                        <tr>
+                            <td>
+                                <div class="dp-cell-title">@feature.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(feature.Description))
+                                {
+                                    <div class="dp-cell-muted">@feature.Description</div>
+                                }
+                            </td>
+                            <td>
+                                <div class="dp-cell-title">@project.CrNumber</div>
+                                <div class="dp-cell-muted">@project.Title</div>
+                            </td>
+                            <td><span class="@statusBadge">@feature.Status</span></td>
+                            <td><span class="@priorityBadge">@feature.Priority</span></td>
+                            <td><span class="dp-badge dp-badge-slate">@feature.Stage</span></td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(feature.AssignedDeveloper?.FullName))
+                                {
+                                    <span class="dp-badge dp-badge-sky">@feature.AssignedDeveloper!.FullName</span>
+                                }
+                                else
+                                {
+                                    <span class="dp-cell-muted">Unassigned</span>
+                                }
+                            </td>
+                            <td class="dp-cell-muted">@timelineText</td>
+                            <td class="text-end">
+                                <a asp-action="Details" asp-route-id="@project.Id" class="dp-btn" title="Open project">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                                @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
+                                {
+                                    <a asp-action="EditFeature"
+                                       asp-route-featureId="@feature.Id"
+                                       asp-route-returnUrl="@returnUrl"
+                                       class="dp-btn"
+                                       title="Edit feature">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form asp-action="DeleteFeature" method="post" class="d-inline" onsubmit="return confirm('Remove this feature?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="featureId" value="@feature.Id" />
+                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                        <button type="submit" class="dp-btn dp-btn-danger" title="Delete feature">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

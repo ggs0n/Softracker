@@ -21,11 +21,34 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BugActivity> BugActivities => Set<BugActivity>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
     public DbSet<ProjectFeature> ProjectFeatures => Set<ProjectFeature>();
+    public DbSet<RepositoryFeature> RepositoryFeatures => Set<RepositoryFeature>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<ApplicationUser>(e =>
+        {
+            e.Property(u => u.SubscriptionPlan)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(SubscriptionPlan.Free);
+
+            e.Property(u => u.OrganizationTeam)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(OrganizationTeam.Unassigned);
+
+            e.Property(u => u.IsProSubscriptionActive)
+                .HasDefaultValue(false);
+
+            e.Property(u => u.StripeCustomerId)
+                .HasMaxLength(100);
+
+            e.Property(u => u.StripeSubscriptionId)
+                .HasMaxLength(100);
+        });
 
         builder.Entity<WorkTask>(e =>
         {
@@ -201,9 +224,41 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<ProjectFeature>(e =>
         {
             e.HasIndex(f => f.ChangeRequestId);
+            e.HasIndex(f => f.AssignedDeveloperId);
+
+            e.Property(f => f.Status)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(CrStatus.Draft);
+
+            e.Property(f => f.Priority)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(CrPriority.Medium);
+
+            e.Property(f => f.Stage)
+             .HasConversion<string>()
+             .HasMaxLength(30)
+             .HasDefaultValue(CrStage.ProjectStart);
 
             e.HasOne(f => f.ChangeRequest)
              .WithMany(c => c.Features)
+             .HasForeignKey(f => f.ChangeRequestId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(f => f.AssignedDeveloper)
+             .WithMany()
+             .HasForeignKey(f => f.AssignedDeveloperId)
+             .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<RepositoryFeature>(e =>
+        {
+            e.HasIndex(f => f.ChangeRequestId);
+            e.HasIndex(f => new { f.ChangeRequestId, f.Name }).IsUnique();
+
+            e.HasOne(f => f.ChangeRequest)
+             .WithMany(c => c.RepositoryFeatures)
              .HasForeignKey(f => f.ChangeRequestId)
              .OnDelete(DeleteBehavior.Cascade);
         });

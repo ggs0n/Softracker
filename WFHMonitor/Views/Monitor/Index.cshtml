@@ -1,0 +1,255 @@
+@model WFHMonitor.ViewModels.MonitorDashboardViewModel
+@{
+    ViewData["Title"] = "Monitor";
+    var healthyCount = Model.Projects.Count(p => p.AwsHealth.State == MonitorSignalState.Healthy);
+    var unhealthyCount = Model.Projects.Count(p => p.AwsHealth.State == MonitorSignalState.Unhealthy);
+    var totalViews = Model.Projects
+        .Where(p => p.AnalyticsViewsLast30Days.HasValue)
+        .Sum(p => p.AnalyticsViewsLast30Days ?? 0);
+}
+
+<style>
+    .monitor-subtext {
+        font-size: 0.74rem;
+        color: #94a3b8;
+    }
+    .monitor-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 12px;
+    }
+    .monitor-card-body {
+        padding: 14px 18px 18px;
+    }
+    .monitor-project-id {
+        font-size: 0.67rem;
+        font-family: monospace;
+        color: #6366f1;
+        letter-spacing: 0.04em;
+    }
+    .monitor-status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+    }
+    .monitor-status-left {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+    }
+    .monitor-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        flex-shrink: 0;
+    }
+    .monitor-dot.is-green {
+        background: #10b981;
+        box-shadow: 0 0 7px rgba(16,185,129,0.9);
+    }
+    .monitor-dot.is-red {
+        background: #ef4444;
+        box-shadow: 0 0 7px rgba(239,68,68,0.8);
+    }
+    .monitor-dot.is-gray {
+        background: #64748b;
+    }
+    .monitor-status-label {
+        color: #e2e8f0;
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .monitor-status-detail {
+        color: #94a3b8;
+        font-size: 0.7rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 190px;
+    }
+    .monitor-section-title {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #64748b;
+        margin: 13px 0 6px;
+    }
+    .monitor-big-number {
+        font-size: 1.45rem;
+        font-weight: 800;
+        line-height: 1;
+        color: #f8fafc;
+    }
+    .monitor-note {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        margin-top: 4px;
+    }
+    .monitor-divider {
+        border-top: 1px solid rgba(255,255,255,0.08);
+        margin-top: 12px;
+    }
+</style>
+
+<div class="mod-header mb-4">
+    <div class="mod-header-left">
+        <h1 class="mod-title"><i class="bi bi-activity" style="color:#38bdf8"></i> Deployment Monitor</h1>
+        <p class="mod-subtitle">Google Analytics views, AWS server health, and Stripe payment history</p>
+    </div>
+    <div class="monitor-subtext">Last refresh: @Model.GeneratedAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")</div>
+</div>
+
+<div class="dp-stat-grid mb-4">
+    <div class="dp-stat-card" style="--sc-color:#38bdf8;--sc-bg:rgba(56,189,248,0.14)">
+        <div class="dp-stat-icon"><i class="bi bi-box-seam"></i></div>
+        <div class="dp-stat-value">@Model.Projects.Count</div>
+        <div class="dp-stat-label">Deployed Projects</div>
+    </div>
+    <div class="dp-stat-card" style="--sc-color:#10b981;--sc-bg:rgba(16,185,129,0.14)">
+        <div class="dp-stat-icon"><i class="bi bi-heart-pulse"></i></div>
+        <div class="dp-stat-value">@healthyCount</div>
+        <div class="dp-stat-label">Healthy Servers</div>
+    </div>
+    <div class="dp-stat-card" style="--sc-color:#ef4444;--sc-bg:rgba(239,68,68,0.15)">
+        <div class="dp-stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="dp-stat-value">@unhealthyCount</div>
+        <div class="dp-stat-label">Unhealthy Servers</div>
+    </div>
+    <div class="dp-stat-card" style="--sc-color:#f59e0b;--sc-bg:rgba(245,158,11,0.15)">
+        <div class="dp-stat-icon"><i class="bi bi-bar-chart-line"></i></div>
+        <div class="dp-stat-value">@totalViews.ToString("N0")</div>
+        <div class="dp-stat-label">Analytics Views</div>
+    </div>
+    <div class="dp-stat-card" style="--sc-color:#8b5cf6;--sc-bg:rgba(139,92,246,0.15)">
+        <div class="dp-stat-icon"><i class="bi bi-credit-card-2-front"></i></div>
+        <div class="dp-stat-value">@Model.StripePayments.Count</div>
+        <div class="dp-stat-label">Stripe Payments</div>
+    </div>
+</div>
+
+@if (!Model.Projects.Any())
+{
+    <div class="dp mb-4" style="--dp-color:#64748b">
+        <div class="dp-empty">
+            <i class="bi bi-inboxes"></i>
+            No deployed projects found. Mark projects as <strong>Done</strong> or <strong>DeploymentComplete</strong> to include them here.
+        </div>
+    </div>
+}
+else
+{
+    <div class="monitor-grid mb-4">
+        @foreach (var project in Model.Projects)
+        {
+            <div class="dp" style="--dp-color:#38bdf8">
+                <div class="dp-header">
+                    <div class="dp-header-icon" style="background:rgba(56,189,248,0.12);color:#38bdf8">
+                        <i class="bi bi-cloud-check"></i>
+                    </div>
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="dp-header-title text-truncate">@project.Title</div>
+                        <div class="monitor-project-id mt-1">@project.CrNumber</div>
+                    </div>
+                    <a asp-controller="ChangeRequest" asp-action="Details" asp-route-id="@project.ProjectId" class="dp-btn" title="Open project">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </div>
+                <div class="monitor-card-body">
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <span class="dp-badge dp-badge-slate">@project.Stage</span>
+                        <span class="dp-badge dp-badge-indigo">@project.Status</span>
+                    </div>
+
+                    <div class="monitor-section-title">AWS Health (@project.AwsRegion)</div>
+                    <div class="monitor-status-row">
+                        <div class="monitor-status-left">
+                            <span class="monitor-dot @project.AwsHealth.DotClass"></span>
+                            <span class="monitor-status-label">@project.AwsHealth.Label</span>
+                        </div>
+                        <span class="monitor-status-detail" title="@project.AwsHealth.Details">@project.AwsHealth.Details</span>
+                    </div>
+
+                    <div class="monitor-divider"></div>
+
+                    <div class="monitor-section-title">Google Analytics (@project.AnalyticsLabel)</div>
+                    @if (project.AnalyticsViewsLast30Days.HasValue)
+                    {
+                        <div class="monitor-big-number">@project.AnalyticsViewsLast30Days.Value.ToString("N0")</div>
+                        <div class="monitor-note">Total views captured for this project.</div>
+                    }
+                    else
+                    {
+                        <div class="monitor-note">@project.AnalyticsMessage</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<div class="dp" style="--dp-color:#8b5cf6">
+    <div class="dp-header">
+        <div class="dp-header-icon" style="background:rgba(139,92,246,0.15);color:#a78bfa">
+            <i class="bi bi-credit-card-2-front-fill"></i>
+        </div>
+        <span class="dp-header-title">Stripe Payment History</span>
+        <span class="dp-header-count">@Model.StripePayments.Count recent</span>
+    </div>
+    @if (!Model.StripePayments.Any())
+    {
+        <div class="dp-empty">
+            <i class="bi bi-credit-card"></i>
+            @Model.StripeMessage
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="dp-table">
+                <thead>
+                    <tr>
+                        <th>Payment</th>
+                        <th class="text-end">Amount</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                        <th class="text-end">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var payment in Model.StripePayments)
+                    {
+                        var statusClass = payment.Status.ToLowerInvariant() switch
+                        {
+                            "succeeded" => "dp-badge dp-badge-green",
+                            "requires_payment_method" => "dp-badge dp-badge-amber",
+                            "processing" => "dp-badge dp-badge-sky",
+                            "canceled" => "dp-badge dp-badge-red",
+                            _ => "dp-badge dp-badge-slate"
+                        };
+
+                        <tr>
+                            <td class="dp-cell-mono">@payment.Id</td>
+                            <td class="text-end">$@payment.Amount.ToString("N2") @payment.Currency</td>
+                            <td><span class="@statusClass">@payment.Status</span></td>
+                            <td class="dp-cell-muted">@payment.Description</td>
+                            <td class="text-end dp-cell-muted">
+                                @(payment.CreatedAtUtc == DateTime.MinValue
+                                    ? "-"
+                                    : payment.CreatedAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm"))
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
