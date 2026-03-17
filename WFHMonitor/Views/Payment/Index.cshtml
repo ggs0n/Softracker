@@ -16,14 +16,14 @@
         background: linear-gradient(160deg, #0f172a 0%, #1a1f3a 100%);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 14px;
-        color: #e2e8f0;
+        color: var(--text-on-dark);
         overflow: hidden;
     }
     .plan-card::before {
         content: "";
         display: block;
         height: 3px;
-        background: var(--pc-color, #6366f1);
+        background: var(--pc-color, var(--accent));
     }
     .plan-body { padding: 18px; }
     .plan-name {
@@ -55,7 +55,7 @@
     }
     .plan-list li {
         font-size: 0.8rem;
-        color: #cbd5e1;
+        color: var(--text-on-dark);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -94,7 +94,7 @@
         padding: 10px 0;
         border-bottom: 1px solid rgba(255,255,255,0.06);
         font-size: 0.8rem;
-        color: #cbd5e1;
+        color: var(--text-on-dark);
     }
     .usage-list li:last-child { border-bottom: none; }
     .plan-pay-note {

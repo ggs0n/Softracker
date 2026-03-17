@@ -3,7 +3,7 @@
 
 <div class="mod-header mb-4">
     <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-kanban-fill" style="color:#818cf8"></i> Task Board</h1>
+        <h1 class="mod-title"><i class="bi bi-kanban-fill" style="color:var(--accent)"></i> Task Board</h1>
         <p class="mod-subtitle">Track work in progress across all stages</p>
     </div>
     @if (User.IsInRole("Admin"))
@@ -16,9 +16,9 @@
 
 @if (User.IsInRole("Developer"))
 {
-    <div class="dp" style="--dp-color:#6366f1">
+    <div class="dp" style="--dp-color:var(--accent)">
         <div class="dp-header">
-            <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+            <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)">
                 <i class="bi bi-list-check"></i>
             </div>
             <span class="dp-header-title">My Assigned Tasks</span>

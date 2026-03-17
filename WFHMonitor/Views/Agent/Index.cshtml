@@ -9,7 +9,7 @@
     .agent-card {
         border: 1px solid rgba(255,255,255,0.08);
         background: linear-gradient(145deg, #1e1e2e, #16213e);
-        color: #e2e8f0;
+        color: var(--text-on-dark);
         border-radius: 16px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
         cursor: pointer;
@@ -25,7 +25,7 @@
         position: absolute;
         top: 0; left: 0; right: 0;
         height: 3px;
-        background: var(--agent-color, #6366f1);
+        background: var(--agent-color, var(--accent));
     }
     .agent-avatar-wrap {
         width: 64px;
@@ -125,7 +125,7 @@
         white-space: nowrap;
     }
     .agent-add-photo-btn:hover {
-        color: #e2e8f0;
+        color: var(--text-on-dark);
         border-color: rgba(255,255,255,0.4);
         background: rgba(255,255,255,0.08);
     }
@@ -395,7 +395,7 @@
                             }
                             else
                             {
-                                <span class="perf-grade-badge" style="color:#475569;border-color:#33415533;background:rgba(51,65,85,0.12)">N/A</span>
+                                <span class="perf-grade-badge" style="color:var(--text-on-dark-muted);border-color:#33415533;background:rgba(51,65,85,0.12)">N/A</span>
                             }
                         </div>
                         @if (agent.PerformanceScore >= 0)
@@ -427,7 +427,7 @@
                         }
                         else
                         {
-                            <div style="font-size:0.68rem;color:#334155;margin-top:2px">No tasks assigned yet</div>
+                            <div style="font-size:0.68rem;color:var(--text-on-dark-muted);margin-top:2px">No tasks assigned yet</div>
                         }
                     </div>
                 </div>
@@ -473,7 +473,7 @@
         letter-spacing: 0.08em;
         opacity: 0.45;
         margin-top: 4px;
-        color: #e2e8f0;
+        color: var(--text-on-dark);
     }
     .qs-divider {
         width: 1px;
@@ -515,7 +515,7 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.07em;
-        color: #cbd5e1;
+        color: var(--text-on-dark);
     }
     .ai-panel-count {
         margin-left: auto;
@@ -543,7 +543,7 @@
         justify-content: center;
         gap: 8px;
         padding: 40px 20px;
-        color: #475569;
+        color: var(--text-on-dark-muted);
         font-size: 0.78rem;
         text-align: center;
     }
@@ -574,13 +574,13 @@
     .wi-title {
         font-size: 0.8rem;
         font-weight: 600;
-        color: #e2e8f0;
+        color: var(--text-on-dark);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
     .wi-title a { color: inherit; text-decoration: none; }
-    .wi-title a:hover { color: #6366f1; }
+    .wi-title a:hover { color: var(--accent); }
     .wi-meta {
         display: flex;
         align-items: center;
@@ -591,7 +591,7 @@
     .wi-bug-num {
         font-size: 0.67rem;
         font-weight: 700;
-        color: #6366f1;
+        color: var(--accent);
         font-family: monospace;
         letter-spacing: 0.03em;
     }
@@ -608,7 +608,7 @@
     }
     .wi-time {
         font-size: 0.63rem;
-        color: #475569;
+        color: var(--text-on-dark-muted);
         margin-left: auto;
         white-space: nowrap;
         flex-shrink: 0;
@@ -640,11 +640,11 @@
     .cj-name {
         font-size: 0.8rem;
         font-weight: 600;
-        color: #e2e8f0;
+        color: var(--text-on-dark);
     }
     .cj-desc {
         font-size: 0.68rem;
-        color: #475569;
+        color: var(--text-on-dark-muted);
         margin-top: 1px;
         white-space: nowrap;
         overflow: hidden;
@@ -694,14 +694,14 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #6366f1;
+        background: var(--accent);
         flex-shrink: 0;
         box-shadow: 0 0 6px rgba(99,102,241,0.5);
     }
     .af-line {
         flex: 1;
         width: 1px;
-        background: rgba(99,102,241,0.15);
+        background: var(--accent-bg);
         margin-top: 4px;
         min-height: 16px;
     }
@@ -709,7 +709,7 @@
     .af-action {
         font-size: 0.8rem;
         font-weight: 600;
-        color: #e2e8f0;
+        color: var(--text-on-dark);
         line-height: 1.3;
     }
     .af-meta {
@@ -722,14 +722,14 @@
     .af-bug {
         font-size: 0.67rem;
         font-weight: 700;
-        color: #6366f1;
+        color: var(--accent);
         font-family: monospace;
         text-decoration: none;
     }
-    .af-bug:hover { color: #818cf8; }
+    .af-bug:hover { color: var(--accent); }
     .af-title-text {
         font-size: 0.68rem;
-        color: #475569;
+        color: var(--text-on-dark-muted);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -747,7 +747,7 @@
     .af-time {
         margin-left: auto;
         font-size: 0.63rem;
-        color: #334155;
+        color: var(--text-on-dark-muted);
         white-space: nowrap;
         flex-shrink: 0;
     }
@@ -802,7 +802,7 @@
 @* Queue Snapshot Bar *@
 <div class="qs-bar mb-4">
     <div class="qs-item">
-        <div class="qs-value" style="color:#e2e8f0">@Model.QueueSnapshot.Total</div>
+        <div class="qs-value" style="color:var(--text-on-dark)">@Model.QueueSnapshot.Total</div>
         <div class="qs-label">Total</div>
     </div>
     <div class="qs-item">
@@ -810,7 +810,7 @@
         <div class="qs-label">Queued</div>
     </div>
     <div class="qs-item">
-        <div class="qs-value" style="color:#6366f1">@Model.QueueSnapshot.InProgress</div>
+        <div class="qs-value" style="color:var(--accent)">@Model.QueueSnapshot.InProgress</div>
         <div class="qs-label">In Progress</div>
     </div>
     <div class="qs-item">
@@ -833,7 +833,7 @@
     <div class="col-12 col-xl-6">
         <div class="ai-panel">
             <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:rgba(99,102,241,0.15);color:#6366f1">
+                <div class="ai-panel-icon" style="background:var(--accent-bg);color:var(--accent)">
                     <i class="bi bi-lightning-charge-fill"></i>
                 </div>
                 <span class="ai-panel-title">Running Work Items</span>
@@ -916,7 +916,7 @@
     <div class="col-12">
         <div class="ai-panel">
             <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+                <div class="ai-panel-icon" style="background:var(--accent-bg);color:var(--accent)">
                     <i class="bi bi-activity"></i>
                 </div>
                 <span class="ai-panel-title">Recent Agent Activity</span>

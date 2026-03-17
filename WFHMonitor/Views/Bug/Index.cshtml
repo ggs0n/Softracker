@@ -194,7 +194,7 @@
                                 }
                                 else
                                 {
-                                    <span style="color:#cbd5e1;font-size:0.82rem">@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
+                                    <span style="color:var(--text-on-dark);font-size:0.82rem">@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
                                 }
                             </td>
                             <td class="dp-cell-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>

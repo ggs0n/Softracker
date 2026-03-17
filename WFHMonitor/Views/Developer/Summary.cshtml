@@ -3,7 +3,7 @@
 
 <div class="mod-header mb-4">
     <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-clipboard-data" style="color:#818cf8"></i> Developer Summary</h1>
+        <h1 class="mod-title"><i class="bi bi-clipboard-data" style="color:var(--accent)"></i> Developer Summary</h1>
         <p class="mod-subtitle">Your performance metrics and work overview</p>
     </div>
 </div>
@@ -20,7 +20,7 @@
         <div class="dp-stat-value">@Model.AssignedChangeRequestCount</div>
         <div class="dp-stat-label">Assigned Projects</div>
     </div>
-    <div class="dp-stat-card" style="--sc-color:#818cf8;--sc-bg:rgba(99,102,241,0.15)">
+    <div class="dp-stat-card" style="--sc-color:var(--accent);--sc-bg:var(--accent-bg)">
         <div class="dp-stat-icon"><i class="bi bi-git"></i></div>
         <div class="dp-stat-value">@Model.LinkedBranchCount</div>
         <div class="dp-stat-label">GitHub Branches</div>
@@ -56,12 +56,12 @@
                 </tr>
             </thead>
             <tbody>
-                <tr><td style="color:#cbd5e1">Bug fixed <span class="dp-cell-muted">(+20)</span></td><td class="text-center dp-cell-muted">@Model.BugFixedCount</td><td class="text-end dp-xp-plus">+@Model.BugFixedPoints</td></tr>
-                <tr><td style="color:#cbd5e1">Critical bug fixed <span class="dp-cell-muted">(+40)</span></td><td class="text-center dp-cell-muted">@Model.CriticalBugFixedCount</td><td class="text-end dp-xp-plus">+@Model.CriticalBugFixedPoints</td></tr>
-                <tr><td style="color:#cbd5e1">Project delivered on time <span class="dp-cell-muted">(+30)</span></td><td class="text-center dp-cell-muted">@Model.CrDeliveredOnTimeCount</td><td class="text-end dp-xp-plus">+@Model.CrDeliveredOnTimePoints</td></tr>
-                <tr><td style="color:#cbd5e1">Task completed before due date <span class="dp-cell-muted">(+15)</span></td><td class="text-center dp-cell-muted">@Model.TaskCompletedBeforeDueDateCount</td><td class="text-end dp-xp-plus">+@Model.TaskCompletedBeforeDueDatePoints</td></tr>
-                <tr><td style="color:#cbd5e1">Reopened bug penalty <span class="dp-cell-muted">(-10)</span></td><td class="text-center dp-cell-muted">@Model.ReopenedBugPenaltyCount</td><td class="text-end dp-xp-minus">-@Model.ReopenedBugPenaltyPoints</td></tr>
-                <tr><td style="color:#cbd5e1">Failed SLA penalty <span class="dp-cell-muted">(-15)</span></td><td class="text-center dp-cell-muted">@Model.FailedSlaPenaltyCount</td><td class="text-end dp-xp-minus">-@Model.FailedSlaPenaltyPoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Bug fixed <span class="dp-cell-muted">(+20)</span></td><td class="text-center dp-cell-muted">@Model.BugFixedCount</td><td class="text-end dp-xp-plus">+@Model.BugFixedPoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Critical bug fixed <span class="dp-cell-muted">(+40)</span></td><td class="text-center dp-cell-muted">@Model.CriticalBugFixedCount</td><td class="text-end dp-xp-plus">+@Model.CriticalBugFixedPoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Project delivered on time <span class="dp-cell-muted">(+30)</span></td><td class="text-center dp-cell-muted">@Model.CrDeliveredOnTimeCount</td><td class="text-end dp-xp-plus">+@Model.CrDeliveredOnTimePoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Task completed before due date <span class="dp-cell-muted">(+15)</span></td><td class="text-center dp-cell-muted">@Model.TaskCompletedBeforeDueDateCount</td><td class="text-end dp-xp-plus">+@Model.TaskCompletedBeforeDueDatePoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Reopened bug penalty <span class="dp-cell-muted">(-10)</span></td><td class="text-center dp-cell-muted">@Model.ReopenedBugPenaltyCount</td><td class="text-end dp-xp-minus">-@Model.ReopenedBugPenaltyPoints</td></tr>
+                <tr><td style="color:var(--text-on-dark)">Failed SLA penalty <span class="dp-cell-muted">(-15)</span></td><td class="text-center dp-cell-muted">@Model.FailedSlaPenaltyCount</td><td class="text-end dp-xp-minus">-@Model.FailedSlaPenaltyPoints</td></tr>
             </tbody>
             <tfoot>
                 <tr style="border-top:1px solid rgba(255,255,255,0.1)">
@@ -108,9 +108,9 @@
 
     @*Assigned Projects *@
     <div class="col-lg-6">
-        <div class="dp h-100" style="--dp-color:#6366f1">
+        <div class="dp h-100" style="--dp-color:var(--accent)">
             <div class="dp-header">
-                <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8"><i class="bi bi-file-earmark-diff"></i></div>
+                <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)"><i class="bi bi-file-earmark-diff"></i></div>
                 <span class="dp-header-title">Assigned Projects</span>
                 <span class="dp-header-count">@Model.AssignedChangeRequests.Count()</span>
             </div>
@@ -142,9 +142,9 @@
 <div class="row g-3">
     @*GitHub Branches *@
     <div class="col-lg-6">
-        <div class="dp h-100" style="--dp-color:#818cf8">
+        <div class="dp h-100" style="--dp-color:var(--accent)">
             <div class="dp-header">
-                <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8"><i class="bi bi-diagram-3"></i></div>
+                <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)"><i class="bi bi-diagram-3"></i></div>
                 <span class="dp-header-title">GitHub Branches</span>
                 <span class="dp-header-count" style="font-size:0.6rem">@Model.DeveloperEmail</span>
             </div>
@@ -158,7 +158,7 @@
                 {
                     <div class="dp-list-row">
                         <div class="flex-grow-1 min-width-0">
-                            <div style="color:#e2e8f0;font-weight:600;font-size:0.82rem">@branch.CrNumber</div>
+                            <div style="color:var(--text-on-dark);font-weight:600;font-size:0.82rem">@branch.CrNumber</div>
                             <div class="dp-cell-muted">@branch.Repo</div>
                         </div>
                         <span class="dp-badge dp-badge-indigo" style="font-family:monospace">@branch.Branch</span>

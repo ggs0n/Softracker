@@ -1,251 +1,262 @@
 @model AdminDashboardViewModel
 @{ ViewData["Title"] = "Admin Dashboard"; }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Admin Dashboard</h2>
-    <span class="text-muted">@Model.Today.ToString("dddd, MMMM dd yyyy")</span>
-</div>
-
 @{
     var bugResolutionPercent = Model.TotalBugs == 0 ? 100 : (int)Math.Round(Model.CompleteBugs * 100.0 / Model.TotalBugs);
 }
 
-@* Summary Cards *@
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card text-center border-0 bg-primary text-white">
-            <div class="card-body py-3">
-                <i class="bi bi-people fs-2"></i>
-                <h3 class="mt-1 mb-0">@Model.TotalEmployees</h3>
-                <small>Total Employees</small>
-            </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1" style="font-size:1.25rem; font-weight:800; letter-spacing:-0.03em; color:var(--text-primary);">
+            Dashboard
+        </h2>
+        <p class="mb-0" style="font-size:0.8rem; color:var(--text-muted);">
+            @Model.Today.ToString("dddd, MMMM dd yyyy")
+        </p>
+    </div>
+</div>
+
+@* Summary Stats — no generic 4-card row, use asymmetric 2-col zig-zag *@
+<div class="row g-3 mb-4 stagger">
+    <div class="col-sm-6 col-lg-3">
+        <div class="dash-stat dash-stat-blue">
+            <div class="dash-stat-icon"><i class="bi bi-people"></i></div>
+            <div class="dash-stat-value">@Model.TotalEmployees</div>
+            <div class="dash-stat-label">Team members</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-center border-0 bg-success text-white">
-            <div class="card-body py-3">
-                <i class="bi bi-check-circle fs-2"></i>
-                <h3 class="mt-1 mb-0">@Model.TasksDoneTodayCount</h3>
-                <small>Tasks Done Today</small>
-            </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="dash-stat dash-stat-emerald">
+            <div class="dash-stat-icon"><i class="bi bi-check-circle"></i></div>
+            <div class="dash-stat-value">@Model.TasksDoneTodayCount</div>
+            <div class="dash-stat-label">Tasks done today</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-center border-0 bg-warning">
-            <div class="card-body py-3">
-                <i class="bi bi-slash-circle fs-2"></i>
-                <h3 class="mt-1 mb-0">@Model.BlockedTasks.Count</h3>
-                <small>Blocked Tasks</small>
-            </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="dash-stat dash-stat-amber">
+            <div class="dash-stat-icon"><i class="bi bi-slash-circle"></i></div>
+            <div class="dash-stat-value">@Model.BlockedTasks.Count</div>
+            <div class="dash-stat-label">Blocked tasks</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-center border-0 bg-danger text-white">
-            <div class="card-body py-3">
-                <i class="bi bi-bug fs-2"></i>
-                <h3 class="mt-1 mb-0">@Model.OpenBugs / @Model.TotalBugs</h3>
-                <small>Open Bugs</small>
-            </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="dash-stat dash-stat-rose">
+            <div class="dash-stat-icon"><i class="bi bi-bug"></i></div>
+            <div class="dash-stat-value" style="font-variant-numeric:tabular-nums">@Model.OpenBugs<span style="font-size:0.9rem;font-weight:500;color:inherit;opacity:0.5">/@Model.TotalBugs</span></div>
+            <div class="dash-stat-label">Open bugs</div>
         </div>
     </div>
 </div>
 
-@* Project Overview *@
+@* Project Overview — refined table *@
 @if (Model.Projects.Any())
 {
-    <div class="card mb-4">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Project Overview</h6>
-            <span class="badge bg-light text-dark">@Model.Projects.Count project(s)</span>
+    <div class="project-table mb-4 animate-in" style="background:var(--bg-surface)">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2" style="border-bottom:1px solid var(--border-subtle)">
+            <h6 class="mb-0 d-flex align-items-center gap-2" style="font-size:0.85rem; font-weight:700; letter-spacing:-0.01em">
+                <i class="bi bi-folder2-open" style="color:var(--accent)"></i> Project overview
+            </h6>
+            <span style="font-size:0.68rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">
+                @Model.Projects.Count project(s)
+            </span>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0 align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Project</th>
-                            <th>Status</th>
-                            <th>Stage</th>
-                            <th style="min-width:180px">Task Progress</th>
-                            <th>Features</th>
-                            <th>Bugs</th>
-                            <th>Timeline</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in Model.Projects)
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Stage</th>
+                        <th style="min-width:180px">Task progress</th>
+                        <th>Features</th>
+                        <th>Bugs</th>
+                        <th>Timeline</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Projects)
+                    {
+                        var progressColor = p.TaskCompletionPercent == 100 ? "bg-success"
+                            : p.TaskCompletionPercent >= 50 ? "bg-primary"
+                            : p.TaskCompletionPercent > 0 ? "bg-warning" : "bg-secondary";
+
+                        var statusBadge = p.Status switch
                         {
-                            var progressColor = p.TaskCompletionPercent == 100 ? "bg-success"
-                                : p.TaskCompletionPercent >= 50 ? "bg-primary"
-                                : p.TaskCompletionPercent > 0 ? "bg-warning" : "bg-secondary";
+                            CrStatus.Done => "bg-success",
+                            CrStatus.InProgress => "bg-primary",
+                            CrStatus.InReview => "bg-info",
+                            CrStatus.Approved => "bg-info",
+                            CrStatus.Rejected => "bg-danger",
+                            _ => "bg-secondary"
+                        };
 
-                            var statusBadge = p.Status switch
-                            {
-                                CrStatus.Done => "bg-success",
-                                CrStatus.InProgress => "bg-primary",
-                                CrStatus.InReview => "bg-info",
-                                CrStatus.Approved => "bg-info",
-                                CrStatus.Rejected => "bg-danger",
-                                _ => "bg-secondary"
-                            };
+                        var priorityBadge = p.Priority switch
+                        {
+                            CrPriority.Critical => "bg-danger",
+                            CrPriority.High => "bg-warning text-dark",
+                            CrPriority.Medium => "bg-info text-dark",
+                            _ => "bg-light text-dark border"
+                        };
 
-                            var priorityBadge = p.Priority switch
-                            {
-                                CrPriority.Critical => "bg-danger",
-                                CrPriority.High => "bg-warning text-dark",
-                                CrPriority.Medium => "bg-info text-dark",
-                                _ => "bg-light text-dark border"
-                            };
-
-                            <tr>
-                                <td>
-                                    <div>
-                                        <a asp-controller="ChangeRequest" asp-action="Details" asp-route-id="@p.Id"
-                                           class="fw-semibold text-decoration-none">@p.Title</a>
+                        <tr>
+                            <td>
+                                <div>
+                                    <a asp-controller="ChangeRequest" asp-action="Details" asp-route-id="@p.Id"
+                                       class="fw-semibold text-decoration-none" style="color:var(--text-primary)">@p.Title</a>
+                                </div>
+                                <small style="color:var(--text-muted); font-family:var(--font-mono); font-size:0.72rem">@p.CrNumber</small>
+                                <span class="badge @priorityBadge ms-1" style="font-size:0.6rem">@p.Priority</span>
+                            </td>
+                            <td><span class="badge @statusBadge">@p.Status</span></td>
+                            <td><span style="color:var(--text-secondary); font-size:0.82rem">@p.Stage</span></td>
+                            <td>
+                                @if (p.TotalTasks > 0)
+                                {
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px">
+                                            <div class="progress-bar @progressColor" role="progressbar"
+                                                 style="width:@(p.TaskCompletionPercent)%; border-radius:999px"></div>
+                                        </div>
+                                        <small class="text-nowrap fw-semibold" style="font-variant-numeric:tabular-nums; font-size:0.78rem">@p.TaskCompletionPercent%</small>
                                     </div>
-                                    <small class="text-muted">@p.CrNumber</small>
-                                    <span class="badge @priorityBadge ms-1" style="font-size:0.65rem">@p.Priority</span>
-                                </td>
-                                <td><span class="badge @statusBadge">@p.Status</span></td>
-                                <td><span class="text-muted small">@p.Stage</span></td>
-                                <td>
-                                    @if (p.TotalTasks > 0)
+                                    <small style="color:var(--text-muted); font-size:0.72rem">@p.DoneTasks/@p.TotalTasks done</small>
+                                    @if (p.BlockedTasks > 0)
                                     {
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="progress flex-grow-1" style="height:8px">
-                                                <div class="progress-bar @progressColor" role="progressbar"
-                                                     style="width:@(p.TaskCompletionPercent)%"></div>
-                                            </div>
-                                            <small class="text-nowrap fw-semibold">@p.TaskCompletionPercent%</small>
+                                        <small class="text-danger ms-1" style="font-size:0.72rem">(@p.BlockedTasks blocked)</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <small style="color:var(--text-muted); font-style:italic">No tasks</small>
+                                }
+                            </td>
+                            <td>
+                                @if (p.TotalFeatures > 0)
+                                {
+                                    var fColor = p.FeatureCompletionPercent == 100 ? "bg-success"
+                                        : p.FeatureCompletionPercent >= 50 ? "bg-primary"
+                                        : p.FeatureCompletionPercent > 0 ? "bg-warning" : "bg-secondary";
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:5px; min-width:60px">
+                                            <div class="progress-bar @fColor" role="progressbar"
+                                                 style="width:@(p.FeatureCompletionPercent)%; border-radius:999px"></div>
                                         </div>
-                                        <small class="text-muted">@p.DoneTasks/@p.TotalTasks done</small>
-                                        @if (p.BlockedTasks > 0)
-                                        {
-                                            <small class="text-danger ms-1">(@p.BlockedTasks blocked)</small>
-                                        }
-                                    }
-                                    else
+                                        <small class="text-nowrap" style="font-variant-numeric:tabular-nums; font-size:0.75rem">@p.CompletedFeatures/@p.TotalFeatures</small>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <small style="color:var(--text-muted)">-</small>
+                                }
+                            </td>
+                            <td>
+                                @if (p.TotalBugs > 0)
+                                {
+                                    <span class="badge bg-danger" style="font-size:0.65rem">@p.OpenBugs open</span>
+                                    <span class="badge bg-success" style="font-size:0.65rem">@p.CompleteBugs fixed</span>
+                                }
+                                else
+                                {
+                                    <small style="color:var(--text-muted)">-</small>
+                                }
+                            </td>
+                            <td>
+                                @if (p.TimelineStart.HasValue && p.TimelineEnd.HasValue)
+                                {
+                                    <small style="font-size:0.78rem">@p.TimelineStart.Value.ToString("dd MMM") - @p.TimelineEnd.Value.ToString("dd MMM yy")</small>
+                                    @if (p.IsOverdue)
                                     {
-                                        <small class="text-muted fst-italic">No tasks</small>
+                                        <br /><span class="badge bg-danger" style="font-size:0.6rem">Overdue</span>
                                     }
-                                </td>
-                                <td>
-                                    @if (p.TotalFeatures > 0)
+                                    else if (p.DaysRemaining.HasValue && p.DaysRemaining.Value >= 0 && p.Status != CrStatus.Done)
                                     {
-                                        var fColor = p.FeatureCompletionPercent == 100 ? "bg-success"
-                                            : p.FeatureCompletionPercent >= 50 ? "bg-primary"
-                                            : p.FeatureCompletionPercent > 0 ? "bg-warning" : "bg-secondary";
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="progress flex-grow-1" style="height:6px; min-width:60px">
-                                                <div class="progress-bar @fColor" role="progressbar"
-                                                     style="width:@(p.FeatureCompletionPercent)%"></div>
-                                            </div>
-                                            <small class="text-nowrap">@p.CompletedFeatures/@p.TotalFeatures</small>
-                                        </div>
+                                        <br /><small style="color:var(--text-muted); font-size:0.72rem">@p.DaysRemaining days left</small>
                                     }
-                                    else
-                                    {
-                                        <small class="text-muted">-</small>
-                                    }
-                                </td>
-                                <td>
-                                    @if (p.TotalBugs > 0)
-                                    {
-                                        <span class="badge bg-danger">@p.OpenBugs open</span>
-                                        <span class="badge bg-success">@p.CompleteBugs fixed</span>
-                                    }
-                                    else
-                                    {
-                                        <small class="text-muted">-</small>
-                                    }
-                                </td>
-                                <td>
-                                    @if (p.TimelineStart.HasValue && p.TimelineEnd.HasValue)
-                                    {
-                                        <small>@p.TimelineStart.Value.ToString("dd MMM") - @p.TimelineEnd.Value.ToString("dd MMM yy")</small>
-                                        @if (p.IsOverdue)
-                                        {
-                                            <br /><span class="badge bg-danger" style="font-size:0.65rem">Overdue</span>
-                                        }
-                                        else if (p.DaysRemaining.HasValue && p.DaysRemaining.Value >= 0 && p.Status != CrStatus.Done)
-                                        {
-                                            <br /><small class="text-muted">@p.DaysRemaining days left</small>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <small class="text-muted">-</small>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                                }
+                                else
+                                {
+                                    <small style="color:var(--text-muted)">-</small>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     </div>
 }
 
+@* Tasks & Blocked — side by side instead of stacked *@
 <div class="row g-3">
-    @* Tasks Done Today *@
-    <div class="col-md-12">
-        <div class="card mb-3">
-            <div class="card-header bg-success text-white">
-                <h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>Tasks Completed Today</h6>
-            </div>
-            <div class="card-body p-0">
+    <div class="col-lg-6">
+        <div class="task-list-section animate-in">
+            <div class="task-list-header success">
+                <i class="bi bi-check-circle"></i>
+                Tasks completed today
                 @if (Model.TasksDoneToday.Any())
                 {
-                    <ul class="list-group list-group-flush">
-                        @foreach (var task in Model.TasksDoneToday)
-                        {
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="bi bi-check2 text-success me-2"></i>@task.Title
-                                </div>
-                                @if (task.Assignee != null)
-                                {
-                                    <span class="badge bg-light text-dark border small">@task.Assignee.FullName</span>
-                                }
-                            </li>
-                        }
-                    </ul>
+                    <span class="ms-auto badge rounded-pill" style="background:rgba(5,150,105,0.12); color:#059669; font-size:0.65rem">@Model.TasksDoneToday.Count()</span>
                 }
-                else
+            </div>
+            @if (Model.TasksDoneToday.Any())
+            {
+                @foreach (var task in Model.TasksDoneToday)
                 {
-                    <p class="text-center text-muted py-3">No tasks completed today</p>
+                    <div class="task-list-item">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-check2" style="color:var(--color-success)"></i>
+                            <span>@task.Title</span>
+                        </div>
+                        @if (task.Assignee != null)
+                        {
+                            <span style="font-size:0.72rem; color:var(--text-muted); font-weight:500">@task.Assignee.FullName</span>
+                        }
+                    </div>
                 }
-            </div>
+            }
+            else
+            {
+                <div class="task-list-empty">
+                    <i class="bi bi-inbox" style="font-size:1.5rem; opacity:0.25; display:block; margin-bottom:6px"></i>
+                    No tasks completed today
+                </div>
+            }
         </div>
+    </div>
 
-        @* Blocked Tasks *@
-        <div class="card">
-            <div class="card-header bg-danger text-white">
-                <h6 class="mb-0"><i class="bi bi-slash-circle me-2"></i>Blocked Tasks</h6>
-            </div>
-            <div class="card-body p-0">
+    <div class="col-lg-6">
+        <div class="task-list-section animate-in" style="animation-delay:80ms">
+            <div class="task-list-header danger">
+                <i class="bi bi-slash-circle"></i>
+                Blocked tasks
                 @if (Model.BlockedTasks.Any())
                 {
-                    <ul class="list-group list-group-flush">
-                        @foreach (var task in Model.BlockedTasks)
-                        {
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="bi bi-slash-circle text-danger me-2"></i>@task.Title
-                                </div>
-                                @if (task.Assignee != null)
-                                {
-                                    <span class="badge bg-light text-dark border small">@task.Assignee.FullName</span>
-                                }
-                            </li>
-                        }
-                    </ul>
-                }
-                else
-                {
-                    <p class="text-center text-muted py-3 fst-italic">No blocked tasks</p>
+                    <span class="ms-auto badge rounded-pill" style="background:rgba(220,38,38,0.1); color:#dc2626; font-size:0.65rem">@Model.BlockedTasks.Count</span>
                 }
             </div>
+            @if (Model.BlockedTasks.Any())
+            {
+                @foreach (var task in Model.BlockedTasks)
+                {
+                    <div class="task-list-item">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-slash-circle" style="color:var(--color-danger)"></i>
+                            <span>@task.Title</span>
+                        </div>
+                        @if (task.Assignee != null)
+                        {
+                            <span style="font-size:0.72rem; color:var(--text-muted); font-weight:500">@task.Assignee.FullName</span>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="task-list-empty">
+                    <i class="bi bi-shield-check" style="font-size:1.5rem; opacity:0.25; display:block; margin-bottom:6px"></i>
+                    No blocked tasks
+                </div>
+            }
         </div>
     </div>
 </div>

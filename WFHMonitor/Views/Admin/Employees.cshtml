@@ -3,7 +3,7 @@
 
 <div class="mod-header mb-4">
     <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-people-fill" style="color:#818cf8"></i> Employees</h1>
+        <h1 class="mod-title"><i class="bi bi-people-fill" style="color:var(--accent)"></i> Employees</h1>
         <p class="mod-subtitle">Manage team members and access</p>
     </div>
 </div>
@@ -11,9 +11,9 @@
 <div class="row g-4">
     @* Employee list *@
     <div class="col-lg-7">
-        <div class="dp" style="--dp-color:#6366f1">
+        <div class="dp" style="--dp-color:var(--accent)">
             <div class="dp-header">
-                <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+                <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)">
                     <i class="bi bi-people-fill"></i>
                 </div>
                 <span class="dp-header-title">Team Members</span>
@@ -50,7 +50,7 @@
                                     _           => "dp-badge-slate"
                                 };
                                 <tr>
-                                    <td style="color:#e2e8f0;font-weight:600">@item.Employee.FullName</td>
+                                    <td style="color:var(--text-on-dark);font-weight:600">@item.Employee.FullName</td>
                                     <td class="dp-cell-muted">@item.Employee.Email</td>
                                     <td><span class="dp-badge @roleCls">@item.Role</span></td>
                                     <td class="text-end">
@@ -75,8 +75,8 @@
     @* Add Employee form *@
     <div class="col-lg-5">
         <div class="dp-form-panel">
-            <div class="dp-header" style="background:rgba(231,76,111,0.08);border-bottom:1px solid rgba(255,255,255,0.06)">
-                <div class="dp-header-icon" style="background:rgba(231,76,111,0.15);color:#f472b6">
+            <div class="dp-header" style="background:rgba(16,185,129,0.05);border-bottom:1px solid var(--border-dark)">
+                <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)">
                     <i class="bi bi-person-plus-fill"></i>
                 </div>
                 <span class="dp-header-title">Add Employee</span>
@@ -115,7 +115,7 @@
                         <input asp-for="NewEmployee.ConfirmPassword" type="password" autocomplete="new-password" class="form-control dp-form-control" />
                         <span asp-validation-for="NewEmployee.ConfirmPassword" class="text-danger small"></span>
                     </div>
-                    <button type="submit" class="dp-btn-primary w-100" style="background:#e74c6f;justify-content:center">
+                    <button type="submit" class="dp-btn-primary w-100" style="justify-content:center">
                         <i class="bi bi-person-check"></i> Register Employee
                     </button>
                 </form>

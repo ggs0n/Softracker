@@ -2,11 +2,11 @@
 
 @{
     var colColor = Model.Color switch {
-        "primary"   => "#6366f1",
+        "primary"   => "#3b82f6",
         "success"   => "#10b981",
         "danger"    => "#ef4444",
         "warning"   => "#eab308",
-        _           => "#64748b"
+        _           => "#71717a"
     };
 }
 
@@ -21,20 +21,20 @@
         <div style="padding:10px;min-height:300px;display:flex;flex-direction:column;gap:8px">
             @foreach (var task in Model.Tasks)
             {
-                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-left:3px solid @colColor;border-radius:10px;padding:12px 14px;transition:background 0.15s"
-                     onmouseenter="this.style.background='rgba(255,255,255,0.07)'"
-                     onmouseleave="this.style.background='rgba(255,255,255,0.04)'">
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-left:2px solid @colColor;border-radius:10px;padding:12px 14px;transition:all 0.2s cubic-bezier(0.16,1,0.3,1)"
+                     onmouseenter="this.style.background='rgba(255,255,255,0.06)';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                     onmouseleave="this.style.background='rgba(255,255,255,0.03)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
                     <div class="d-flex justify-content-between align-items-start gap-2">
-                        <div style="font-size:0.82rem;font-weight:600;color:#e2e8f0;line-height:1.3">@task.Title</div>
+                        <div style="font-size:0.82rem;font-weight:600;color:var(--text-on-dark);line-height:1.3">@task.Title</div>
                         <div class="dropdown flex-shrink-0">
                             <button class="dp-btn" data-bs-toggle="dropdown" style="width:24px;height:24px;font-size:0.7rem">
                                 <i class="bi bi-three-dots-vertical"></i>
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end" style="background:#1e1e2d;border:1px solid rgba(255,255,255,0.1);border-radius:10px;min-width:140px">
+                            <ul class="dropdown-menu dropdown-menu-end" style="background:var(--bg-dark-raised, #1f1f23);border:1px solid rgba(255,255,255,0.08);border-radius:10px;min-width:140px;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
                                 <li>
                                     <a class="dropdown-item" asp-action="Edit" asp-route-id="@task.Id"
-                                       style="color:#cbd5e1;font-size:0.82rem;padding:8px 14px">
-                                        <i class="bi bi-pencil me-2" style="color:#818cf8"></i>Edit
+                                       style="color:#e4e4e7;font-size:0.82rem;padding:8px 14px">
+                                        <i class="bi bi-pencil me-2" style="color:var(--accent)"></i>Edit
                                     </a>
                                 </li>
                                 @if (User.IsInRole("Admin"))
@@ -56,7 +56,7 @@
 
                     @if (!string.IsNullOrEmpty(task.Description))
                     {
-                        <p style="font-size:0.72rem;color:#475569;margin:5px 0 0;line-height:1.4">@task.Description</p>
+                        <p style="font-size:0.72rem;color:var(--text-on-dark-muted);margin:5px 0 0;line-height:1.4">@task.Description</p>
                     }
 
                     <div class="d-flex gap-1 flex-wrap mt-2">
@@ -97,8 +97,8 @@
 
             @if (!Model.Tasks.Any())
             {
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:8px;color:#334155;font-size:0.75rem">
-                    <i class="bi bi-inbox" style="font-size:1.5rem;opacity:0.3"></i>
+                <div class="dp-empty" style="padding:40px 0">
+                    <i class="bi bi-inbox"></i>
                     No tasks
                 </div>
             }
