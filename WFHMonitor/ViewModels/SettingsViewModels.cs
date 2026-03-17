@@ -1,4 +1,5 @@
 using WFHMonitor.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace WFHMonitor.ViewModels;
 
@@ -8,6 +9,7 @@ public class SettingsPageViewModel
     public List<ModulePermissionEditItemViewModel> Modules { get; set; } = new();
     public bool BellNotificationSoundEnabled { get; set; }
     public string BellNotificationSoundOption { get; set; } = BellSoundOptions.Classic;
+    public ProVersionSettingsViewModel ProVersion { get; set; } = new();
 }
 
 public class ModulePermissionEditItemViewModel
@@ -38,4 +40,18 @@ public class RuntimeSystemAccessViewModel
     public bool CanModifyBugs { get; set; }
     public bool BellNotificationSoundEnabled { get; set; }
     public string BellNotificationSoundOption { get; set; } = BellSoundOptions.Classic;
+}
+
+public class ProVersionSettingsViewModel
+{
+    [Range(0, 10000)]
+    public int FreeProjectLimit { get; set; } = ProVersionDefaults.FreeProjectLimit;
+
+    [Range(0, 10000)]
+    public int FreeBugLimit { get; set; } = ProVersionDefaults.FreeBugLimit;
+
+    [Range(0, 10000)]
+    public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
+
+    public bool AllowOpenClawForFreePlan { get; set; }
 }

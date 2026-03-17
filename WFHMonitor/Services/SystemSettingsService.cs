@@ -36,8 +36,15 @@ public class SystemSettingsService : ISystemSettingsService
             ActiveMenu = NormalizeActiveMenu(activeMenu),
             Modules = modules,
             BellNotificationSoundEnabled = pref.BellNotificationSoundEnabled,
-            BellNotificationSoundOption = NormalizeSoundOption(pref.BellNotificationSoundOption)
+            BellNotificationSoundOption = NormalizeSoundOption(pref.BellNotificationSoundOption),
+            ProVersion = BuildProVersionSettings(pref)
         };
+    }
+
+    public async Task<ProVersionSettingsViewModel> GetProVersionSettingsAsync()
+    {
+        var pref = await GetOrCreatePreferenceAsync(trackChanges: false);
+        return BuildProVersionSettings(pref);
     }
 
     public async Task SaveModulePermissionsAsync(IReadOnlyCollection<ModulePermissionEditItemViewModel> modules)
@@ -74,6 +81,17 @@ public class SystemSettingsService : ISystemSettingsService
         var pref = await GetOrCreatePreferenceAsync(trackChanges: true);
         pref.BellNotificationSoundEnabled = enabled;
         pref.BellNotificationSoundOption = NormalizeSoundOption(soundOption);
+        pref.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task SaveProVersionSettingsAsync(ProVersionSettingsViewModel model)
+    {
+        var pref = await GetOrCreatePreferenceAsync(trackChanges: true);
+        pref.FreeProjectLimit = NormalizeLimit(model.FreeProjectLimit, ProVersionDefaults.FreeProjectLimit);
+        pref.FreeBugLimit = NormalizeLimit(model.FreeBugLimit, ProVersionDefaults.FreeBugLimit);
+        pref.FreeFeatureLimit = NormalizeLimit(model.FreeFeatureLimit, ProVersionDefaults.FreeFeatureLimit);
+        pref.AllowOpenClawForFreePlan = model.AllowOpenClawForFreePlan;
         pref.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
     }
@@ -178,6 +196,10 @@ public class SystemSettingsService : ISystemSettingsService
             Id = 1,
             BellNotificationSoundEnabled = true,
             BellNotificationSoundOption = BellSoundOptions.Classic,
+            FreeProjectLimit = ProVersionDefaults.FreeProjectLimit,
+            FreeBugLimit = ProVersionDefaults.FreeBugLimit,
+            FreeFeatureLimit = ProVersionDefaults.FreeFeatureLimit,
+            AllowOpenClawForFreePlan = false,
             UpdatedAt = DateTime.UtcNow
         };
 
@@ -220,7 +242,20 @@ public class SystemSettingsService : ISystemSettingsService
     {
         if (string.Equals(activeMenu, "BellNotification", StringComparison.OrdinalIgnoreCase))
             return "BellNotification";
+        if (string.Equals(activeMenu, "ProVersion", StringComparison.OrdinalIgnoreCase))
+            return "ProVersion";
         return "ModulePermission";
+    }
+
+    private static ProVersionSettingsViewModel BuildProVersionSettings(SystemPreference pref)
+    {
+        return new ProVersionSettingsViewModel
+        {
+            FreeProjectLimit = NormalizeLimit(pref.FreeProjectLimit, ProVersionDefaults.FreeProjectLimit),
+            FreeBugLimit = NormalizeLimit(pref.FreeBugLimit, ProVersionDefaults.FreeBugLimit),
+            FreeFeatureLimit = NormalizeLimit(pref.FreeFeatureLimit, ProVersionDefaults.FreeFeatureLimit),
+            AllowOpenClawForFreePlan = pref.AllowOpenClawForFreePlan
+        };
     }
 
     private static string NormalizeSoundOption(string? soundOption)
@@ -231,6 +266,11 @@ public class SystemSettingsService : ISystemSettingsService
         return BellSoundOptions.All.Contains(soundOption, StringComparer.OrdinalIgnoreCase)
             ? BellSoundOptions.All.First(option => option.Equals(soundOption, StringComparison.OrdinalIgnoreCase))
             : BellSoundOptions.Classic;
+    }
+
+    private static int NormalizeLimit(int value, int fallback)
+    {
+        return value < 0 ? fallback : value;
     }
 
     private static string GetDisplayName(string moduleKey)

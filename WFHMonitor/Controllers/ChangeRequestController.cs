@@ -18,7 +18,6 @@ namespace WFHMonitor.Controllers;
 [Authorize]
 public class ChangeRequestController : Controller
 {
-    private const int FreeChangeRequestLimit = 5;
     private static readonly HashSet<string> AllProjectsViewActions = [nameof(Index), nameof(Details)];
     private static readonly HashSet<string> FeaturesViewActions = [nameof(Features), nameof(FeatureDetails)];
     private static readonly HashSet<string> FeaturesModifyActions =
@@ -139,7 +138,8 @@ public class ChangeRequestController : Controller
             return Forbid();
 
         var currentUser = await _userManager.GetUserAsync(User);
-        ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
         ViewBag.OpenClawFeatureAgentOptions = GetOpenClawFeatureAgentOptions();
         if (User.IsInRole("Admin") || User.IsInRole("Agent"))
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
@@ -150,6 +150,17 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateFeature(int? projectId, string? returnUrl)
     {
+        var userId = _userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var (isReached, freeLimit) = await HasReachedFreeFeatureLimitAsync(userId);
+            if (isReached)
+            {
+                TempData["Error"] = $"Free plan allows up to {freeLimit} features. Upgrade to Pro to create more.";
+                return RedirectToAction("Index", "Payment");
+            }
+        }
+
         var vm = new CreateProjectFeatureViewModel
         {
             ChangeRequestId = projectId ?? 0,
@@ -167,6 +178,17 @@ public class ChangeRequestController : Controller
     public async Task<IActionResult> CreateFeature(CreateProjectFeatureViewModel model)
     {
         EnsureDefaultFeatureTimeline(model);
+
+        var userId = _userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var (isReached, freeLimit) = await HasReachedFreeFeatureLimitAsync(userId);
+            if (isReached)
+            {
+                TempData["Error"] = $"Free plan allows up to {freeLimit} features. Upgrade to Pro to continue.";
+                return RedirectToAction("Index", "Payment");
+            }
+        }
 
         if (!ModelState.IsValid)
         {
@@ -367,7 +389,8 @@ public class ChangeRequestController : Controller
             return Forbid();
 
         var currentUser = await _userManager.FindByIdAsync(userId);
-        if (currentUser == null || !HasActiveProAccess(currentUser))
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
@@ -451,7 +474,8 @@ public class ChangeRequestController : Controller
             return Forbid();
 
         var currentUser = await _userManager.FindByIdAsync(userId);
-        if (currentUser == null || !HasActiveProAccess(currentUser))
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
@@ -568,7 +592,8 @@ public class ChangeRequestController : Controller
         ViewBag.ResolvedGitHubBranch = branch;
         ViewBag.OpenClawScanAgentOptions = GetOpenClawScanAgentOptions();
         var currentUser = await _userManager.GetUserAsync(User);
-        ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
 
         if (!string.IsNullOrWhiteSpace(owner) &&
             !string.IsNullOrWhiteSpace(repo) &&
@@ -591,10 +616,14 @@ public class ChangeRequestController : Controller
     public async Task<IActionResult> Create()
     {
         var userId = _userManager.GetUserId(User);
-        if (!string.IsNullOrWhiteSpace(userId) && await HasReachedFreeChangeRequestLimitAsync(userId))
+        if (!string.IsNullOrWhiteSpace(userId))
         {
-            TempData["Error"] = $"Free plan allows up to {FreeChangeRequestLimit} change requests. Upgrade to Pro to create more.";
-            return RedirectToAction("Index", "Payment");
+            var (isReached, freeLimit) = await HasReachedFreeProjectLimitAsync(userId);
+            if (isReached)
+            {
+                TempData["Error"] = $"Free plan allows up to {freeLimit} projects. Upgrade to Pro to create more.";
+                return RedirectToAction("Index", "Payment");
+            }
         }
 
         var vm = new ChangeRequestFormViewModel
@@ -611,9 +640,10 @@ public class ChangeRequestController : Controller
         ApplyGitHubRepoFromUrl(model);
         var userId = _userManager.GetUserId(User)!;
 
-        if (await HasReachedFreeChangeRequestLimitAsync(userId))
+        var (isReached, freeLimit) = await HasReachedFreeProjectLimitAsync(userId);
+        if (isReached)
         {
-            TempData["Error"] = $"Free plan allows up to {FreeChangeRequestLimit} change requests. Upgrade to Pro to continue.";
+            TempData["Error"] = $"Free plan allows up to {freeLimit} projects. Upgrade to Pro to continue.";
             return RedirectToAction("Index", "Payment");
         }
 
@@ -1102,7 +1132,8 @@ public class ChangeRequestController : Controller
             return Forbid();
 
         var currentUser = await _userManager.FindByIdAsync(userId);
-        if (currentUser == null || !HasActiveProAccess(currentUser))
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Find Bugs (OpenClaw) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
@@ -1192,6 +1223,17 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddFeature(int crId, string name, string? description)
     {
+        var userId = _userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var (isReached, freeLimit) = await HasReachedFreeFeatureLimitAsync(userId);
+            if (isReached)
+            {
+                TempData["Error"] = $"Free plan allows up to {freeLimit} features. Upgrade to Pro to create more.";
+                return RedirectToAction("Index", "Payment");
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(name))
         {
             TempData["Error"] = "Feature name is required.";
@@ -1350,20 +1392,39 @@ public class ChangeRequestController : Controller
         return await ApplyOrgTeamVisibility(query, userTeamId).ToListAsync();
     }
 
-    private async Task<bool> HasReachedFreeChangeRequestLimitAsync(string userId)
+    private async Task<(bool IsReached, int FreeLimit)> HasReachedFreeProjectLimitAsync(string userId)
     {
+        var settings = await _systemSettingsService.GetProVersionSettingsAsync();
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null || HasActiveProAccess(user))
-            return false;
+            return (false, settings.FreeProjectLimit);
 
         var currentCount = await _db.ChangeRequests
             .CountAsync(c => c.CreatedById == userId);
 
-        return currentCount >= FreeChangeRequestLimit;
+        return (currentCount >= settings.FreeProjectLimit, settings.FreeProjectLimit);
+    }
+
+    private async Task<(bool IsReached, int FreeLimit)> HasReachedFreeFeatureLimitAsync(string userId)
+    {
+        var settings = await _systemSettingsService.GetProVersionSettingsAsync();
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null || HasActiveProAccess(user))
+            return (false, settings.FreeFeatureLimit);
+
+        var currentCount = await _db.ChangeRequests
+            .Where(c => c.CreatedById == userId)
+            .SelectMany(c => c.Features)
+            .CountAsync();
+
+        return (currentCount >= settings.FreeFeatureLimit, settings.FreeFeatureLimit);
     }
 
     private static bool HasActiveProAccess(ApplicationUser user) =>
         user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
+
+    private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
+        HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan;
 
     private static (string ModuleKey, bool RequiresModify)? ResolvePermissionCheck(string actionName)
     {

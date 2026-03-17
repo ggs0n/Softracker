@@ -3,6 +3,7 @@
     ViewData["Title"] = "Settings";
     var isModulePermissionMenu = string.Equals(Model.ActiveMenu, "ModulePermission", StringComparison.OrdinalIgnoreCase);
     var isBellNotificationMenu = string.Equals(Model.ActiveMenu, "BellNotification", StringComparison.OrdinalIgnoreCase);
+    var isProVersionMenu = string.Equals(Model.ActiveMenu, "ProVersion", StringComparison.OrdinalIgnoreCase);
     var soundOptions = new (string Value, string Label)[]
     {
         ("classic", "Classic Bell"),
@@ -38,6 +39,16 @@
             <span>
                 <strong>Bell Notification</strong>
                 <small>Enable or disable notification sound</small>
+            </span>
+        </a>
+
+        <a asp-action="Index"
+           asp-route-menu="ProVersion"
+           class="settings-menu-item @(isProVersionMenu ? "active" : "")">
+            <i class="bi bi-gem"></i>
+            <span>
+                <strong>PRO Version</strong>
+                <small>Control Free plan limits and OpenClaw access</small>
             </span>
         </a>
     </aside>
@@ -144,6 +155,55 @@
                             </button>
                             <button type="submit" class="dp-btn-primary">
                                 <i class="bi bi-check2-circle"></i> Save Bell Notification
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+
+        @if (isProVersionMenu)
+        {
+            <div class="card">
+                <div class="card-header bg-light fw-semibold">
+                    <i class="bi bi-gem me-2"></i>PRO Version
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveProVersion" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ActiveMenu" value="ProVersion" />
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label asp-for="ProVersion.FreeProjectLimit" class="form-label fw-semibold">Free Plan: Max Projects</label>
+                                <input asp-for="ProVersion.FreeProjectLimit" class="form-control form-control-sm" min="0" />
+                                <span asp-validation-for="ProVersion.FreeProjectLimit" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="ProVersion.FreeBugLimit" class="form-label fw-semibold">Free Plan: Max Bugs</label>
+                                <input asp-for="ProVersion.FreeBugLimit" class="form-control form-control-sm" min="0" />
+                                <span asp-validation-for="ProVersion.FreeBugLimit" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="ProVersion.FreeFeatureLimit" class="form-label fw-semibold">Free Plan: Max Features</label>
+                                <input asp-for="ProVersion.FreeFeatureLimit" class="form-control form-control-sm" min="0" />
+                                <span asp-validation-for="ProVersion.FreeFeatureLimit" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="settings-toggle-row mt-3 mb-3">
+                            <div>
+                                <div class="fw-semibold">Allow OpenClaw for Free Plan</div>
+                                <div class="text-muted small">When off, Find Bugs / Fix Bugs / Feature Agent are Pro-only.</div>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" asp-for="ProVersion.AllowOpenClawForFreePlan" />
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="dp-btn-primary">
+                                <i class="bi bi-check2-circle"></i> Save PRO Version
                             </button>
                         </div>
                     </form>

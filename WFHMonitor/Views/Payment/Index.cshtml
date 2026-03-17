@@ -130,8 +130,9 @@
             <div class="plan-price">$0</div>
             <div class="plan-period">per user / month</div>
             <ul class="plan-list">
-                <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeCrLimit change requests</li>
+                <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeProjectLimit projects</li>
                 <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeBugLimit bug reports</li>
+                <li><i class="bi bi-check-circle-fill"></i> Up to @Model.FreeFeatureLimit features</li>
                 <li><i class="bi bi-check-circle-fill"></i> Core task and project management</li>
                 <li><i class="bi bi-check-circle-fill"></i> Community support</li>
             </ul>
@@ -198,7 +199,7 @@
                 <div class="plan-pay-note">
                     @if (Model.CanStartProCheckout)
                     {
-                        <span>Complete Stripe payment to unlock unlimited CR and Bug creation.</span>
+                        <span>Complete Stripe payment to unlock unlimited projects, bugs, and features.</span>
                     }
                     else
                     {
@@ -220,15 +221,21 @@
     <div style="padding:0 18px 12px">
         <ul class="usage-list">
             <li>
-                <span>Change Requests Created</span>
-                <span class="dp-badge @(Model.IsFreeCrLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
-                    @Model.CurrentCrCount / @(hasProAccess ? "Unlimited" : Model.FreeCrLimit)
+                <span>Projects Created</span>
+                <span class="dp-badge @(Model.IsFreeProjectLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
+                    @Model.CurrentProjectCount / @(hasProAccess ? "Unlimited" : Model.FreeProjectLimit)
                 </span>
             </li>
             <li>
                 <span>Bug Reports Created</span>
                 <span class="dp-badge @(Model.IsFreeBugLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
                     @Model.CurrentBugCount / @(hasProAccess ? "Unlimited" : Model.FreeBugLimit)
+                </span>
+            </li>
+            <li>
+                <span>Features Created</span>
+                <span class="dp-badge @(Model.IsFreeFeatureLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
+                    @Model.CurrentFeatureCount / @(hasProAccess ? "Unlimited" : Model.FreeFeatureLimit)
                 </span>
             </li>
         </ul>
@@ -253,14 +260,28 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="dp-cell-title">Change Request Creation</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeCrLimit</span></td>
+                    <td class="dp-cell-title">Project Creation</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeProjectLimit</span></td>
                     <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
                 </tr>
                 <tr>
                     <td class="dp-cell-title">Bug Creation</td>
                     <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeBugLimit</span></td>
                     <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">Feature Creation</td>
+                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeFeatureLimit</span></td>
+                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
+                </tr>
+                <tr>
+                    <td class="dp-cell-title">OpenClaw Agent Integration</td>
+                    <td class="text-center">
+                        <span class="dp-badge @(Model.AllowOpenClawForFreePlan ? "dp-badge-green" : "dp-badge-slate")">
+                            @(Model.AllowOpenClawForFreePlan ? "Enabled by Admin" : "Disabled")
+                        </span>
+                    </td>
+                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Full Access</span></td>
                 </tr>
                 <tr>
                     <td class="dp-cell-title">Pro Activation</td>

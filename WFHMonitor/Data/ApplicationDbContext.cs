@@ -343,6 +343,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(s => s.BellNotificationSoundOption)
                 .HasMaxLength(30)
                 .HasDefaultValue(BellSoundOptions.Classic);
+
+            e.Property(s => s.FreeProjectLimit)
+                .HasDefaultValue(ProVersionDefaults.FreeProjectLimit);
+
+            e.Property(s => s.FreeBugLimit)
+                .HasDefaultValue(ProVersionDefaults.FreeBugLimit);
+
+            e.Property(s => s.FreeFeatureLimit)
+                .HasDefaultValue(ProVersionDefaults.FreeFeatureLimit);
+
+            e.Property(s => s.AllowOpenClawForFreePlan)
+                .HasDefaultValue(false);
         });
 
         builder.Entity<OrgTeam>(e =>

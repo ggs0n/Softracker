@@ -436,21 +436,6 @@ public static class DbInitializer
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
-            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 1')
-                BEGIN
-                    INSERT INTO [dbo].[OrgTeams] ([Name], [CreatedAt], [UpdatedAt])
-                    VALUES ('Team 1', SYSUTCDATETIME(), SYSUTCDATETIME());
-                END
-
-                IF NOT EXISTS (SELECT 1 FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 2')
-                BEGIN
-                    INSERT INTO [dbo].[OrgTeams] ([Name], [CreatedAt], [UpdatedAt])
-                    VALUES ('Team 2', SYSUTCDATETIME(), SYSUTCDATETIME());
-                END
-            END
-
             DECLARE @Team1Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 1' ORDER BY [Id]);
             DECLARE @Team2Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 2' ORDER BY [Id]);
 
@@ -560,6 +545,10 @@ public static class DbInitializer
                     [Id] int NOT NULL,
                     [BellNotificationSoundEnabled] bit NOT NULL CONSTRAINT [DF_SystemPreferences_BellNotificationSoundEnabled] DEFAULT 1,
                     [BellNotificationSoundOption] nvarchar(30) NOT NULL CONSTRAINT [DF_SystemPreferences_BellNotificationSoundOption] DEFAULT 'classic',
+                    [FreeProjectLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeProjectLimit] DEFAULT 2,
+                    [FreeBugLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeBugLimit] DEFAULT 2,
+                    [FreeFeatureLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeFeatureLimit] DEFAULT 2,
+                    [AllowOpenClawForFreePlan] bit NOT NULL CONSTRAINT [DF_SystemPreferences_AllowOpenClawForFreePlan] DEFAULT 0,
                     [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_SystemPreferences_UpdatedAt] DEFAULT SYSUTCDATETIME(),
                     CONSTRAINT [PK_SystemPreferences] PRIMARY KEY ([Id])
                 );
@@ -578,10 +567,52 @@ public static class DbInitializer
 
         await db.Database.ExecuteSqlRawAsync("""
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'FreeProjectLimit') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [FreeProjectLimit] int NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_FreeProjectLimit] DEFAULT 2;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'FreeBugLimit') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [FreeBugLimit] int NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_FreeBugLimit] DEFAULT 2;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'FreeFeatureLimit') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [FreeFeatureLimit] int NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_FreeFeatureLimit] DEFAULT 2;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'AllowOpenClawForFreePlan') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [AllowOpenClawForFreePlan] bit NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_AllowOpenClawForFreePlan] DEFAULT 0;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM [dbo].[SystemPreferences] WHERE [Id] = 1)
             BEGIN
-                INSERT INTO [dbo].[SystemPreferences] ([Id], [BellNotificationSoundEnabled], [UpdatedAt])
-                VALUES (1, 1, SYSUTCDATETIME());
+                INSERT INTO [dbo].[SystemPreferences]
+                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [AllowOpenClawForFreePlan], [UpdatedAt])
+                VALUES
+                    (1, 1, 'classic', 2, 2, 2, 0, SYSUTCDATETIME());
             END
             """);
 
@@ -593,6 +624,20 @@ public static class DbInitializer
                 SET [BellNotificationSoundOption] = 'classic'
                 WHERE [BellNotificationSoundOption] IS NULL
                    OR LTRIM(RTRIM([BellNotificationSoundOption])) = '';
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+            BEGIN
+                UPDATE [dbo].[SystemPreferences]
+                SET
+                    [FreeProjectLimit] = CASE WHEN [FreeProjectLimit] < 0 THEN 2 ELSE [FreeProjectLimit] END,
+                    [FreeBugLimit] = CASE WHEN [FreeBugLimit] < 0 THEN 2 ELSE [FreeBugLimit] END,
+                    [FreeFeatureLimit] = CASE WHEN [FreeFeatureLimit] < 0 THEN 2 ELSE [FreeFeatureLimit] END
+                WHERE [FreeProjectLimit] < 0
+                   OR [FreeBugLimit] < 0
+                   OR [FreeFeatureLimit] < 0;
             END
             """);
     }

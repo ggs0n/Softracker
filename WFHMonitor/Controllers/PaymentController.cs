@@ -15,15 +15,18 @@ public class PaymentController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _db;
     private readonly IStripeBillingService _stripeBillingService;
+    private readonly ISystemSettingsService _systemSettingsService;
 
     public PaymentController(
         UserManager<ApplicationUser> userManager,
         ApplicationDbContext db,
-        IStripeBillingService stripeBillingService)
+        IStripeBillingService stripeBillingService,
+        ISystemSettingsService systemSettingsService)
     {
         _userManager = userManager;
         _db = db;
         _stripeBillingService = stripeBillingService;
+        _systemSettingsService = systemSettingsService;
     }
 
     public async Task<IActionResult> Index()
@@ -36,14 +39,24 @@ public class PaymentController : Controller
         if (user == null)
             return Forbid();
 
+        var proSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+
         var vm = new PaymentPlansViewModel
         {
             CurrentPlan = user.SubscriptionPlan,
             IsProSubscriptionActive = user.IsProSubscriptionActive,
             ProSubscribedAt = user.ProSubscribedAt,
             IsStripeBillingConfigured = _stripeBillingService.IsConfigured,
-            CurrentCrCount = await _db.ChangeRequests.CountAsync(c => c.CreatedById == userId),
-            CurrentBugCount = await _db.BugReports.CountAsync(b => b.CreatedById == userId)
+            CurrentProjectCount = await _db.ChangeRequests.CountAsync(c => c.CreatedById == userId),
+            CurrentBugCount = await _db.BugReports.CountAsync(b => b.CreatedById == userId),
+            CurrentFeatureCount = await _db.ChangeRequests
+                .Where(c => c.CreatedById == userId)
+                .SelectMany(c => c.Features)
+                .CountAsync(),
+            FreeProjectLimit = proSettings.FreeProjectLimit,
+            FreeBugLimit = proSettings.FreeBugLimit,
+            FreeFeatureLimit = proSettings.FreeFeatureLimit,
+            AllowOpenClawForFreePlan = proSettings.AllowOpenClawForFreePlan
         };
 
         ViewData["Title"] = "Payment";

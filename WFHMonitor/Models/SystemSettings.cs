@@ -33,7 +33,18 @@ public class SystemPreference
     public bool BellNotificationSoundEnabled { get; set; } = true;
     [Required, MaxLength(30)]
     public string BellNotificationSoundOption { get; set; } = BellSoundOptions.Classic;
+    public int FreeProjectLimit { get; set; } = ProVersionDefaults.FreeProjectLimit;
+    public int FreeBugLimit { get; set; } = ProVersionDefaults.FreeBugLimit;
+    public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
+    public bool AllowOpenClawForFreePlan { get; set; } = false;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class ProVersionDefaults
+{
+    public const int FreeProjectLimit = 2;
+    public const int FreeBugLimit = 2;
+    public const int FreeFeatureLimit = 2;
 }
 
 public static class BellSoundOptions

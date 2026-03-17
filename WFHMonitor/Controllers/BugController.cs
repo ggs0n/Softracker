@@ -16,8 +16,6 @@ namespace WFHMonitor.Controllers;
 [Authorize(Roles = "Admin,Tester,Developer,Agent")]
 public class BugController : Controller
 {
-    private const int FreeBugLimit = 5;
-
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IBugService _bugService;
@@ -93,7 +91,8 @@ public class BugController : Controller
 
             ViewBag.OpenClawFixAgentOptions = GetOpenClawFixAgentOptions();
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
-            ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
+            var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+            ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
 
             return View(bug);
         }
@@ -108,10 +107,14 @@ public class BugController : Controller
     public async Task<IActionResult> Create()
     {
         var userId = _userManager.GetUserId(User);
-        if (!string.IsNullOrWhiteSpace(userId) && await HasReachedFreeBugLimitAsync(userId))
+        if (!string.IsNullOrWhiteSpace(userId))
         {
-            TempData["Error"] = $"Free plan allows up to {FreeBugLimit} bug reports. Upgrade to Pro to create more.";
-            return RedirectToAction("Index", "Payment");
+            var (isReached, freeLimit) = await HasReachedFreeBugLimitAsync(userId);
+            if (isReached)
+            {
+                TempData["Error"] = $"Free plan allows up to {freeLimit} bug reports. Upgrade to Pro to create more.";
+                return RedirectToAction("Index", "Payment");
+            }
         }
 
         var vm = new BugFormViewModel();
@@ -125,9 +128,10 @@ public class BugController : Controller
     public async Task<IActionResult> Create(BugFormViewModel model)
     {
         var userId = _userManager.GetUserId(User)!;
-        if (await HasReachedFreeBugLimitAsync(userId))
+        var (isReached, freeLimit) = await HasReachedFreeBugLimitAsync(userId);
+        if (isReached)
         {
-            TempData["Error"] = $"Free plan allows up to {FreeBugLimit} bug reports. Upgrade to Pro to continue.";
+            TempData["Error"] = $"Free plan allows up to {freeLimit} bug reports. Upgrade to Pro to continue.";
             return RedirectToAction("Index", "Payment");
         }
 
@@ -285,7 +289,8 @@ public class BugController : Controller
             return Forbid();
 
         var currentUser = await _userManager.FindByIdAsync(userId);
-        if (currentUser == null || !HasActiveProAccess(currentUser))
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Fix Bug (OpenClaw) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
@@ -533,18 +538,22 @@ public class BugController : Controller
         return preferred?.Id ?? agents.OrderBy(a => a.FullName).FirstOrDefault()?.Id;
     }
 
-    private async Task<bool> HasReachedFreeBugLimitAsync(string userId)
+    private async Task<(bool IsReached, int FreeLimit)> HasReachedFreeBugLimitAsync(string userId)
     {
+        var settings = await _systemSettingsService.GetProVersionSettingsAsync();
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null || HasActiveProAccess(user))
-            return false;
+            return (false, settings.FreeBugLimit);
 
         var currentCount = await _db.BugReports
             .CountAsync(b => b.CreatedById == userId);
 
-        return currentCount >= FreeBugLimit;
+        return (currentCount >= settings.FreeBugLimit, settings.FreeBugLimit);
     }
 
     private static bool HasActiveProAccess(ApplicationUser user) =>
         user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
+
+    private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
+        HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan;
 }

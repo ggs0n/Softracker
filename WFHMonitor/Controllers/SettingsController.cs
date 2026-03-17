@@ -41,4 +41,19 @@ public class SettingsController : Controller
         TempData["Success"] = "Bell notification settings updated.";
         return RedirectToAction(nameof(Index), new { menu = "BellNotification" });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveProVersion(SettingsPageViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["Error"] = "Please provide valid PRO Version limits.";
+            return RedirectToAction(nameof(Index), new { menu = "ProVersion" });
+        }
+
+        await _settingsService.SaveProVersionSettingsAsync(model.ProVersion);
+        TempData["Success"] = "PRO Version settings updated.";
+        return RedirectToAction(nameof(Index), new { menu = "ProVersion" });
+    }
 }
