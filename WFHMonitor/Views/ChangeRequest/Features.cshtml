@@ -2,6 +2,16 @@
 @{
     ViewData["Title"] = "Features";
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    int? currentProjectId = null;
+
+    if (int.TryParse(Context.Request.Query["projectId"], out var qpProjectId))
+    {
+        currentProjectId = qpProjectId;
+    }
+    else if (Model.Count == 1)
+    {
+        currentProjectId = Model[0].Id;
+    }
 
     var projects = Model
         .SelectMany(p => p.Features.Select(f => new { Project = p, Feature = f }))
@@ -16,7 +26,10 @@
     </div>
     @if (User.IsInRole("Admin"))
     {
-        <a asp-action="CreateFeature" asp-route-returnUrl="@returnUrl" class="dp-btn-primary">
+        <a asp-action="CreateFeature"
+           asp-route-projectId="@currentProjectId"
+           asp-route-returnUrl="@returnUrl"
+           class="dp-btn-primary">
             <i class="bi bi-plus-circle"></i> Add New Feature
         </a>
     }
