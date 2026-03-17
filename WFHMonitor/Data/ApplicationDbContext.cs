@@ -225,6 +225,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(f => f.ChangeRequestId);
             e.HasIndex(f => f.AssignedDeveloperId);
+            e.HasIndex(f => f.FeatureNumber).IsUnique();
+
+            e.Property(f => f.FeatureNumber)
+             .HasMaxLength(20);
 
             e.Property(f => f.Status)
              .HasConversion<string>()

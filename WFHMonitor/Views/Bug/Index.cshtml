@@ -1,17 +1,101 @@
 @model List<WFHMonitor.Models.BugReport>
-@{ ViewData["Title"] = "Bugs"; }
+@{
+    ViewData["Title"] = "Bugs";
+
+    var projectToneClasses = new[]
+    {
+        "bug-project-tone-1",
+        "bug-project-tone-2",
+        "bug-project-tone-3",
+        "bug-project-tone-4",
+        "bug-project-tone-5",
+        "bug-project-tone-6",
+        "bug-project-tone-7",
+        "bug-project-tone-8"
+    };
+
+    int ResolveProjectToneIndex(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 0;
+
+        unchecked
+        {
+            var hash = 23;
+            foreach (var ch in value.Trim().ToUpperInvariant())
+                hash = (hash * 31) + ch;
+
+            return Math.Abs(hash) % projectToneClasses.Length;
+        }
+    }
+}
+
+<style>
+    .bug-project-chip {
+        font-weight: 700;
+        border-width: 1px;
+        border-style: solid;
+        border-radius: 999px;
+        padding: 0.23rem 0.56rem;
+        font-size: 0.75rem;
+        letter-spacing: 0.02em;
+    }
+
+    .bug-project-tone-1 { color: #0ea5e9; border-color: rgba(14,165,233,0.45); background: rgba(14,165,233,0.14); }
+    .bug-project-tone-2 { color: #22c55e; border-color: rgba(34,197,94,0.45); background: rgba(34,197,94,0.14); }
+    .bug-project-tone-3 { color: #f97316; border-color: rgba(249,115,22,0.45); background: rgba(249,115,22,0.14); }
+    .bug-project-tone-4 { color: #f43f5e; border-color: rgba(244,63,94,0.45); background: rgba(244,63,94,0.14); }
+    .bug-project-tone-5 { color: #a78bfa; border-color: rgba(167,139,250,0.45); background: rgba(167,139,250,0.14); }
+    .bug-project-tone-6 { color: #06b6d4; border-color: rgba(6,182,212,0.45); background: rgba(6,182,212,0.14); }
+    .bug-project-tone-7 { color: #f59e0b; border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.14); }
+    .bug-project-tone-8 { color: #84cc16; border-color: rgba(132,204,22,0.45); background: rgba(132,204,22,0.14); }
+
+    .bug-agent-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .bug-agent-progress-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: #3b82f6;
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    .bug-agent-progress-dot.is-pulsing {
+        animation: bugPulse 1.25s infinite;
+    }
+
+    .bug-agent-progress-dot.is-queued {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+    }
+
+    @@keyframes bugPulse {
+        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+        70% { box-shadow: 0 0 0 9px rgba(59,130,246,0); }
+        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    }
+</style>
 
 <div class="mod-header">
     <div class="mod-header-left">
         <h1 class="mod-title"><i class="bi bi-bug-fill" style="color:#f87171"></i> Bug Tracker</h1>
         <p class="mod-subtitle">Track and manage all reported defects</p>
     </div>
-    @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
-    {
-        <a asp-action="Create" class="dp-btn-primary">
-            <i class="bi bi-plus-circle"></i> New Bug
+    <div class="d-flex gap-2">
+        <a asp-action="Index" class="dp-btn" title="Refresh status">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
         </a>
-    }
+        @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
+        {
+            <a asp-action="Create" class="dp-btn-primary">
+                <i class="bi bi-plus-circle"></i> New Bug
+            </a>
+        }
+    </div>
 </div>
 
 <div class="dp" style="--dp-color:#ef4444">
@@ -38,6 +122,7 @@
                     <tr>
                         <th>Bug #</th>
                         <th>Title</th>
+                        <th>PR Link</th>
                         <th>Project</th>
                         <th>Status</th>
                         <th>Assigned</th>
@@ -48,20 +133,37 @@
                 <tbody>
                     @foreach (var bug in Model)
                     {
+                        var projectNumber = bug.ChangeRequest?.CrNumber;
+                        var projectText = !string.IsNullOrWhiteSpace(projectNumber)
+                            ? projectNumber
+                            : bug.ChangeRequestReferenceText;
+                        var projectToneClass = projectToneClasses[ResolveProjectToneIndex(projectText ?? string.Empty)];
                         <tr>
                             <td class="dp-cell-mono">@bug.BugNumber</td>
                             <td class="dp-cell-title">
                                 <a asp-action="Details" asp-route-id="@bug.Id">@bug.Title</a>
                             </td>
                             <td>
+                                @if (!string.IsNullOrWhiteSpace(bug.PullRequestUrl))
+                                {
+                                    <a href="@bug.PullRequestUrl" target="_blank" rel="noopener noreferrer" class="dp-btn">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Open PR
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="dp-cell-muted">-</span>
+                                }
+                            </td>
+                            <td>
                                 @if (bug.ChangeRequest != null)
                                 {
-                                    <span class="dp-badge dp-badge-indigo">@bug.ChangeRequest.CrNumber</span>
+                                    <span class="bug-project-chip @projectToneClass">@bug.ChangeRequest.CrNumber</span>
                                     <span class="dp-cell-muted ms-1 d-none d-xl-inline">@bug.ChangeRequest.Title</span>
                                 }
                                 else if (!string.IsNullOrWhiteSpace(bug.ChangeRequestReferenceText))
                                 {
-                                    <span class="dp-cell-muted">@bug.ChangeRequestReferenceText</span>
+                                    <span class="bug-project-chip @projectToneClass">@bug.ChangeRequestReferenceText</span>
                                 }
                                 else
                                 {
@@ -71,11 +173,9 @@
                             <td>
                                 @{
                                     var statusCls = bug.Status.ToString() switch {
-                                        "Open"       => "dp-badge-red",
-                                        "InProgress" => "dp-badge-indigo",
-                                        "Resolved"   => "dp-badge-green",
-                                        "Closed"     => "dp-badge-slate",
-                                        "Reopened"   => "dp-badge-amber",
+                                        "New"      => "dp-badge-red",
+                                        "Testing"  => "dp-badge-indigo",
+                                        "Complete" => "dp-badge-green",
                                         _            => "dp-badge-slate"
                                     };
                                 }
@@ -84,8 +184,13 @@
                             <td>
                                 @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
                                 {
+                                    var isAgentQueued = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.Queued;
+                                    var isAgentProcessing = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.InProgress;
                                     <span class="dp-badge dp-badge-sky"><i class="bi bi-cpu me-1"></i>Agent</span>
-                                    <span class="dp-cell-muted ms-1">@bug.AgentStatus</span>
+                                    <span class="bug-agent-progress ms-1">
+                                        <span class="bug-agent-progress-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
+                                        <span class="dp-cell-muted">@bug.AgentStatus</span>
+                                    </span>
                                 }
                                 else
                                 {

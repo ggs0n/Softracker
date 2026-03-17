@@ -1,6 +1,9 @@
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using WFHMonitor.Models
 @using WFHMonitor.Services.Interfaces
 @inject INotificationService NotificationService
+@inject UserManager<ApplicationUser> UserManager
 
 <!DOCTYPE html>
 <html lang="en">
@@ -22,7 +25,19 @@
     var notificationBell = string.IsNullOrWhiteSpace(userId)
         ? new WFHMonitor.ViewModels.NotificationBellViewModel()
         : await NotificationService.GetBellAsync(userId);
+    var currentUser = string.IsNullOrWhiteSpace(userId)
+        ? null
+        : await UserManager.FindByIdAsync(userId);
+    var isProActive = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && currentUser.IsProSubscriptionActive;
+    var isProPending = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && !currentUser.IsProSubscriptionActive;
+    var planIndicatorClass = isProActive ? "pro" : isProPending ? "pending" : "free";
+    var planIndicatorLabel = isProActive ? "PRO ACTIVE" : isProPending ? "PRO PENDING" : "FREE";
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var notificationDropdownModel = new WFHMonitor.ViewModels.NotificationDropdownViewModel
+    {
+        Bell = notificationBell,
+        ReturnUrl = returnUrl
+    };
     var isProjectsSectionActive = ctrl == "ChangeRequest" || ctrl == "Bug";
     var isMonitorSectionActive = ctrl == "Monitor";
     var isPaymentSectionActive = ctrl == "Payment";
@@ -164,6 +179,7 @@
                 <div>
                     <div class="fw-semibold text-white" style="font-size:0.82rem;">@User.Identity!.Name</div>
                     <div style="font-size:0.72rem;opacity:0.5;">@(User.IsInRole("Admin") ? "Admin" : User.IsInRole("Tester") ? "Tester" : User.IsInRole("Developer") ? "Developer" : User.IsInRole("Agent") ? "Agent" : "Employee")</div>
+                    <div class="plan-indicator @planIndicatorClass">@planIndicatorLabel</div>
                 </div>
             </div>
             <form asp-controller="Auth" asp-action="Logout" method="post">
@@ -181,6 +197,7 @@
             <div class="d-flex align-items-center gap-2">
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary notification-btn"
+                            id="notificationBellButton"
                             type="button"
                             data-bs-toggle="dropdown"
                             data-bs-auto-close="outside"
@@ -191,52 +208,8 @@
                             <span class="notification-badge">@(notificationBell.UnreadCount > 99 ? "99+" : notificationBell.UnreadCount.ToString())</span>
                         }
                     </button>
-                    <div class="dropdown-menu dropdown-menu-end notification-menu p-0">
-                        <div class="notification-header d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-                            <span class="fw-semibold">Notifications</span>
-                            @if (notificationBell.UnreadCount > 0)
-                            {
-                                <form asp-controller="Notification" asp-action="MarkAllRead" method="post" class="m-0">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none">Mark all read</button>
-                                </form>
-                            }
-                        </div>
-                        <div class="notification-list">
-                            @if (!notificationBell.Items.Any())
-                            {
-                                <div class="px-3 py-3 text-muted small">No notifications yet.</div>
-                            }
-                            else
-                            {
-                                @foreach (var item in notificationBell.Items)
-                                {
-                                    <div class="notification-item @(item.IsRead ? "is-read" : "is-unread")">
-                                        <div class="notification-item-body">
-                                            <div class="notification-title">@item.Title</div>
-                                            <div class="notification-message">@item.Message</div>
-                                            <div class="notification-time">@item.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</div>
-                                        </div>
-                                        <div class="notification-item-actions">
-                                            @if (!item.IsRead)
-                                            {
-                                                <form asp-controller="Notification" asp-action="MarkRead" method="post" class="m-0">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="id" value="@item.Id" />
-                                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none">Read</button>
-                                                </form>
-                                            }
-                                            @if (!string.IsNullOrWhiteSpace(item.LinkUrl))
-                                            {
-                                                <a href="@item.LinkUrl" class="btn btn-link btn-sm p-0 text-decoration-none">Open</a>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            }
-                        </div>
+                    <div id="notificationDropdownHost">
+                        @await Html.PartialAsync("_NotificationDropdown", notificationDropdownModel)
                     </div>
                 </div>
             </div>
@@ -276,6 +249,77 @@ else
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
+<script>
+    (function () {
+        const bellButton = document.getElementById('notificationBellButton');
+        const dropdownHost = document.getElementById('notificationDropdownHost');
+        if (!bellButton || !dropdownHost) {
+            return;
+        }
+
+        let isRefreshing = false;
+
+        function updateBadge(unreadCount) {
+            const count = Number.isFinite(unreadCount) ? unreadCount : 0;
+            let badge = bellButton.querySelector('.notification-badge');
+
+            if (count <= 0) {
+                if (badge) {
+                    badge.remove();
+                }
+                return;
+            }
+
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'notification-badge';
+                bellButton.appendChild(badge);
+            }
+
+            badge.textContent = count > 99 ? '99+' : String(count);
+        }
+
+        async function refreshNotificationBell() {
+            if (isRefreshing) {
+                return;
+            }
+
+            isRefreshing = true;
+            try {
+                const returnUrl = window.location.pathname + window.location.search;
+                const endpoint = '/Notification/BellFragment?returnUrl=' + encodeURIComponent(returnUrl);
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const html = await response.text();
+                dropdownHost.innerHTML = html;
+
+                const menu = dropdownHost.querySelector('.notification-menu');
+                const unreadRaw = menu ? menu.getAttribute('data-unread-count') : '0';
+                const unreadCount = parseInt(unreadRaw || '0', 10);
+                updateBadge(Number.isNaN(unreadCount) ? 0 : unreadCount);
+            } catch {
+                // Ignore transient polling errors.
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        window.setInterval(refreshNotificationBell, 10000);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                refreshNotificationBell();
+            }
+        });
+    })();
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

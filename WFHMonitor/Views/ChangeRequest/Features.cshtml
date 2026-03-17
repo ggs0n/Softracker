@@ -44,6 +44,7 @@
             <table class="dp-table">
                 <thead>
                     <tr>
+                        <th>Feature #</th>
                         <th>Feature</th>
                         <th>Project</th>
                         <th>Status</th>
@@ -83,7 +84,14 @@
 
                         <tr>
                             <td>
-                                <div class="dp-cell-title">@feature.Name</div>
+                                <span class="dp-badge dp-badge-slate">@feature.FeatureNumber</span>
+                            </td>
+                            <td>
+                                <a asp-action="FeatureDetails"
+                                   asp-route-featureId="@feature.Id"
+                                   class="dp-cell-title text-decoration-none">
+                                    @feature.Name
+                                </a>
                                 @if (!string.IsNullOrWhiteSpace(feature.Description))
                                 {
                                     <div class="dp-cell-muted">@feature.Description</div>

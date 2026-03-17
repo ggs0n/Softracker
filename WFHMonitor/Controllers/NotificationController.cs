@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WFHMonitor.Services.Interfaces;
+using WFHMonitor.ViewModels;
 
 namespace WFHMonitor.Controllers;
 
@@ -13,6 +14,23 @@ public class NotificationController : Controller
     public NotificationController(INotificationService notificationService)
     {
         _notificationService = notificationService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> BellFragment(string? returnUrl)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var bell = string.IsNullOrWhiteSpace(userId)
+            ? new NotificationBellViewModel()
+            : await _notificationService.GetBellAsync(userId);
+
+        var model = new NotificationDropdownViewModel
+        {
+            Bell = bell,
+            ReturnUrl = NormalizeReturnUrl(returnUrl)
+        };
+
+        return PartialView("~/Views/Shared/_NotificationDropdown.cshtml", model);
     }
 
     [HttpPost]
@@ -42,5 +60,12 @@ public class NotificationController : Controller
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
             return LocalRedirect(returnUrl);
         return RedirectToAction("Index", "Home");
+    }
+
+    private string NormalizeReturnUrl(string? returnUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return returnUrl;
+        return "/";
     }
 }

@@ -163,6 +163,9 @@ public class ProjectFeature
     public int ChangeRequestId { get; set; }
     public ChangeRequest? ChangeRequest { get; set; }
 
+    [Required, MaxLength(20)]
+    public string FeatureNumber { get; set; } = string.Empty;
+
     [Required, MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 

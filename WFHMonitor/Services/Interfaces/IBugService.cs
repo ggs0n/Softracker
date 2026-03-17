@@ -6,13 +6,14 @@ namespace WFHMonitor.Services.Interfaces;
 
 public interface IBugService
 {
-    Task<List<BugReport>> GetIndexBugsAsync(bool forDeveloper, string? userId);
+    Task<List<BugReport>> GetIndexBugsAsync(bool restrictToAssignedUser, string? userId);
     Task<BugReport?> GetDetailsAsync(int id);
     Task<BugReport?> GetByIdAsync(int id);
     Task PopulateFormOptionsAsync(BugFormViewModel model);
     Task<BugFormViewModel?> BuildEditViewModelAsync(int id);
     Task<(bool Succeeded, string Error, int BugId)> CreateAsync(BugFormViewModel model, string createdById);
     Task<(bool Succeeded, string Error)> UpdateAsync(int id, BugFormViewModel model);
+    Task<(bool Succeeded, string Error)> UpdatePullRequestUrlAsync(int id, string? pullRequestUrl);
     Task UpdateStatusAsync(BugReport bug, BugStatus status);
     Task<(bool Succeeded, string Error)> UploadScreenshotAsync(int id, IFormFile file);
     Task<(bool Succeeded, string Error)> DeleteScreenshotAsync(int screenshotId);

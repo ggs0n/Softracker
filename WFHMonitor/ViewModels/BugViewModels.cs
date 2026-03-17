@@ -25,6 +25,10 @@ public class BugFormViewModel
     [Display(Name = "Module Impacted")]
     public string? ModuleImpacted { get; set; }
 
+    [MaxLength(500)]
+    [Display(Name = "PR Link")]
+    public string? PullRequestUrl { get; set; }
+
     public BugStatus Status { get; set; } = BugStatus.New;
     public BugAssigneeType AssigneeType { get; set; } = BugAssigneeType.Developer;
     public BugAgentStatus AgentStatus { get; set; } = BugAgentStatus.None;

@@ -31,7 +31,7 @@ public class BugService : IBugService
         _notificationService = notificationService;
     }
 
-    public async Task<List<BugReport>> GetIndexBugsAsync(bool forDeveloper, string? userId)
+    public async Task<List<BugReport>> GetIndexBugsAsync(bool restrictToAssignedUser, string? userId)
     {
         IQueryable<BugReport> query = _db.BugReports
             .Include(b => b.ChangeRequest)
@@ -39,7 +39,7 @@ public class BugService : IBugService
             .Include(b => b.CreatedBy)
             .AsNoTracking();
 
-        if (forDeveloper)
+        if (restrictToAssignedUser)
             query = query.Where(b => b.AssignedDeveloperId == userId);
 
         return await query
@@ -88,6 +88,7 @@ public class BugService : IBugService
             Workflow = bug.Workflow,
             StepsToReproduce = bug.StepsToReproduce,
             ModuleImpacted = bug.ModuleImpacted,
+            PullRequestUrl = bug.PullRequestUrl,
             Status = bug.Status,
             AssigneeType = bug.AssigneeType,
             AgentStatus = bug.AgentStatus,
@@ -113,9 +114,10 @@ public class BugService : IBugService
             Workflow = model.Workflow,
             StepsToReproduce = model.StepsToReproduce,
             ModuleImpacted = model.ModuleImpacted,
+            PullRequestUrl = NormalizePullRequestUrl(model.PullRequestUrl),
             Status = model.Status,
             AssigneeType = model.AssigneeType,
-            AgentStatus = model.AssigneeType == BugAssigneeType.Agent ? BugAgentStatus.Queued : BugAgentStatus.None,
+            AgentStatus = BugAgentStatus.None,
             ChangeRequestId = model.ChangeRequestId,
             ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim(),
             AssignedDeveloperId = model.AssigneeType == BugAssigneeType.Agent ? model.AssignedAgentId : model.AssignedDeveloperId,
@@ -128,7 +130,7 @@ public class BugService : IBugService
         _db.BugActivities.Add(new BugActivity
         {
             BugReportId = bug.Id,
-            Action = bug.AssigneeType == BugAssigneeType.Agent ? "Created (Assigned to Agent Queue)" : "Created",
+            Action = bug.AssigneeType == BugAssigneeType.Agent ? "Created (Assigned to Agent)" : "Created",
             NewStatus = bug.Status,
             NewAssignedDeveloperId = bug.AssignedDeveloperId
         });
@@ -164,16 +166,18 @@ public class BugService : IBugService
         var oldAssignedId = bug.AssignedDeveloperId;
         var oldAssigneeType = bug.AssigneeType;
         var oldAgentStatus = bug.AgentStatus;
+        var oldPullRequestUrl = bug.PullRequestUrl;
 
         bug.Title = model.Title;
         bug.Description = model.Description;
         bug.Workflow = model.Workflow;
         bug.StepsToReproduce = model.StepsToReproduce;
         bug.ModuleImpacted = model.ModuleImpacted;
+        bug.PullRequestUrl = NormalizePullRequestUrl(model.PullRequestUrl);
         bug.Status = model.Status;
         bug.AssigneeType = model.AssigneeType;
         bug.AgentStatus = model.AssigneeType == BugAssigneeType.Agent
-            ? (oldAssigneeType != BugAssigneeType.Agent ? BugAgentStatus.Queued : model.AgentStatus)
+            ? (oldAssigneeType != BugAssigneeType.Agent ? BugAgentStatus.None : model.AgentStatus)
             : BugAgentStatus.None;
         bug.ChangeRequestId = model.ChangeRequestId;
         bug.ChangeRequestReferenceText = model.ChangeRequestReferenceText?.Trim();
@@ -183,12 +187,15 @@ public class BugService : IBugService
         if (oldStatus != bug.Status ||
             oldAssignedId != bug.AssignedDeveloperId ||
             oldAssigneeType != bug.AssigneeType ||
-            oldAgentStatus != bug.AgentStatus)
+            oldAgentStatus != bug.AgentStatus ||
+            !string.Equals(oldPullRequestUrl, bug.PullRequestUrl, StringComparison.Ordinal))
         {
             _db.BugActivities.Add(new BugActivity
             {
                 BugReportId = bug.Id,
-                Action = oldAssigneeType != bug.AssigneeType
+                Action = !string.Equals(oldPullRequestUrl, bug.PullRequestUrl, StringComparison.Ordinal)
+                    ? "PR Link Updated"
+                    : oldAssigneeType != bug.AssigneeType
                     ? $"Reassigned to {bug.AssigneeType}"
                     : "Updated",
                 OldStatus = oldStatus,
@@ -215,6 +222,36 @@ public class BugService : IBugService
                 $"/Bug/Details/{bug.Id}");
         }
 
+        return (true, string.Empty);
+    }
+
+    public async Task<(bool Succeeded, string Error)> UpdatePullRequestUrlAsync(int id, string? pullRequestUrl)
+    {
+        var bug = await _db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
+        if (bug == null)
+            return (false, "Bug not found.");
+
+        var normalized = NormalizePullRequestUrl(pullRequestUrl);
+        if (!string.IsNullOrWhiteSpace(normalized) && normalized.Length > 500)
+            return (false, "PR link cannot exceed 500 characters.");
+
+        if (string.Equals(bug.PullRequestUrl, normalized, StringComparison.Ordinal))
+            return (true, string.Empty);
+
+        bug.PullRequestUrl = normalized;
+        bug.UpdatedAt = DateTime.UtcNow;
+
+        _db.BugActivities.Add(new BugActivity
+        {
+            BugReportId = bug.Id,
+            Action = string.IsNullOrWhiteSpace(normalized) ? "PR Link Removed" : "PR Link Updated",
+            OldStatus = bug.Status,
+            NewStatus = bug.Status,
+            OldAssignedDeveloperId = bug.AssignedDeveloperId,
+            NewAssignedDeveloperId = bug.AssignedDeveloperId
+        });
+
+        await _db.SaveChangesAsync();
         return (true, string.Empty);
     }
 
@@ -411,6 +448,12 @@ public class BugService : IBugService
         }
 
         return true;
+    }
+
+    private static string? NormalizePullRequestUrl(string? value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
 }

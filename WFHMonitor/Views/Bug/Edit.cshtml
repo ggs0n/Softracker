@@ -1,105 +1,137 @@
 @model WFHMonitor.ViewModels.BugFormViewModel
-@{ ViewData["Title"] = "Edit Bug"; }
+@{
+    ViewData["Title"] = "Edit Bug";
+    var isPrLinkOnly = ViewBag.IsPrLinkOnly as bool? ?? false;
+}
 
 <div class="row">
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-warning">
-                <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>Edit Bug</h5>
+                <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>@(isPrLinkOnly ? "Edit PR Link" : "Edit Bug")</h5>
             </div>
             <div class="card-body p-4">
-                <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
-                    @Html.AntiForgeryToken()
-                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+                @if (isPrLinkOnly)
+                {
+                    <form asp-action="UpdatePullRequestUrl" asp-route-id="@Model.Id" method="post">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
-                    <div class="mb-3">
-                        <label asp-for="Title" class="form-label fw-semibold">Title</label>
-                        <input asp-for="Title" class="form-control" />
-                        <span asp-validation-for="Title" class="text-danger small"></span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
-                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Workflow" class="form-label fw-semibold">Workflow</label>
-                        <textarea asp-for="Workflow" class="form-control" rows="3"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="StepsToReproduce" class="form-label fw-semibold">Steps To Reproduce</label>
-                        <textarea asp-for="StepsToReproduce" class="form-control" rows="4"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ModuleImpacted" class="form-label fw-semibold">Module Impacted</label>
-                        <input asp-for="ModuleImpacted" class="form-control" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
-                        <select asp-for="ChangeRequestId" class="form-select">
-                            <option value="">-- None --</option>
-                            @foreach (var cr in Model.ChangeRequestOptions)
-                            {
-                                <option value="@cr.Value" selected="@(cr.Value == (Model.ChangeRequestId?.ToString() ?? string.Empty) ? "selected" : null)">@cr.Text</option>
-                            }
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Project (Free Text)</label>
-                        <input asp-for="ChangeRequestReferenceText" class="form-control" />
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
-                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="form-select"></select>
+                        <div class="mb-3">
+                            <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
+                            <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
+                            <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
                         </div>
-                        <div class="col-md-6">
-                            <label asp-for="AssigneeType" class="form-label fw-semibold">Assign To</label>
-                            <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="form-select" id="assigneeType">
-                            </select>
-                        </div>
-                    </div>
 
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6" id="developerAssignGroup">
-                            <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assign To Developer</label>
-                            <select asp-for="AssignedDeveloperId" class="form-select">
-                                <option value="">-- Unassigned --</option>
-                                @foreach (var dev in Model.DeveloperOptions)
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-check-lg me-2"></i>Save PR Link
+                            </button>
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="All" class="alert alert-danger small"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label fw-semibold">Title</label>
+                            <input asp-for="Title" class="form-control" />
+                            <span asp-validation-for="Title" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label fw-semibold">Description</label>
+                            <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Workflow" class="form-label fw-semibold">Workflow</label>
+                            <textarea asp-for="Workflow" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="StepsToReproduce" class="form-label fw-semibold">Steps To Reproduce</label>
+                            <textarea asp-for="StepsToReproduce" class="form-control" rows="4"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="ModuleImpacted" class="form-label fw-semibold">Module Impacted</label>
+                            <input asp-for="ModuleImpacted" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
+                            <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
+                            <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
+                            <select asp-for="ChangeRequestId" class="form-select">
+                                <option value="">-- None --</option>
+                                @foreach (var cr in Model.ChangeRequestOptions)
                                 {
-                                    <option value="@dev.Value" selected="@(dev.Value == Model.AssignedDeveloperId ? "selected" : null)">@dev.Text</option>
+                                    <option value="@cr.Value" selected="@(cr.Value == (Model.ChangeRequestId?.ToString() ?? string.Empty) ? "selected" : null)">@cr.Text</option>
                                 }
                             </select>
                         </div>
-                        <div class="col-md-6 d-none" id="agentAssignGroup">
-                            <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
-                            <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
-                                <option value="">-- Select Agent --</option>
-                                @foreach (var agent in Model.AgentOptions)
-                                {
-                                    <option value="@agent.Value" selected="@(agent.Value == Model.AssignedAgentId ? "selected" : null)">@agent.Text</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-6" id="agentStatusGroup">
-                            <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
-                            <select asp-for="AgentStatus" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAgentStatus>()" class="form-select"></select>
-                        </div>
-                    </div>
 
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-check-lg me-2"></i>Save Changes
-                        </button>
-                        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
-                    </div>
-                </form>
+                        <div class="mb-3">
+                            <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Project (Free Text)</label>
+                            <input asp-for="ChangeRequestReferenceText" class="form-control" />
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Status" class="form-label fw-semibold">Status</label>
+                                <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="form-select"></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="AssigneeType" class="form-label fw-semibold">Assign To</label>
+                                <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="form-select" id="assigneeType">
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6" id="developerAssignGroup">
+                                <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assign To Developer</label>
+                                <select asp-for="AssignedDeveloperId" class="form-select">
+                                    <option value="">-- Unassigned --</option>
+                                    @foreach (var dev in Model.DeveloperOptions)
+                                    {
+                                        <option value="@dev.Value" selected="@(dev.Value == Model.AssignedDeveloperId ? "selected" : null)">@dev.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-none" id="agentAssignGroup">
+                                <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
+                                <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
+                                    <option value="">-- Select Agent --</option>
+                                    @foreach (var agent in Model.AgentOptions)
+                                    {
+                                        <option value="@agent.Value" selected="@(agent.Value == Model.AssignedAgentId ? "selected" : null)">@agent.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6" id="agentStatusGroup">
+                                <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
+                                <select asp-for="AgentStatus" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAgentStatus>()" class="form-select"></select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-check-lg me-2"></i>Save Changes
+                            </button>
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                }
             </div>
         </div>
     </div>
@@ -107,27 +139,29 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
-        function isAgentSelected() {
-            const value = $('#assigneeType').val();
-            // Enum select can post either name ("Agent") or numeric value ("1")
-            return value === 'Agent' || value === '1';
-        }
-
-        function toggleAssigneeFields() {
-            var isAgent = isAgentSelected();
-            $('#developerAssignGroup').toggleClass('d-none', isAgent);
-            $('#agentAssignGroup').toggleClass('d-none', !isAgent);
-            $('#agentStatusGroup').toggleClass('d-none', !isAgent);
-            if (isAgent) {
-                $('#AssignedDeveloperId').val('');
-            } else {
-                $('#AssignedAgentId').val('');
-                $('#AgentStatus').val('None');
+    @if (!isPrLinkOnly)
+    {
+        <script>
+            function isAgentSelected() {
+                const value = $('#assigneeType').val();
+                return value === 'Agent' || value === '1';
             }
-        }
 
-        toggleAssigneeFields();
-        $('#assigneeType').on('change', toggleAssigneeFields);
-    </script>
+            function toggleAssigneeFields() {
+                var isAgent = isAgentSelected();
+                $('#developerAssignGroup').toggleClass('d-none', isAgent);
+                $('#agentAssignGroup').toggleClass('d-none', !isAgent);
+                $('#agentStatusGroup').toggleClass('d-none', !isAgent);
+                if (isAgent) {
+                    $('#AssignedDeveloperId').val('');
+                } else {
+                    $('#AssignedAgentId').val('');
+                    $('#AgentStatus').val('None');
+                }
+            }
+
+            toggleAssigneeFields();
+            $('#assigneeType').on('change', toggleAssigneeFields);
+        </script>
+    }
 }

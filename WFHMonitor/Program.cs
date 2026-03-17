@@ -38,12 +38,18 @@ builder.Services.Configure<ProjectMonitoringSettings>(
     builder.Configuration.GetSection("ProjectMonitoring"));
 builder.Services.Configure<StripeBillingSettings>(
     builder.Configuration.GetSection("StripeBilling"));
+builder.Services.Configure<OpenClawSettings>(
+    builder.Configuration.GetSection("OpenClaw"));
 builder.Services.AddHttpClient<IGitHubService, GitHubService>();
 builder.Services.AddHttpClient<IStripeBillingService, StripeBillingService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
 builder.Services.AddScoped<IDeveloperSummaryService, DeveloperSummaryService>();
 builder.Services.AddScoped<IBugService, BugService>();
+builder.Services.AddScoped<IOpenClawBugScanService, OpenClawBugScanService>();
+builder.Services.AddSingleton<BugFixQueueService>();
+builder.Services.AddSingleton<IBugFixQueueService>(sp => sp.GetRequiredService<BugFixQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BugFixQueueService>());
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IOutlookCalendarSyncService, OutlookCalendarSyncService>();

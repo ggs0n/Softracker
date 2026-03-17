@@ -160,6 +160,38 @@ body {
   color: rgba(255,255,255,0.5);
 }
 
+.sidebar-footer .plan-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.sidebar-footer .plan-indicator.pro {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(134, 239, 172, 0.45);
+}
+
+.sidebar-footer .plan-indicator.pending {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(252, 211, 77, 0.45);
+}
+
+.sidebar-footer .plan-indicator.free {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(203, 213, 225, 0.35);
+}
+
 .sidebar-footer form button {
   display: flex;
   align-items: center;

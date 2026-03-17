@@ -16,6 +16,7 @@ _ReSharper*/
 publish/
 **/publish/
 **/PublishProfiles/
+/.wfhtmp/
 
 ## NuGet
 *.nupkg

@@ -15,3 +15,9 @@ public class NotificationBellViewModel
     public int UnreadCount { get; set; }
     public List<NotificationItemViewModel> Items { get; set; } = new();
 }
+
+public class NotificationDropdownViewModel
+{
+    public NotificationBellViewModel Bell { get; set; } = new();
+    public string ReturnUrl { get; set; } = "/";
+}

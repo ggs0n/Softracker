@@ -39,6 +39,12 @@
                     </div>
 
                     <div class="mb-3">
+                        <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
+                        <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
+                        <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
                         <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
                         <select asp-for="ChangeRequestId" class="form-select">
                             <option value="">-- None --</option>

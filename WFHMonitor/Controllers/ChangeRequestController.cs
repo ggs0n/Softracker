@@ -22,17 +22,26 @@ public class ChangeRequestController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IGitHubService _gitHub;
+    private readonly IBugService _bugService;
+    private readonly IOpenClawBugScanService _openClawBugScanService;
+    private readonly OpenClawSettings _openClawSettings;
     private readonly IWebHostEnvironment env;
 
     public ChangeRequestController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         IGitHubService gitHub,
+        IBugService bugService,
+        IOpenClawBugScanService openClawBugScanService,
+        Microsoft.Extensions.Options.IOptions<OpenClawSettings> openClawSettings,
         IWebHostEnvironment env)
     {
         _db = db;
         _userManager = userManager;
         _gitHub = gitHub;
+        _bugService = bugService;
+        _openClawBugScanService = openClawBugScanService;
+        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
         this.env = env;
     }
 
@@ -66,6 +75,27 @@ public class ChangeRequestController : Controller
             return NotFound();
 
         return View(projects);
+    }
+
+    public async Task<IActionResult> FeatureDetails(int featureId)
+    {
+        var feature = await _db.ProjectFeatures
+            .Include(f => f.ChangeRequest)
+                .ThenInclude(c => c!.CreatedBy)
+            .Include(f => f.AssignedDeveloper)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == featureId);
+        if (feature == null) return NotFound();
+
+        if (User.IsInRole("Developer"))
+        {
+            var userId = _userManager.GetUserId(User);
+            var hasAccess = await _db.ChangeRequestPics
+                .AnyAsync(p => p.ChangeRequestId == feature.ChangeRequestId && p.EmployeeId == userId);
+            if (!hasAccess) return Forbid();
+        }
+
+        return View(feature);
     }
 
     [Authorize(Roles = "Admin")]
@@ -130,10 +160,12 @@ public class ChangeRequestController : Controller
         }
 
         var isCompleted = model.Status == CrStatus.Done;
+        var featureNumber = await GenerateNextFeatureNumberAsync(DateTime.UtcNow.Year);
 
         _db.ProjectFeatures.Add(new ProjectFeature
         {
             ChangeRequestId = model.ChangeRequestId,
+            FeatureNumber = featureNumber,
             Name = normalizedName,
             Description = model.Description?.Trim(),
             Status = model.Status,
@@ -314,6 +346,9 @@ public class ChangeRequestController : Controller
         ViewBag.ResolvedGitHubOwner = owner;
         ViewBag.ResolvedGitHubRepo = repo;
         ViewBag.ResolvedGitHubBranch = branch;
+        ViewBag.OpenClawScanAgentOptions = GetOpenClawScanAgentOptions();
+        var currentUser = await _userManager.GetUserAsync(User);
+        ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
 
         if (!string.IsNullOrWhiteSpace(owner) &&
             !string.IsNullOrWhiteSpace(repo) &&
@@ -374,7 +409,7 @@ public class ChangeRequestController : Controller
 
         for (var attempt = 1; attempt <= maxCrNumberAttempts; attempt++)
         {
-            var crNumberCandidate = await GenerateNextCrNumberAsync(currentYear);
+            var crNumberCandidate = await GenerateNextProjectNumberAsync(currentYear);
             var candidate = BuildChangeRequestEntity(model, userId, crNumberCandidate);
 
             _db.ChangeRequests.Add(candidate);
@@ -808,6 +843,115 @@ public class ChangeRequestController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Tester,Developer")]
+    public async Task<IActionResult> FindBugs(int id, string? scanAgentId)
+    {
+        var project = await _db.ChangeRequests
+            .Include(c => c.Features)
+            .Include(c => c.RepositoryFeatures)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (project == null) return NotFound();
+
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var currentUser = await _userManager.FindByIdAsync(userId);
+        if (currentUser == null || !HasActiveProAccess(currentUser))
+        {
+            TempData["Error"] = "Find Bugs (OpenClaw) is available for Pro plan only.";
+            return RedirectToAction("Index", "Payment");
+        }
+
+        if (User.IsInRole("Developer"))
+        {
+            var hasAccess = await _db.ChangeRequestPics
+                .AnyAsync(p => p.ChangeRequestId == id && p.EmployeeId == userId);
+            if (!hasAccess) return Forbid();
+        }
+
+        var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var selectedScanAgentId = string.IsNullOrWhiteSpace(scanAgentId)
+            ? configuredScanAgentIds.FirstOrDefault() ?? "main"
+            : scanAgentId.Trim();
+        if (configuredScanAgentIds.Count > 0 &&
+            !configuredScanAgentIds.Any(a => a.Equals(selectedScanAgentId, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = "Selected OpenClaw scan agent is not allowed by configuration.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var openClawAgentId = await ResolveOpenClawAgentIdAsync();
+        if (string.IsNullOrWhiteSpace(openClawAgentId))
+        {
+            TempData["Error"] = "OpenClaw agent user not found. Create an Agent user first.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var existingTitles = await _db.BugReports
+            .Where(b => b.ChangeRequestId == id)
+            .Select(b => b.Title)
+            .ToListAsync();
+
+        var knownTitles = existingTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var scanResult = await _openClawBugScanService.ScanProjectAsync(
+            project,
+            selectedScanAgentId,
+            HttpContext.RequestAborted);
+        if (!scanResult.Succeeded)
+        {
+            TempData["Error"] = scanResult.Error;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var findings = scanResult.Findings
+            .Where(f => knownTitles.Add(f.Title))
+            .Take(_openClawBugScanService.MaxFindingsPerScan)
+            .ToList();
+
+        if (findings.Count == 0)
+        {
+            TempData["Info"] = "OpenClaw scan complete - no new bugs found for this project.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var created = 0;
+        var errors = new List<string>();
+
+        foreach (var finding in findings)
+        {
+            var model = new BugFormViewModel
+            {
+                Title = finding.Title,
+                Description = finding.Description,
+                Workflow = finding.Workflow,
+                StepsToReproduce = finding.StepsToReproduce,
+                ModuleImpacted = finding.ModuleImpacted,
+                Status = BugStatus.New,
+                AssigneeType = BugAssigneeType.Agent,
+                AgentStatus = BugAgentStatus.Queued,
+                AssignedAgentId = openClawAgentId,
+                ChangeRequestId = id,
+                ChangeRequestReferenceText = project.CrNumber
+            };
+
+            var result = await _bugService.CreateAsync(model, userId);
+            if (result.Succeeded)
+                created++;
+            else if (!string.IsNullOrWhiteSpace(result.Error))
+                errors.Add(result.Error);
+        }
+
+        if (created > 0)
+            TempData["Success"] = $"OpenClaw agent '{selectedScanAgentId}' found {created} bug(s). Added to Bugs list and linked to project.";
+        if (errors.Count > 0)
+            TempData["Error"] = errors[0];
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddFeature(int crId, string name, string? description)
     {
@@ -823,6 +967,7 @@ public class ChangeRequestController : Controller
         _db.ProjectFeatures.Add(new ProjectFeature
         {
             ChangeRequestId = crId,
+            FeatureNumber = await GenerateNextFeatureNumberAsync(DateTime.UtcNow.Year),
             Name = name.Trim(),
             Description = description?.Trim(),
             Status = CrStatus.Draft,
@@ -970,6 +1115,30 @@ public class ChangeRequestController : Controller
             .ToList();
     }
 
+    private async Task<string?> ResolveOpenClawAgentIdAsync()
+    {
+        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var preferred = agents
+            .OrderBy(a => a.FullName)
+            .FirstOrDefault(a =>
+                (a.FullName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.UserName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Email?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false));
+
+        return preferred?.Id ?? agents.OrderBy(a => a.FullName).FirstOrDefault()?.Id;
+    }
+
+    private List<SelectListItem> GetOpenClawScanAgentOptions()
+    {
+        var configured = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        if (configured.Count == 0)
+            configured = ["main"];
+
+        return configured
+            .Select(id => new SelectListItem(id, id))
+            .ToList();
+    }
+
     private void ApplyGitHubRepoFromUrl(ChangeRequestFormViewModel model)
     {
         model.GitHubRepoUrl = model.GitHubRepoUrl?.Trim();
@@ -1045,9 +1214,9 @@ public class ChangeRequestController : Controller
         };
     }
 
-    private async Task<string> GenerateNextCrNumberAsync(int year)
+    private async Task<string> GenerateNextProjectNumberAsync(int year)
     {
-        var prefix = $"CR-{year}-";
+        var prefix = $"PRJ-{year}-";
         var existingNumbers = await _db.ChangeRequests
             .Where(c => c.CrNumber.StartsWith(prefix))
             .Select(c => c.CrNumber)
@@ -1056,7 +1225,7 @@ public class ChangeRequestController : Controller
         var maxSequence = 0;
         foreach (var value in existingNumbers)
         {
-            if (!TryExtractCrSequence(value, year, out var sequence))
+            if (!TryExtractRunningSequence(value, "PRJ", year, out var sequence))
                 continue;
 
             if (sequence > maxSequence)
@@ -1066,13 +1235,34 @@ public class ChangeRequestController : Controller
         return $"{prefix}{(maxSequence + 1):D4}";
     }
 
-    private static bool TryExtractCrSequence(string crNumber, int year, out int sequence)
+    private async Task<string> GenerateNextFeatureNumberAsync(int year)
+    {
+        var prefix = $"CR-{year}-";
+        var existingNumbers = await _db.ProjectFeatures
+            .Where(f => f.FeatureNumber.StartsWith(prefix))
+            .Select(f => f.FeatureNumber)
+            .ToListAsync();
+
+        var maxSequence = 0;
+        foreach (var value in existingNumbers)
+        {
+            if (!TryExtractRunningSequence(value, "CR", year, out var sequence))
+                continue;
+
+            if (sequence > maxSequence)
+                maxSequence = sequence;
+        }
+
+        return $"{prefix}{(maxSequence + 1):D4}";
+    }
+
+    private static bool TryExtractRunningSequence(string value, string expectedPrefix, int year, out int sequence)
     {
         sequence = 0;
-        var parts = crNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        var parts = value.Split('-', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3)
             return false;
-        if (!parts[0].Equals("CR", StringComparison.OrdinalIgnoreCase))
+        if (!parts[0].Equals(expectedPrefix, StringComparison.OrdinalIgnoreCase))
             return false;
         if (!int.TryParse(parts[1], out var parsedYear) || parsedYear != year)
             return false;
@@ -1382,5 +1572,6 @@ public class ChangeRequestController : Controller
 
         return true;
     }
+
 }
 

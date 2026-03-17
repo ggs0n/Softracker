@@ -1,7 +1,65 @@
 @model WFHMonitor.Models.BugReport
 @{
     ViewData["Title"] = Model.Title;
+    var openClawFixAgentOptions = ViewBag.OpenClawFixAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+        ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+    var appAgentOptions = ViewBag.AgentUserOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+        ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+    var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var canEditPrLink = (User.IsInRole("Admin") || User.IsInRole("Tester")) ||
+        (!string.IsNullOrWhiteSpace(currentUserId) &&
+         string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal) &&
+         (User.IsInRole("Developer") || User.IsInRole("Agent")));
+    var isAgentQueued = Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent &&
+        Model.AgentStatus == WFHMonitor.Models.BugAgentStatus.Queued;
+    var isAgentProcessing = Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent &&
+        Model.AgentStatus == WFHMonitor.Models.BugAgentStatus.InProgress;
 }
+
+<style>
+    .bug-agent-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+    }
+
+    .bug-agent-progress-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #3b82f6;
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    .bug-agent-progress-dot.is-pulsing {
+        animation: bugPulse 1.25s infinite;
+    }
+
+    .bug-agent-progress-dot.is-queued {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+    }
+
+    .bug-stage-btn {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .bug-stage-btn:focus-visible .badge {
+        outline: 2px solid rgba(59, 130, 246, 0.5);
+        outline-offset: 2px;
+    }
+
+    @@keyframes bugPulse {
+        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    }
+</style>
 
 <div class="d-flex justify-content-between align-items-start mb-4">
     <div>
@@ -26,7 +84,20 @@
                 var isComplete = i < bugStageIndex;
                 var isCurrent = i == bugStageIndex;
                 var badgeClass = isCurrent ? "bg-primary" : isComplete ? "bg-success" : "bg-light text-muted border";
-                <span class="badge @badgeClass fs-6 px-3 py-2">@bugStages[i].Label</span>
+                if (User.IsInRole("Admin"))
+                {
+                    <form asp-action="UpdateStatus" asp-route-id="@Model.Id" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="status" value="@bugStages[i].Status" />
+                        <button type="submit" class="bug-stage-btn" title="Set status to @bugStages[i].Label">
+                            <span class="badge @badgeClass fs-6 px-3 py-2">@bugStages[i].Label</span>
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <span class="badge @badgeClass fs-6 px-3 py-2">@bugStages[i].Label</span>
+                }
                 if (i < bugStages.Count - 1)
                 {
                     <i class="bi bi-chevron-right text-muted"></i>
@@ -47,18 +118,26 @@
             </form>
         </div>
     }
-    else if (User.IsInRole("Developer") &&
-             Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Developer &&
-             Model.AssignedDeveloperId == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)
+    else if (canEditPrLink)
     {
-        <form asp-action="UpdateStatus" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
-            @Html.AntiForgeryToken()
-            <select name="status" class="form-select form-select-sm" style="max-width:160px;">
-                <option value="New" selected="@(Model.Status == WFHMonitor.Models.BugStatus.New ? "selected" : null)">New</option>
-                <option value="Testing" selected="@(Model.Status == WFHMonitor.Models.BugStatus.Testing ? "selected" : null)">Testing</option>
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary">Update</button>
-        </form>
+        <div class="d-flex gap-2">
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-link-45deg me-1"></i>Edit PR Link
+            </a>
+            @if (User.IsInRole("Developer") &&
+                 Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Developer &&
+                 string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal))
+            {
+                <form asp-action="UpdateStatus" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
+                    @Html.AntiForgeryToken()
+                    <select name="status" class="form-select form-select-sm" style="max-width:160px;">
+                        <option value="New" selected="@(Model.Status == WFHMonitor.Models.BugStatus.New ? "selected" : null)">New</option>
+                        <option value="Testing" selected="@(Model.Status == WFHMonitor.Models.BugStatus.Testing ? "selected" : null)">Testing</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                </form>
+            }
+        </div>
     }
 </div>
 
@@ -256,7 +335,10 @@
                 @if (Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
                 {
                     <div class="small text-muted mt-3">Agent Status</div>
-                    <div class="fw-semibold">@Model.AgentStatus</div>
+                    <div class="bug-agent-progress">
+                        <span class="bug-agent-progress-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
+                        <span>@Model.AgentStatus</span>
+                    </div>
                 }
                 <div class="small text-muted">@(Model.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent ? "Assigned Agent" : "Assigned Developer")</div>
                 <div class="fw-semibold">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
@@ -275,6 +357,56 @@
                 </div>
                 <div class="small text-muted mt-3">Module Impacted</div>
                 <div class="fw-semibold">@(string.IsNullOrEmpty(Model.ModuleImpacted) ? "Not specified" : Model.ModuleImpacted)</div>
+                <div class="small text-muted mt-3">Pull Request</div>
+                <div class="fw-semibold">
+                    @if (!string.IsNullOrWhiteSpace(Model.PullRequestUrl))
+                    {
+                        <a href="@Model.PullRequestUrl" target="_blank" rel="noopener noreferrer">@Model.PullRequestUrl</a>
+                    }
+                    else
+                    {
+                        <span>Not added yet.</span>
+                    }
+                </div>
+                @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                {
+                    <hr />
+                    <form asp-action="FixWithAgent" asp-route-id="@Model.Id" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="small text-muted mb-1">OpenClaw Fix Agent</div>
+                        <select name="fixAgentId" class="form-select form-select-sm mb-2">
+                            @foreach (var option in openClawFixAgentOptions)
+                            {
+                                <option value="@option.Value">@option.Text</option>
+                            }
+                        </select>
+                        <div class="small text-muted mb-1">Assign To App Agent</div>
+                        <select name="assignedAgentId" class="form-select form-select-sm mb-3">
+                            @foreach (var option in appAgentOptions)
+                            {
+                                <option value="@option.Value">@option.Text</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-dark w-100">
+                            @if (isAgentProcessing)
+                            {
+                                <span><i class="bi bi-arrow-repeat me-1"></i>Agent Processing...</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-wrench-adjustable-circle me-1"></i>Fix Bug (OpenClaw)</span>
+                            }
+                        </button>
+                        <div class="small text-muted mt-2">Manual trigger. Click to queue fix with selected agent.</div>
+                    </form>
+                }
+                else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
+                {
+                    <hr />
+                    <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning w-100">
+                        <i class="bi bi-stars me-1"></i>Upgrade to Pro for Fix Bug Agent
+                    </a>
+                }
             </div>
         </div>
 

@@ -97,6 +97,10 @@ public static class DbInitializer
                 ALTER TABLE [ProjectFeatures] ADD [TimelineEnd] datetime2 NULL;
             IF COL_LENGTH('ProjectFeatures', 'AssignedDeveloperId') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [AssignedDeveloperId] nvarchar(450) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'FeatureNumber') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [FeatureNumber] nvarchar(20) NULL;
+            IF COL_LENGTH('BugReports', 'PullRequestUrl') IS NULL
+                ALTER TABLE [BugReports] ADD [PullRequestUrl] nvarchar(500) NULL;
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -110,6 +114,56 @@ public static class DbInitializer
                 ALTER TABLE [ProjectFeatures]
                 ADD CONSTRAINT [FK_ProjectFeatures_AspNetUsers_AssignedDeveloperId]
                 FOREIGN KEY ([AssignedDeveloperId]) REFERENCES [AspNetUsers]([Id]) ON DELETE SET NULL;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE c
+            SET [CrNumber] = CONCAT('PRJ-', SUBSTRING(c.[CrNumber], 4, 100))
+            FROM [ChangeRequests] c
+            WHERE c.[CrNumber] LIKE 'CR-%'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM [ChangeRequests] c2
+                  WHERE c2.[Id] <> c.[Id]
+                    AND c2.[CrNumber] = CONCAT('PRJ-', SUBSTRING(c.[CrNumber], 4, 100))
+              );
+
+            IF COL_LENGTH('ProjectFeatures', 'FeatureNumber') IS NOT NULL
+            BEGIN
+                ;WITH Numbered AS
+                (
+                    SELECT pf.[Id],
+                           YEAR(COALESCE(pf.[CreatedAt], SYSUTCDATETIME())) AS [YearPart],
+                           ROW_NUMBER() OVER (
+                               PARTITION BY YEAR(COALESCE(pf.[CreatedAt], SYSUTCDATETIME()))
+                               ORDER BY pf.[CreatedAt], pf.[Id]
+                           ) AS [Seq]
+                    FROM [ProjectFeatures] pf
+                    WHERE pf.[FeatureNumber] IS NULL OR LTRIM(RTRIM(pf.[FeatureNumber])) = ''
+                )
+                UPDATE pf
+                SET [FeatureNumber] = CONCAT(
+                    'CR-',
+                    CAST(n.[YearPart] AS varchar(4)),
+                    '-',
+                    RIGHT(CONCAT('0000', CAST(n.[Seq] AS varchar(10))), 4)
+                )
+                FROM [ProjectFeatures] pf
+                INNER JOIN Numbered n ON n.[Id] = pf.[Id];
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'FeatureNumber') IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_ProjectFeatures_FeatureNumber'
+                     AND object_id = OBJECT_ID(N'[dbo].[ProjectFeatures]')
+               )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_ProjectFeatures_FeatureNumber]
+                ON [dbo].[ProjectFeatures]([FeatureNumber])
+                WHERE [FeatureNumber] IS NOT NULL;
             END
             """);
 
