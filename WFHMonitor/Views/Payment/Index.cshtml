@@ -1,8 +1,8 @@
 @model WFHMonitor.ViewModels.PaymentPlansViewModel
 @{
-    ViewData["Title"] = "Payment";
+    ViewData["Title"] = "Subscription";
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
-    var hasProAccess = Model.CurrentPlan == SubscriptionPlan.Pro && Model.IsProSubscriptionActive;
+    var hasProAccess = Model.HasProAccess;
 }
 
 <style>
@@ -111,7 +111,14 @@
     </div>
     @if (hasProAccess)
     {
-        <span class="dp-badge dp-badge-green">Current: Pro (Active)</span>
+        if (Model.IsProCancelAtPeriodEnd && Model.ProSubscriptionEndsAt.HasValue)
+        {
+            <span class="dp-badge dp-badge-amber">Current: Pro (Ends @Model.ProSubscriptionEndsAt.Value.ToLocalTime().ToString("dd MMM yyyy"))</span>
+        }
+        else
+        {
+            <span class="dp-badge dp-badge-green">Current: Pro (Active)</span>
+        }
     }
     else if (Model.RequiresProPayment)
     {
@@ -194,6 +201,19 @@
                     </form>
                 }
             </div>
+            @if (hasProAccess && Model.ProSubscriptionEndsAt.HasValue)
+            {
+                <div class="plan-pay-note">
+                    @if (Model.IsProCancelAtPeriodEnd)
+                    {
+                        <span>Your Pro plan is scheduled to end on @Model.ProSubscriptionEndsAt.Value.ToLocalTime().ToString("dd MMM yyyy").</span>
+                    }
+                    else
+                    {
+                        <span>Current billing cycle ends on @Model.ProSubscriptionEndsAt.Value.ToLocalTime().ToString("dd MMM yyyy").</span>
+                    }
+                </div>
+            }
             @if (Model.RequiresProPayment)
             {
                 <div class="plan-pay-note">
@@ -207,108 +227,18 @@
                     }
                 </div>
             }
+            @if (Model.CanCancelProPlan && !Model.IsProCancelAtPeriodEnd)
+            {
+                <div class="plan-pay-note">
+                    <form asp-controller="Payment" asp-action="CancelPlan" method="post" class="m-0 mt-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-x-circle me-1"></i>Cancel Plan (End of 1-Month Cycle)
+                        </button>
+                    </form>
+                </div>
+            }
         </div>
-    </div>
-</div>
-
-<div class="dp mb-3" style="--dp-color:#14b8a6">
-    <div class="dp-header">
-        <div class="dp-header-icon" style="background:rgba(20,184,166,0.14);color:#2dd4bf">
-            <i class="bi bi-speedometer2"></i>
-        </div>
-        <span class="dp-header-title">Your Usage</span>
-    </div>
-    <div style="padding:0 18px 12px">
-        <ul class="usage-list">
-            <li>
-                <span>Projects Created</span>
-                <span class="dp-badge @(Model.IsFreeProjectLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
-                    @Model.CurrentProjectCount / @(hasProAccess ? "Unlimited" : Model.FreeProjectLimit)
-                </span>
-            </li>
-            <li>
-                <span>Bug Reports Created</span>
-                <span class="dp-badge @(Model.IsFreeBugLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
-                    @Model.CurrentBugCount / @(hasProAccess ? "Unlimited" : Model.FreeBugLimit)
-                </span>
-            </li>
-            <li>
-                <span>Features Created</span>
-                <span class="dp-badge @(Model.IsFreeFeatureLimitReached && !hasProAccess ? "dp-badge-red" : "dp-badge-sky")">
-                    @Model.CurrentFeatureCount / @(hasProAccess ? "Unlimited" : Model.FreeFeatureLimit)
-                </span>
-            </li>
-        </ul>
-    </div>
-</div>
-
-<div class="dp" style="--dp-color:#8b5cf6">
-    <div class="dp-header">
-        <div class="dp-header-icon" style="background:rgba(139,92,246,0.15);color:#a78bfa">
-            <i class="bi bi-ui-checks-grid"></i>
-        </div>
-        <span class="dp-header-title">Plan Comparison</span>
-    </div>
-    <div class="table-responsive">
-        <table class="dp-table">
-            <thead>
-                <tr>
-                    <th>Feature</th>
-                    <th class="text-center">Free</th>
-                    <th class="text-center">Pro</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="dp-cell-title">Project Creation</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeProjectLimit</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Bug Creation</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeBugLimit</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Feature Creation</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-amber">Up to @Model.FreeFeatureLimit</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Unlimited</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">OpenClaw Agent Integration</td>
-                    <td class="text-center">
-                        <span class="dp-badge @(Model.AllowOpenClawForFreePlan ? "dp-badge-green" : "dp-badge-slate")">
-                            @(Model.AllowOpenClawForFreePlan ? "Enabled by Admin" : "Disabled")
-                        </span>
-                    </td>
-                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Full Access</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Pro Activation</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-slate">N/A</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Stripe Payment Required</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Task Board</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Project & Bug Tracking</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-green">Included</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Deployment Monitor Features</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-slate">Limited</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-indigo">Full</span></td>
-                </tr>
-                <tr>
-                    <td class="dp-cell-title">Support</td>
-                    <td class="text-center"><span class="dp-badge dp-badge-slate">Community</span></td>
-                    <td class="text-center"><span class="dp-badge dp-badge-amber">Priority</span></td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 </div>

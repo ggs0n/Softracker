@@ -31,7 +31,7 @@ public class BugService : IBugService
         _notificationService = notificationService;
     }
 
-    public async Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId)
+    public async Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId, BugStatus? status = null)
     {
         IQueryable<BugReport> query = _db.BugReports
             .Include(b => b.ChangeRequest)
@@ -55,6 +55,9 @@ public class BugService : IBugService
                     !b.ChangeRequest!.OrgTeamId.HasValue);
             }
         }
+
+        if (status.HasValue)
+            query = query.Where(b => b.Status == status.Value);
 
         return await query
             .OrderByDescending(b => b.CreatedAt)

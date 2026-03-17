@@ -40,6 +40,15 @@ public enum FeatureAgentStatus
     Failed
 }
 
+public enum ProjectBugScanStatus
+{
+    None,
+    Queued,
+    InProgress,
+    Completed,
+    Failed
+}
+
 public class ChangeRequest
 {
     public int Id { get; set; }
@@ -98,6 +107,16 @@ public class ChangeRequest
     [MaxLength(800)]
     [Display(Name = "Technology / Languages")]
     public string? TechnologyStack { get; set; }
+
+    public ProjectBugScanStatus BugScanStatus { get; set; } = ProjectBugScanStatus.None;
+
+    [MaxLength(100)]
+    public string? BugScanAgentId { get; set; }
+
+    [MaxLength(500)]
+    public string? BugScanLastMessage { get; set; }
+
+    public DateTime? BugScanLastRunAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

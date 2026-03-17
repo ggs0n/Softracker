@@ -23,8 +23,11 @@ public class ApplicationUser : IdentityUser
     public SubscriptionPlan SubscriptionPlan { get; set; } = SubscriptionPlan.Free;
     public bool IsProSubscriptionActive { get; set; } = false;
     public DateTime? ProSubscribedAt { get; set; }
+    public DateTime? ProSubscriptionEndsAt { get; set; }
+    public bool IsProCancelAtPeriodEnd { get; set; } = false;
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
+    public string? LastProcessedStripeCheckoutSessionId { get; set; }
     public OrganizationTeam OrganizationTeam { get; set; } = OrganizationTeam.Unassigned;
     public int? OrgTeamId { get; set; }
     public OrgTeam? OrgTeam { get; set; }

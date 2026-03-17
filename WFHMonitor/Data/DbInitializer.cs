@@ -6,7 +6,7 @@ namespace WFHMonitor.Data;
 
 public static class DbInitializer
 {
-    public static async Task SeedAsync(IServiceProvider services)
+    public static async Task SeedAsync(IServiceProvider services, bool seedDemoUsers = true)
     {
         var db = services.GetRequiredService<ApplicationDbContext>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
@@ -21,60 +21,63 @@ public static class DbInitializer
                 await roleManager.CreateAsync(new IdentityRole(role));
         }
 
-        if (await userManager.FindByEmailAsync("admin@gmail.com") == null)
+        if (seedDemoUsers)
         {
-            var admin = new ApplicationUser
+            if (await userManager.FindByEmailAsync("admin@gmail.com") == null)
             {
-                UserName = "admin@gmail.com",
-                Email = "admin@gmail.com",
-                FullName = "System Admin",
-                EmailConfirmed = true
-            };
-            var result = await userManager.CreateAsync(admin, "Admin@1234");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(admin, "Admin");
-        }
+                var admin = new ApplicationUser
+                {
+                    UserName = "admin@gmail.com",
+                    Email = "admin@gmail.com",
+                    FullName = "System Admin",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(admin, "Admin@1234");
+                if (result.Succeeded)
+                    await userManager.AddToRoleAsync(admin, "Admin");
+            }
 
-        if (await userManager.FindByEmailAsync("employee@gmail.com") == null)
-        {
-            var emp = new ApplicationUser
+            if (await userManager.FindByEmailAsync("employee@gmail.com") == null)
             {
-                UserName = "employee@gmail.com",
-                Email = "employee@gmail.com",
-                FullName = "John Employee",
-                EmailConfirmed = true
-            };
-            var result = await userManager.CreateAsync(emp, "Employee@1234");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(emp, "Employee");
-        }
+                var emp = new ApplicationUser
+                {
+                    UserName = "employee@gmail.com",
+                    Email = "employee@gmail.com",
+                    FullName = "John Employee",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(emp, "Employee@1234");
+                if (result.Succeeded)
+                    await userManager.AddToRoleAsync(emp, "Employee");
+            }
 
-        if (await userManager.FindByEmailAsync("developer@gmail.com") == null)
-        {
-            var dev = new ApplicationUser
+            if (await userManager.FindByEmailAsync("developer@gmail.com") == null)
             {
-                UserName = "developer@gmail.com",
-                Email = "developer@gmail.com",
-                FullName = "Jane Developer",
-                EmailConfirmed = true
-            };
-            var result = await userManager.CreateAsync(dev, "Developer@1234");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(dev, "Developer");
-        }
+                var dev = new ApplicationUser
+                {
+                    UserName = "developer@gmail.com",
+                    Email = "developer@gmail.com",
+                    FullName = "Jane Developer",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(dev, "Developer@1234");
+                if (result.Succeeded)
+                    await userManager.AddToRoleAsync(dev, "Developer");
+            }
 
-        if (await userManager.FindByEmailAsync("agent@gmail.com") == null)
-        {
-            var agent = new ApplicationUser
+            if (await userManager.FindByEmailAsync("agent@gmail.com") == null)
             {
-                UserName = "agent@gmail.com",
-                Email = "agent@gmail.com",
-                FullName = "Aiden Agent",
-                EmailConfirmed = true
-            };
-            var result = await userManager.CreateAsync(agent, "Agent@1234");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(agent, "Agent");
+                var agent = new ApplicationUser
+                {
+                    UserName = "agent@gmail.com",
+                    Email = "agent@gmail.com",
+                    FullName = "Aiden Agent",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(agent, "Agent@1234");
+                if (result.Succeeded)
+                    await userManager.AddToRoleAsync(agent, "Agent");
+            }
         }
     }
 
@@ -85,6 +88,14 @@ public static class DbInitializer
                 ALTER TABLE [ChangeRequests] ADD [GitHubRepoUrl] nvarchar(500) NULL;
             IF COL_LENGTH('ChangeRequests', 'TechnologyStack') IS NULL
                 ALTER TABLE [ChangeRequests] ADD [TechnologyStack] nvarchar(800) NULL;
+            IF COL_LENGTH('ChangeRequests', 'BugScanStatus') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [BugScanStatus] nvarchar(20) NOT NULL CONSTRAINT [DF_ChangeRequests_BugScanStatus] DEFAULT 'None';
+            IF COL_LENGTH('ChangeRequests', 'BugScanAgentId') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [BugScanAgentId] nvarchar(100) NULL;
+            IF COL_LENGTH('ChangeRequests', 'BugScanLastMessage') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [BugScanLastMessage] nvarchar(500) NULL;
+            IF COL_LENGTH('ChangeRequests', 'BugScanLastRunAt') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [BugScanLastRunAt] datetime2 NULL;
             IF COL_LENGTH('ProjectFeatures', 'Status') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [Status] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_Status] DEFAULT 'Draft';
             IF COL_LENGTH('ProjectFeatures', 'Priority') IS NULL
@@ -152,6 +163,13 @@ public static class DbInitializer
                 UPDATE [ProjectFeatures]
                 SET [Stage] = 'Deploy'
                 WHERE [Stage] = 'DeploymentComplete';
+            END
+
+            IF COL_LENGTH('ChangeRequests', 'BugScanStatus') IS NOT NULL
+            BEGIN
+                UPDATE [ChangeRequests]
+                SET [BugScanStatus] = 'None'
+                WHERE [BugScanStatus] IS NULL OR LTRIM(RTRIM([BugScanStatus])) = '';
             END
 
             IF COL_LENGTH('ProjectFeatures', 'ModuleImpacted') IS NOT NULL
@@ -233,6 +251,18 @@ public static class DbInitializer
             BEGIN
                 CREATE INDEX [IX_ProjectFeatures_AgentStatus]
                 ON [dbo].[ProjectFeatures]([AgentStatus]);
+            END
+
+            IF COL_LENGTH('ChangeRequests', 'BugScanStatus') IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_ChangeRequests_BugScanStatus'
+                     AND object_id = OBJECT_ID(N'[dbo].[ChangeRequests]')
+               )
+            BEGIN
+                CREATE INDEX [IX_ChangeRequests_BugScanStatus]
+                ON [dbo].[ChangeRequests]([BugScanStatus]);
             END
             """);
 
@@ -328,10 +358,16 @@ public static class DbInitializer
                 ALTER TABLE [AspNetUsers] ADD [IsProSubscriptionActive] bit NOT NULL CONSTRAINT [DF_AspNetUsers_IsProSubscriptionActive] DEFAULT 0;
             IF COL_LENGTH('AspNetUsers', 'ProSubscribedAt') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [ProSubscribedAt] datetime2 NULL;
+            IF COL_LENGTH('AspNetUsers', 'ProSubscriptionEndsAt') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [ProSubscriptionEndsAt] datetime2 NULL;
+            IF COL_LENGTH('AspNetUsers', 'IsProCancelAtPeriodEnd') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [IsProCancelAtPeriodEnd] bit NOT NULL CONSTRAINT [DF_AspNetUsers_IsProCancelAtPeriodEnd] DEFAULT 0;
             IF COL_LENGTH('AspNetUsers', 'StripeCustomerId') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [StripeCustomerId] nvarchar(100) NULL;
             IF COL_LENGTH('AspNetUsers', 'StripeSubscriptionId') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [StripeSubscriptionId] nvarchar(100) NULL;
+            IF COL_LENGTH('AspNetUsers', 'LastProcessedStripeCheckoutSessionId') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [LastProcessedStripeCheckoutSessionId] nvarchar(200) NULL;
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -347,6 +383,15 @@ public static class DbInitializer
             UPDATE [AspNetUsers]
             SET [OrganizationTeam] = 'Unassigned'
             WHERE [OrganizationTeam] IS NULL OR LTRIM(RTRIM([OrganizationTeam])) = '';
+            END
+
+            IF COL_LENGTH('AspNetUsers', 'ProSubscriptionEndsAt') IS NOT NULL
+            BEGIN
+            UPDATE [AspNetUsers]
+            SET [ProSubscriptionEndsAt] = DATEADD(month, 1, [ProSubscribedAt])
+            WHERE [IsProSubscriptionActive] = 1
+              AND [ProSubscribedAt] IS NOT NULL
+              AND [ProSubscriptionEndsAt] IS NULL;
             END
             """);
 
@@ -548,6 +593,7 @@ public static class DbInitializer
                     [FreeProjectLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeProjectLimit] DEFAULT 2,
                     [FreeBugLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeBugLimit] DEFAULT 2,
                     [FreeFeatureLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeFeatureLimit] DEFAULT 2,
+                    [EnableOpenClawAgents] bit NOT NULL CONSTRAINT [DF_SystemPreferences_EnableOpenClawAgents] DEFAULT 1,
                     [AllowOpenClawForFreePlan] bit NOT NULL CONSTRAINT [DF_SystemPreferences_AllowOpenClawForFreePlan] DEFAULT 0,
                     [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_SystemPreferences_UpdatedAt] DEFAULT SYSUTCDATETIME(),
                     CONSTRAINT [PK_SystemPreferences] PRIMARY KEY ([Id])
@@ -597,6 +643,16 @@ public static class DbInitializer
 
         await db.Database.ExecuteSqlRawAsync("""
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'EnableOpenClawAgents') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [EnableOpenClawAgents] bit NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_EnableOpenClawAgents] DEFAULT 1;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
                AND COL_LENGTH('SystemPreferences', 'AllowOpenClawForFreePlan') IS NULL
             BEGIN
                 ALTER TABLE [dbo].[SystemPreferences]
@@ -610,9 +666,9 @@ public static class DbInitializer
                AND NOT EXISTS (SELECT 1 FROM [dbo].[SystemPreferences] WHERE [Id] = 1)
             BEGIN
                 INSERT INTO [dbo].[SystemPreferences]
-                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [AllowOpenClawForFreePlan], [UpdatedAt])
+                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [EnableOpenClawAgents], [AllowOpenClawForFreePlan], [UpdatedAt])
                 VALUES
-                    (1, 1, 'classic', 2, 2, 2, 0, SYSUTCDATETIME());
+                    (1, 1, 'classic', 2, 2, 2, 1, 0, SYSUTCDATETIME());
             END
             """);
 

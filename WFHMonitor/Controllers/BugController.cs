@@ -61,14 +61,16 @@ public class BugController : Controller
         await next();
     }
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(BugStatus? status)
     {
         try
         {
             var currentUser = await _userManager.GetUserAsync(User);
             var bugs = await _bugService.GetIndexBugsAsync(
                 User.IsInRole("Admin"),
-                currentUser?.OrgTeamId);
+                currentUser?.OrgTeamId,
+                status);
+            ViewBag.SelectedStatus = status;
             return View(bugs);
         }
         catch (Exception ex)
@@ -92,6 +94,7 @@ public class BugController : Controller
             ViewBag.OpenClawFixAgentOptions = GetOpenClawFixAgentOptions();
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
             var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+            ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
             ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
 
             return View(bug);
@@ -290,6 +293,12 @@ public class BugController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (!planSettings.EnableOpenClawAgents)
+        {
+            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Fix Bug (OpenClaw) is available for Pro plan only.";
@@ -551,9 +560,15 @@ public class BugController : Controller
         return (currentCount >= settings.FreeBugLimit, settings.FreeBugLimit);
     }
 
-    private static bool HasActiveProAccess(ApplicationUser user) =>
-        user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
+    private static bool HasActiveProAccess(ApplicationUser user)
+    {
+        if (user.SubscriptionPlan != SubscriptionPlan.Pro || !user.IsProSubscriptionActive)
+            return false;
+
+        return !user.ProSubscriptionEndsAt.HasValue || user.ProSubscriptionEndsAt.Value > DateTime.UtcNow;
+    }
 
     private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
-        HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan;
+        settings.EnableOpenClawAgents &&
+        (HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan);
 }

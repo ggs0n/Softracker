@@ -39,6 +39,8 @@ public class PaymentController : Controller
         if (user == null)
             return Forbid();
 
+        await EnsureSubscriptionWindowAsync(user);
+
         var proSettings = await _systemSettingsService.GetProVersionSettingsAsync();
 
         var vm = new PaymentPlansViewModel
@@ -46,6 +48,8 @@ public class PaymentController : Controller
             CurrentPlan = user.SubscriptionPlan,
             IsProSubscriptionActive = user.IsProSubscriptionActive,
             ProSubscribedAt = user.ProSubscribedAt,
+            ProSubscriptionEndsAt = ResolveProEndDate(user),
+            IsProCancelAtPeriodEnd = user.IsProCancelAtPeriodEnd,
             IsStripeBillingConfigured = _stripeBillingService.IsConfigured,
             CurrentProjectCount = await _db.ChangeRequests.CountAsync(c => c.CreatedById == userId),
             CurrentBugCount = await _db.BugReports.CountAsync(b => b.CreatedById == userId),
@@ -59,7 +63,7 @@ public class PaymentController : Controller
             AllowOpenClawForFreePlan = proSettings.AllowOpenClawForFreePlan
         };
 
-        ViewData["Title"] = "Payment";
+        ViewData["Title"] = "Subscription";
         return View(vm);
     }
 
@@ -70,12 +74,66 @@ public class PaymentController : Controller
         if (user == null)
             return Forbid();
 
-        user.SubscriptionPlan = plan;
+        await EnsureSubscriptionWindowAsync(user);
+
+        if (plan == SubscriptionPlan.Free)
+        {
+            if (HasActiveProAccess(user))
+            {
+                if (user.IsProCancelAtPeriodEnd)
+                {
+                    TempData["Info"] = "Your Pro plan is already set to cancel at period end.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var stripeSubId = user.StripeSubscriptionId?.Trim();
+                if (!string.IsNullOrWhiteSpace(stripeSubId))
+                {
+                    var stripeCancel = await _stripeBillingService.SetSubscriptionCancelAtPeriodEndAsync(
+                        stripeSubId,
+                        cancelAtPeriodEnd: true);
+                    if (!stripeCancel.Succeeded)
+                    {
+                        TempData["Error"] = string.IsNullOrWhiteSpace(stripeCancel.Error)
+                            ? "Unable to cancel Stripe subscription."
+                            : stripeCancel.Error;
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
+
+                user.IsProCancelAtPeriodEnd = true;
+                user.ProSubscriptionEndsAt ??= ResolveProEndDate(user) ?? DateTime.UtcNow.AddMonths(1);
+                var cancelUpdate = await _userManager.UpdateAsync(user);
+                TempData[cancelUpdate.Succeeded ? "Success" : "Error"] = cancelUpdate.Succeeded
+                    ? $"Pro cancellation scheduled. Access remains active until {user.ProSubscriptionEndsAt:dd MMM yyyy}."
+                    : (cancelUpdate.Errors.FirstOrDefault()?.Description ?? "Unable to schedule cancellation.");
+
+                return RedirectToAction(nameof(Index));
+            }
+
+            user.SubscriptionPlan = SubscriptionPlan.Free;
+            user.IsProCancelAtPeriodEnd = false;
+            var freeResult = await _userManager.UpdateAsync(user);
+            TempData[freeResult.Succeeded ? "Success" : "Error"] = freeResult.Succeeded
+                ? "Subscription updated to Free."
+                : (freeResult.Errors.FirstOrDefault()?.Description ?? "Unable to update your subscription plan.");
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        user.SubscriptionPlan = SubscriptionPlan.Pro;
+        user.IsProCancelAtPeriodEnd = false;
+        if (!HasActiveProAccess(user))
+        {
+            user.IsProSubscriptionActive = false;
+            user.ProSubscribedAt = null;
+            user.ProSubscriptionEndsAt = null;
+        }
         var result = await _userManager.UpdateAsync(user);
 
         if (result.Succeeded)
         {
-            if (plan == SubscriptionPlan.Pro && !user.IsProSubscriptionActive)
+            if (plan == SubscriptionPlan.Pro && !HasActiveProAccess(user))
                 TempData["Info"] = "Pro plan selected. Complete Stripe payment to activate unlimited access.";
             else
                 TempData["Success"] = $"Subscription updated to {plan}.";
@@ -98,13 +156,15 @@ public class PaymentController : Controller
         if (user == null)
             return Forbid();
 
+        await EnsureSubscriptionWindowAsync(user);
+
         if (user.SubscriptionPlan != SubscriptionPlan.Pro)
         {
             TempData["Info"] = "Please choose the Pro plan first.";
             return RedirectToAction(nameof(Index));
         }
 
-        if (user.IsProSubscriptionActive)
+        if (HasActiveProAccess(user))
         {
             TempData["Success"] = "Your Pro subscription is already active.";
             return RedirectToAction(nameof(Index));
@@ -130,7 +190,8 @@ public class PaymentController : Controller
 
     public async Task<IActionResult> Success(string session_id)
     {
-        if (string.IsNullOrWhiteSpace(session_id))
+        var normalizedSessionId = (session_id ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedSessionId))
         {
             TempData["Error"] = "Missing Stripe checkout session.";
             return RedirectToAction(nameof(Index));
@@ -140,7 +201,16 @@ public class PaymentController : Controller
         if (user == null)
             return Forbid();
 
-        var stripeResult = await _stripeBillingService.GetCheckoutSessionAsync(session_id);
+        if (string.Equals(
+                user.LastProcessedStripeCheckoutSessionId,
+                normalizedSessionId,
+                StringComparison.Ordinal))
+        {
+            TempData["Info"] = "This Stripe checkout session was already applied.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var stripeResult = await _stripeBillingService.GetCheckoutSessionAsync(normalizedSessionId);
         if (!stripeResult.Succeeded || stripeResult.Session == null)
         {
             TempData["Error"] = string.IsNullOrWhiteSpace(stripeResult.Error)
@@ -168,9 +238,14 @@ public class PaymentController : Controller
 
         user.SubscriptionPlan = SubscriptionPlan.Pro;
         user.IsProSubscriptionActive = true;
-        user.ProSubscribedAt ??= DateTime.UtcNow;
+        user.ProSubscribedAt = DateTime.UtcNow;
+        user.ProSubscriptionEndsAt = user.ProSubscribedAt.Value.AddMonths(1);
+        user.IsProCancelAtPeriodEnd = false;
         user.StripeCustomerId = string.IsNullOrWhiteSpace(session.CustomerId) ? user.StripeCustomerId : session.CustomerId;
         user.StripeSubscriptionId = string.IsNullOrWhiteSpace(session.SubscriptionId) ? user.StripeSubscriptionId : session.SubscriptionId;
+        user.LastProcessedStripeCheckoutSessionId = string.IsNullOrWhiteSpace(session.Id)
+            ? normalizedSessionId
+            : session.Id;
 
         var update = await _userManager.UpdateAsync(user);
         if (!update.Succeeded)
@@ -187,5 +262,92 @@ public class PaymentController : Controller
     {
         TempData["Info"] = "Stripe checkout was canceled. You can resume payment anytime.";
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelPlan(string? returnUrl)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+            return Forbid();
+
+        await EnsureSubscriptionWindowAsync(user);
+        if (!HasActiveProAccess(user))
+        {
+            TempData["Info"] = "You do not have an active Pro subscription to cancel.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (user.IsProCancelAtPeriodEnd)
+        {
+            TempData["Info"] = "Your Pro cancellation is already scheduled.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var stripeSubId = user.StripeSubscriptionId?.Trim();
+        if (!string.IsNullOrWhiteSpace(stripeSubId))
+        {
+            var stripeCancel = await _stripeBillingService.SetSubscriptionCancelAtPeriodEndAsync(
+                stripeSubId,
+                cancelAtPeriodEnd: true);
+            if (!stripeCancel.Succeeded)
+            {
+                TempData["Error"] = string.IsNullOrWhiteSpace(stripeCancel.Error)
+                    ? "Unable to cancel Stripe subscription."
+                    : stripeCancel.Error;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        user.IsProCancelAtPeriodEnd = true;
+        user.ProSubscriptionEndsAt ??= ResolveProEndDate(user) ?? DateTime.UtcNow.AddMonths(1);
+        var update = await _userManager.UpdateAsync(user);
+        TempData[update.Succeeded ? "Success" : "Error"] = update.Succeeded
+            ? $"Pro cancellation scheduled. Access remains active until {user.ProSubscriptionEndsAt:dd MMM yyyy}."
+            : (update.Errors.FirstOrDefault()?.Description ?? "Unable to cancel subscription.");
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    private static DateTime? ResolveProEndDate(ApplicationUser user)
+    {
+        return user.ProSubscriptionEndsAt ?? user.ProSubscribedAt?.AddMonths(1);
+    }
+
+    private static bool HasActiveProAccess(ApplicationUser user)
+    {
+        if (!user.IsProSubscriptionActive)
+            return false;
+
+        var endDate = ResolveProEndDate(user);
+        return !endDate.HasValue || endDate.Value > DateTime.UtcNow;
+    }
+
+    private async Task EnsureSubscriptionWindowAsync(ApplicationUser user)
+    {
+        var changed = false;
+        var endDate = ResolveProEndDate(user);
+
+        if (user.IsProSubscriptionActive && endDate.HasValue && endDate.Value <= DateTime.UtcNow)
+        {
+            user.IsProSubscriptionActive = false;
+            user.IsProCancelAtPeriodEnd = false;
+            user.SubscriptionPlan = SubscriptionPlan.Free;
+            changed = true;
+        }
+
+        if (user.IsProSubscriptionActive && !user.ProSubscriptionEndsAt.HasValue && user.ProSubscribedAt.HasValue)
+        {
+            user.ProSubscriptionEndsAt = user.ProSubscribedAt.Value.AddMonths(1);
+            changed = true;
+        }
+
+        if (!changed)
+            return;
+
+        await _userManager.UpdateAsync(user);
     }
 }

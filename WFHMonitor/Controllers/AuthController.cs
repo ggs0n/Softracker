@@ -64,7 +64,7 @@ public class AuthController : Controller
             if (user != null && await _userManager.IsInRoleAsync(user, "Admin"))
                 return RedirectToAction("Index", "Admin");
 
-            return LocalRedirect(returnUrl ?? Url.Action("Index", "TaskBoard")!);
+            return LocalRedirect(returnUrl ?? Url.Action("Index", "ChangeRequest")!);
         }
 
         ModelState.AddModelError(string.Empty, "Invalid email or password.");

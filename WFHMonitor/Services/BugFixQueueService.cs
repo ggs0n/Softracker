@@ -57,11 +57,30 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
 
         var bug = await db.BugReports
             .FirstOrDefaultAsync(b => b.Id == item.BugId, cancellationToken);
         if (bug == null)
             return;
+
+        var settings = await systemSettings.GetProVersionSettingsAsync();
+        if (!settings.EnableOpenClawAgents)
+        {
+            bug.AgentStatus = BugAgentStatus.Failed;
+            bug.UpdatedAt = DateTime.UtcNow;
+            db.BugActivities.Add(new BugActivity
+            {
+                BugReportId = bug.Id,
+                Action = TrimActivityText("OpenClaw fix aborted: OpenClaw agents are disabled by admin."),
+                OldStatus = bug.Status,
+                NewStatus = bug.Status,
+                OldAssignedDeveloperId = bug.AssignedDeveloperId,
+                NewAssignedDeveloperId = bug.AssignedDeveloperId
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         var oldAssignedId = bug.AssignedDeveloperId;
         bug.AssigneeType = BugAssigneeType.Agent;

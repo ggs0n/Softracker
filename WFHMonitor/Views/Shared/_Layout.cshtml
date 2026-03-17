@@ -33,7 +33,10 @@
         ? null
         : await UserManager.FindByIdAsync(userId);
     var runtimeAccess = await SystemSettingsService.BuildRuntimeAccessAsync(User);
-    var isProActive = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && currentUser.IsProSubscriptionActive;
+    var isProActive = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro
+                      && currentUser.IsProSubscriptionActive
+                      && (!currentUser.ProSubscriptionEndsAt.HasValue
+                          || currentUser.ProSubscriptionEndsAt.Value > DateTime.UtcNow);
     var isProPending = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && !currentUser.IsProSubscriptionActive;
     var planIndicatorClass = isProActive ? "pro" : isProPending ? "pending" : "free";
     var planIndicatorLabel = isProActive ? "PRO ACTIVE" : isProPending ? "PRO PENDING" : "FREE";
@@ -66,12 +69,6 @@
                     </a>
                 </li>
             }
-            <li>
-                <a asp-controller="TaskBoard" asp-action="Index"
-                   class="@(ctrl == "TaskBoard" ? "active" : "")">
-                    <i class="bi bi-kanban"></i> Task Board
-                </a>
-            </li>
             @if (User.IsInRole("Employee") || User.IsInRole("Developer"))
             {
                 @if (User.IsInRole("Developer"))
@@ -183,7 +180,7 @@
             <li>
                 <a asp-controller="Payment" asp-action="Index"
                    class="@(isPaymentSectionActive ? "active" : "")">
-                    <i class="bi bi-credit-card-2-front"></i> Payment
+                    <i class="bi bi-credit-card-2-front"></i> Subscription
                 </a>
             </li>
         </ul>

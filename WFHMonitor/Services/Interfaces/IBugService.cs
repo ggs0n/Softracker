@@ -6,7 +6,7 @@ namespace WFHMonitor.Services.Interfaces;
 
 public interface IBugService
 {
-    Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId);
+    Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId, BugStatus? status = null);
     Task<BugReport?> GetDetailsAsync(int id);
     Task<BugReport?> GetByIdAsync(int id);
     Task PopulateFormOptionsAsync(BugFormViewModel model, bool isAdmin, int? orgTeamId);

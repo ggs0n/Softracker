@@ -1,6 +1,8 @@
 @model List<WFHMonitor.Models.BugReport>
 @{
     ViewData["Title"] = "Bugs";
+    var selectedStatus = ViewBag.SelectedStatus as WFHMonitor.Models.BugStatus?;
+    var selectedStatusText = selectedStatus?.ToString() ?? string.Empty;
 
     var projectToneClasses = new[]
     {
@@ -31,6 +33,57 @@
 }
 
 <style>
+    .bug-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .bug-filter-form {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .bug-filter-select {
+        min-width: 150px;
+        height: 33px;
+    }
+
+    .bug-toolbar-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 33px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid #d9dee8;
+        background: #fff;
+        color: #475569;
+        text-decoration: none;
+        font-size: 0.76rem;
+        font-weight: 600;
+        line-height: 1;
+        transition: all 0.2s ease;
+    }
+
+    .bug-toolbar-btn:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #1e293b;
+    }
+
+    @@media (max-width: 768px) {
+        .bug-toolbar {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+
     .bug-project-chip {
         font-weight: 700;
         border-width: 1px;
@@ -85,8 +138,26 @@
         <h1 class="mod-title"><i class="bi bi-bug-fill" style="color:#f87171"></i> Bug Tracker</h1>
         <p class="mod-subtitle">Track and manage all reported defects</p>
     </div>
-    <div class="d-flex gap-2">
-        <a asp-action="Index" class="dp-btn" title="Refresh status">
+    <div class="bug-toolbar">
+        <form asp-action="Index" method="get" class="bug-filter-form">
+            <select name="status" class="form-select form-select-sm bug-filter-select">
+                <option value="">All Status</option>
+                @foreach (var statusValue in Enum.GetValues<WFHMonitor.Models.BugStatus>())
+                {
+                    <option value="@statusValue" selected="@(selectedStatus == statusValue ? "selected" : null)">@statusValue</option>
+                }
+            </select>
+            <button type="submit" class="bug-toolbar-btn" title="Apply status filter">
+                <i class="bi bi-funnel"></i> Filter
+            </button>
+            @if (selectedStatus.HasValue)
+            {
+                <a asp-action="Index" class="bug-toolbar-btn" title="Clear filter">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            }
+        </form>
+        <a asp-action="Index" asp-route-status="@selectedStatusText" class="bug-toolbar-btn" title="Refresh status">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </a>
         @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
@@ -104,7 +175,7 @@
             <i class="bi bi-bug-fill"></i>
         </div>
         <span class="dp-header-title">All Bugs</span>
-        <span class="dp-header-count">@Model.Count total</span>
+        <span class="dp-header-count">@Model.Count shown</span>
     </div>
 
     @if (!Model.Any())

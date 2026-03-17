@@ -15,6 +15,11 @@ public interface IStripeBillingService
     Task<(bool Succeeded, StripeCheckoutSessionInfo? Session, string Error)> GetCheckoutSessionAsync(
         string sessionId,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string Error)> SetSubscriptionCancelAtPeriodEndAsync(
+        string subscriptionId,
+        bool cancelAtPeriodEnd,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record StripeCheckoutSessionInfo(

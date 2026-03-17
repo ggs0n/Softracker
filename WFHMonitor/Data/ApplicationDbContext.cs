@@ -48,11 +48,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(u => u.IsProSubscriptionActive)
                 .HasDefaultValue(false);
 
+            e.Property(u => u.ProSubscriptionEndsAt);
+
+            e.Property(u => u.IsProCancelAtPeriodEnd)
+                .HasDefaultValue(false);
+
             e.Property(u => u.StripeCustomerId)
                 .HasMaxLength(100);
 
             e.Property(u => u.StripeSubscriptionId)
                 .HasMaxLength(100);
+
+            e.Property(u => u.LastProcessedStripeCheckoutSessionId)
+                .HasMaxLength(200);
 
             e.HasOne(u => u.OrgTeam)
                 .WithMany()
@@ -111,6 +119,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(c => c.CrNumber).IsUnique();
             e.HasIndex(c => c.Status);
+            e.HasIndex(c => c.BugScanStatus);
 
             e.HasOne(c => c.CreatedBy)
              .WithMany()
@@ -121,6 +130,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany()
              .HasForeignKey(c => c.OrgTeamId)
              .OnDelete(DeleteBehavior.SetNull);
+
+            e.Property(c => c.BugScanStatus)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(ProjectBugScanStatus.None);
+
+            e.Property(c => c.BugScanAgentId)
+             .HasMaxLength(100);
+
+            e.Property(c => c.BugScanLastMessage)
+             .HasMaxLength(500);
         });
 
         builder.Entity<ChangeRequestPic>(e =>
@@ -352,6 +372,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             e.Property(s => s.FreeFeatureLimit)
                 .HasDefaultValue(ProVersionDefaults.FreeFeatureLimit);
+
+            e.Property(s => s.EnableOpenClawAgents)
+                .HasDefaultValue(true);
 
             e.Property(s => s.AllowOpenClawForFreePlan)
                 .HasDefaultValue(false);

@@ -7,6 +7,8 @@ public class PaymentPlansViewModel
     public SubscriptionPlan CurrentPlan { get; set; } = SubscriptionPlan.Free;
     public bool IsProSubscriptionActive { get; set; }
     public DateTime? ProSubscribedAt { get; set; }
+    public DateTime? ProSubscriptionEndsAt { get; set; }
+    public bool IsProCancelAtPeriodEnd { get; set; }
     public bool IsStripeBillingConfigured { get; set; }
 
     public int CurrentProjectCount { get; set; }
@@ -18,8 +20,11 @@ public class PaymentPlansViewModel
     public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
     public bool AllowOpenClawForFreePlan { get; set; }
 
-    public bool RequiresProPayment => CurrentPlan == SubscriptionPlan.Pro && !IsProSubscriptionActive;
+    public bool HasProAccess => IsProSubscriptionActive &&
+                                (!ProSubscriptionEndsAt.HasValue || ProSubscriptionEndsAt.Value > DateTime.UtcNow);
+    public bool RequiresProPayment => CurrentPlan == SubscriptionPlan.Pro && !HasProAccess;
     public bool CanStartProCheckout => RequiresProPayment && IsStripeBillingConfigured;
+    public bool CanCancelProPlan => HasProAccess && CurrentPlan == SubscriptionPlan.Pro;
     public bool IsFreeProjectLimitReached => CurrentProjectCount >= FreeProjectLimit;
     public bool IsFreeBugLimitReached => CurrentBugCount >= FreeBugLimit;
     public bool IsFreeFeatureLimitReached => CurrentFeatureCount >= FreeFeatureLimit;

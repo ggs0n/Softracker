@@ -36,8 +36,7 @@ public class ChangeRequestController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IGitHubService _gitHub;
-    private readonly IBugService _bugService;
-    private readonly IOpenClawBugScanService _openClawBugScanService;
+    private readonly IProjectBugScanQueueService _projectBugScanQueueService;
     private readonly IFeatureAgentQueueService _featureAgentQueueService;
     private readonly INotificationService _notificationService;
     private readonly OpenClawSettings _openClawSettings;
@@ -48,8 +47,7 @@ public class ChangeRequestController : Controller
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         IGitHubService gitHub,
-        IBugService bugService,
-        IOpenClawBugScanService openClawBugScanService,
+        IProjectBugScanQueueService projectBugScanQueueService,
         IFeatureAgentQueueService featureAgentQueueService,
         INotificationService notificationService,
         ISystemSettingsService systemSettingsService,
@@ -59,8 +57,7 @@ public class ChangeRequestController : Controller
         _db = db;
         _userManager = userManager;
         _gitHub = gitHub;
-        _bugService = bugService;
-        _openClawBugScanService = openClawBugScanService;
+        _projectBugScanQueueService = projectBugScanQueueService;
         _featureAgentQueueService = featureAgentQueueService;
         _notificationService = notificationService;
         _systemSettingsService = systemSettingsService;
@@ -139,6 +136,7 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.GetUserAsync(User);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
         ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
         ViewBag.OpenClawFeatureAgentOptions = GetOpenClawFeatureAgentOptions();
         if (User.IsInRole("Admin") || User.IsInRole("Agent"))
@@ -390,6 +388,12 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (!planSettings.EnableOpenClawAgents)
+        {
+            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
         if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
@@ -475,6 +479,12 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (!planSettings.EnableOpenClawAgents)
+        {
+            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
         if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
@@ -593,6 +603,7 @@ public class ChangeRequestController : Controller
         ViewBag.OpenClawScanAgentOptions = GetOpenClawScanAgentOptions();
         var currentUser = await _userManager.GetUserAsync(User);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
         ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
 
         if (!string.IsNullOrWhiteSpace(owner) &&
@@ -1119,9 +1130,6 @@ public class ChangeRequestController : Controller
     public async Task<IActionResult> FindBugs(int id, string? scanAgentId)
     {
         var project = await _db.ChangeRequests
-            .Include(c => c.Features)
-            .Include(c => c.RepositoryFeatures)
-            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (project == null) return NotFound();
         if (!await CanViewProjectAsync(project.Id))
@@ -1133,6 +1141,12 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (!planSettings.EnableOpenClawAgents)
+        {
+            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
         {
             TempData["Error"] = "Find Bugs (OpenClaw) is available for Pro plan only.";
@@ -1150,72 +1164,37 @@ public class ChangeRequestController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var openClawAgentId = await ResolveOpenClawAgentIdAsync();
-        if (string.IsNullOrWhiteSpace(openClawAgentId))
+        if (project.BugScanStatus is ProjectBugScanStatus.Queued or ProjectBugScanStatus.InProgress)
         {
-            TempData["Error"] = "OpenClaw agent user not found. Create an Agent user first.";
+            TempData["Info"] = "Find Bugs is already running for this project.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var existingTitles = await _db.BugReports
-            .Where(b => b.ChangeRequestId == id)
-            .Select(b => b.Title)
-            .ToListAsync();
-
-        var knownTitles = existingTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var scanResult = await _openClawBugScanService.ScanProjectAsync(
-            project,
-            selectedScanAgentId,
-            HttpContext.RequestAborted);
-        if (!scanResult.Succeeded)
+        try
         {
-            TempData["Error"] = scanResult.Error;
+            project.BugScanStatus = ProjectBugScanStatus.Queued;
+            project.BugScanAgentId = selectedScanAgentId;
+            project.BugScanLastRunAt = DateTime.UtcNow;
+            project.BugScanLastMessage = $"Scan queued with '{selectedScanAgentId}'.";
+            await _db.SaveChangesAsync();
+
+            await _projectBugScanQueueService.EnqueueAsync(new ProjectBugScanQueueItem(
+                project.Id,
+                selectedScanAgentId,
+                userId),
+                HttpContext.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            project.BugScanStatus = ProjectBugScanStatus.Failed;
+            project.BugScanLastRunAt = DateTime.UtcNow;
+            project.BugScanLastMessage = ex.Message.Length > 500 ? ex.Message[..500] : ex.Message;
+            await _db.SaveChangesAsync();
+            TempData["Error"] = "Unable to queue Find Bugs scan.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var findings = scanResult.Findings
-            .Where(f => knownTitles.Add(f.Title))
-            .Take(_openClawBugScanService.MaxFindingsPerScan)
-            .ToList();
-
-        if (findings.Count == 0)
-        {
-            TempData["Info"] = "OpenClaw scan complete - no new bugs found for this project.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var created = 0;
-        var errors = new List<string>();
-
-        foreach (var finding in findings)
-        {
-            var model = new BugFormViewModel
-            {
-                Title = finding.Title,
-                Description = finding.Description,
-                Workflow = finding.Workflow,
-                StepsToReproduce = finding.StepsToReproduce,
-                ModuleImpacted = finding.ModuleImpacted,
-                Status = BugStatus.New,
-                AssigneeType = BugAssigneeType.Agent,
-                AgentStatus = BugAgentStatus.Queued,
-                AssignedAgentId = openClawAgentId,
-                ChangeRequestId = id,
-                ChangeRequestReferenceText = project.CrNumber
-            };
-
-            var result = await _bugService.CreateAsync(model, userId);
-            if (result.Succeeded)
-                created++;
-            else if (!string.IsNullOrWhiteSpace(result.Error))
-                errors.Add(result.Error);
-        }
-
-        if (created > 0)
-            TempData["Success"] = $"OpenClaw agent '{selectedScanAgentId}' found {created} bug(s). Added to Bugs list and linked to project.";
-        if (errors.Count > 0)
-            TempData["Error"] = errors[0];
-
+        TempData["Success"] = $"Find Bugs queued with '{selectedScanAgentId}'. Tracking started.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -1420,11 +1399,17 @@ public class ChangeRequestController : Controller
         return (currentCount >= settings.FreeFeatureLimit, settings.FreeFeatureLimit);
     }
 
-    private static bool HasActiveProAccess(ApplicationUser user) =>
-        user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
+    private static bool HasActiveProAccess(ApplicationUser user)
+    {
+        if (user.SubscriptionPlan != SubscriptionPlan.Pro || !user.IsProSubscriptionActive)
+            return false;
+
+        return !user.ProSubscriptionEndsAt.HasValue || user.ProSubscriptionEndsAt.Value > DateTime.UtcNow;
+    }
 
     private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
-        HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan;
+        settings.EnableOpenClawAgents &&
+        (HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan);
 
     private static (string ModuleKey, bool RequiresModify)? ResolvePermissionCheck(string actionName)
     {
@@ -1687,19 +1672,6 @@ public class ChangeRequestController : Controller
             return LocalRedirect(returnUrl);
 
         return RedirectToAction(nameof(FeatureDetails), new { featureId });
-    }
-
-    private async Task<string?> ResolveOpenClawAgentIdAsync()
-    {
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
-        var preferred = agents
-            .OrderBy(a => a.FullName)
-            .FirstOrDefault(a =>
-                (a.FullName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.UserName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Email?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false));
-
-        return preferred?.Id ?? agents.OrderBy(a => a.FullName).FirstOrDefault()?.Id;
     }
 
     private List<SelectListItem> GetOpenClawScanAgentOptions()

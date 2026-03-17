@@ -18,10 +18,13 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-builder.Services.RemoveAll<IPasswordValidator<ApplicationUser>>();
-builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, AllowAllPasswordValidator>();
-builder.Services.RemoveAll<IUserValidator<ApplicationUser>>();
-builder.Services.AddScoped<IUserValidator<ApplicationUser>, AllowAllUserValidator>();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.RemoveAll<IPasswordValidator<ApplicationUser>>();
+    builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, AllowAllPasswordValidator>();
+    builder.Services.RemoveAll<IUserValidator<ApplicationUser>>();
+    builder.Services.AddScoped<IUserValidator<ApplicationUser>, AllowAllUserValidator>();
+}
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -53,6 +56,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<BugFixQueueService
 builder.Services.AddSingleton<FeatureAgentQueueService>();
 builder.Services.AddSingleton<IFeatureAgentQueueService>(sp => sp.GetRequiredService<FeatureAgentQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<FeatureAgentQueueService>());
+builder.Services.AddSingleton<ProjectBugScanQueueService>();
+builder.Services.AddSingleton<IProjectBugScanQueueService>(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
@@ -84,7 +90,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
-    await DbInitializer.SeedAsync(scope.ServiceProvider);
+    await DbInitializer.SeedAsync(scope.ServiceProvider, app.Environment.IsDevelopment());
 }
 
 app.Run();

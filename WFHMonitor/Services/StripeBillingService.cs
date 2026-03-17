@@ -118,6 +118,37 @@ public class StripeBillingService : IStripeBillingService
         return (true, session, string.Empty);
     }
 
+    public async Task<(bool Succeeded, string Error)> SetSubscriptionCancelAtPeriodEndAsync(
+        string subscriptionId,
+        bool cancelAtPeriodEnd,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+            return (false, "Stripe billing is not configured.");
+
+        if (string.IsNullOrWhiteSpace(subscriptionId))
+            return (false, "Stripe subscription id is missing.");
+
+        var payload = new List<KeyValuePair<string, string>>
+        {
+            new("cancel_at_period_end", cancelAtPeriodEnd ? "true" : "false")
+        };
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"https://api.stripe.com/v1/subscriptions/{Uri.EscapeDataString(subscriptionId)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.SecretKey.Trim());
+        request.Content = new FormUrlEncodedContent(payload);
+
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, ParseStripeError(content, response.ReasonPhrase));
+
+        return (true, string.Empty);
+    }
+
     private static string ParseStripeError(string content, string? reasonPhrase)
     {
         try

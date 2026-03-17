@@ -6,6 +6,7 @@
     var appAgentOptions = ViewBag.AgentUserOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
+    var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
     var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     var canEditPrLink = (User.IsInRole("Admin") || User.IsInRole("Tester")) ||
         (!string.IsNullOrWhiteSpace(currentUserId) &&
@@ -368,44 +369,47 @@
                         <span>Not added yet.</span>
                     }
                 </div>
-                @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                @if (isOpenClawEnabled)
                 {
-                    <hr />
-                    <form asp-action="FixWithAgent" asp-route-id="@Model.Id" method="post">
-                        @Html.AntiForgeryToken()
-                        <div class="small text-muted mb-1">OpenClaw Fix Agent</div>
-                        <select name="fixAgentId" class="form-select form-select-sm mb-2">
-                            @foreach (var option in openClawFixAgentOptions)
-                            {
-                                <option value="@option.Value">@option.Text</option>
-                            }
-                        </select>
-                        <div class="small text-muted mb-1">Assign To App Agent</div>
-                        <select name="assignedAgentId" class="form-select form-select-sm mb-3">
-                            @foreach (var option in appAgentOptions)
-                            {
-                                <option value="@option.Value">@option.Text</option>
-                            }
-                        </select>
-                        <button type="submit" class="btn btn-sm btn-outline-dark w-100">
-                            @if (isAgentProcessing)
-                            {
-                                <span><i class="bi bi-arrow-repeat me-1"></i>Agent Processing...</span>
-                            }
-                            else
-                            {
-                                <span><i class="bi bi-wrench-adjustable-circle me-1"></i>Fix Bug (OpenClaw)</span>
-                            }
-                        </button>
-                        <div class="small text-muted mt-2">Manual trigger. Click to queue fix with selected agent.</div>
-                    </form>
-                }
-                else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
-                {
-                    <hr />
-                    <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning w-100">
-                        <i class="bi bi-stars me-1"></i>Upgrade to Pro for Fix Bug Agent
-                    </a>
+                    @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                    {
+                        <hr />
+                        <form asp-action="FixWithAgent" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <div class="small text-muted mb-1">OpenClaw Fix Agent</div>
+                            <select name="fixAgentId" class="form-select form-select-sm mb-2">
+                                @foreach (var option in openClawFixAgentOptions)
+                                {
+                                    <option value="@option.Value">@option.Text</option>
+                                }
+                            </select>
+                            <div class="small text-muted mb-1">Assign To App Agent</div>
+                            <select name="assignedAgentId" class="form-select form-select-sm mb-3">
+                                @foreach (var option in appAgentOptions)
+                                {
+                                    <option value="@option.Value">@option.Text</option>
+                                }
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-dark w-100">
+                                @if (isAgentProcessing)
+                                {
+                                    <span><i class="bi bi-arrow-repeat me-1"></i>Agent Processing...</span>
+                                }
+                                else
+                                {
+                                    <span><i class="bi bi-wrench-adjustable-circle me-1"></i>Fix Bug (OpenClaw)</span>
+                                }
+                            </button>
+                            <div class="small text-muted mt-2">Manual trigger. Click to queue fix with selected agent.</div>
+                        </form>
+                    }
+                    else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
+                    {
+                        <hr />
+                        <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning w-100">
+                            <i class="bi bi-stars me-1"></i>Upgrade to Pro for Fix Bug Agent
+                        </a>
+                    }
                 }
             </div>
         </div>

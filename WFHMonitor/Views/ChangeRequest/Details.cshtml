@@ -8,17 +8,11 @@
     var openClawScanAgentOptions = ViewBag.OpenClawScanAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
+    var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
+    var isBugScanQueued = Model.BugScanStatus == WFHMonitor.Models.ProjectBugScanStatus.Queued;
+    var isBugScanProcessing = Model.BugScanStatus == WFHMonitor.Models.ProjectBugScanStatus.InProgress;
+    var isBugScanRunning = isBugScanQueued || isBugScanProcessing;
     var repositoryFeatures = Model.RepositoryFeatures.OrderBy(f => f.Name).ToList();
-
-    var statusClass = new Dictionary<string, string> {
-        {"Draft","detail-status-draft"}, {"InReview","detail-status-review"}, {"Approved","detail-status-approved"},
-        {"InProgress","detail-status-progress"}, {"Done","detail-status-done"}, {"Rejected","detail-status-rejected"}
-    };
-    var priorityClass = new Dictionary<string, string> {
-        {"Low","detail-priority-low"}, {"Medium","detail-priority-medium"}, {"High","detail-priority-high"}, {"Critical","detail-priority-critical"}
-    };
-    var sClass = statusClass.GetValueOrDefault(Model.Status.ToString(), "detail-status-draft");
-    var pClass = priorityClass.GetValueOrDefault(Model.Priority.ToString(), "detail-priority-medium");
 
     var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
     {
@@ -79,40 +73,13 @@
         margin-left: 2px;
     }
 
-    .project-detail-pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin-top: 8px;
-    }
-
-    .project-detail-pill {
-        border-radius: 999px;
-        font-size: 0.75rem;
-        padding: 4px 10px;
-        border: 1px solid transparent;
-        font-weight: 700;
-    }
-
-    .detail-status-draft { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
-    .detail-status-review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
-    .detail-status-approved { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-    .detail-status-progress { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-    .detail-status-done { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
-    .detail-status-rejected { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
-
-    .detail-priority-low { background: #e8faf0; color: #0f766e; border-color: #b7f0df; }
-    .detail-priority-medium { background: #e5edff; color: #1d4ed8; border-color: #bfdbfe; }
-    .detail-priority-high { background: #fff4de; color: #b45309; border-color: #fde68a; }
-    .detail-priority-critical { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
-
     .project-stage-flow {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
         margin-top: 14px;
         align-items: center;
+        justify-content: center;
     }
 
     .project-stage-pill {
@@ -171,6 +138,38 @@
     @@media (max-width: 991px) {
         .project-detail-title { font-size: 1.65rem; }
     }
+
+    .project-bugscan-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: #334155;
+    }
+
+    .project-bugscan-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #64748b;
+        box-shadow: 0 0 0 0 rgba(100, 116, 139, 0.45);
+    }
+
+    .project-bugscan-dot.is-queued {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35);
+    }
+
+    .project-bugscan-dot.is-pulsing {
+        background: #3b82f6;
+        animation: projectBugScanPulse 1.25s infinite;
+    }
+
+    @@keyframes projectBugScanPulse {
+        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    }
 </style>
 
 <div class="project-detail-shell">
@@ -186,11 +185,6 @@
             <div>
                 <div class="project-detail-kicker">@Model.CrNumber</div>
                 <div class="project-detail-title">@Model.Title</div>
-                <div class="project-detail-pills">
-                    <span class="project-detail-pill @sClass">@Model.Status</span>
-                    <span class="project-detail-pill @pClass">@Model.Priority</span>
-                    <span class="project-detail-meta">Created @Model.CreatedAt.ToString("MMM dd, yyyy") by @Model.CreatedBy?.FullName</span>
-                </div>
             </div>
             @if (User.IsInRole("Admin"))
             {
@@ -416,30 +410,63 @@
             <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-bug me-2"></i>Linked Bugs</span>
                 <div class="d-flex align-items-center gap-2">
-                    @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                    @if (isOpenClawEnabled)
                     {
-                        <form asp-action="FindBugs" asp-route-id="@Model.Id" method="post" class="d-flex align-items-center gap-2">
-                            @Html.AntiForgeryToken()
-                            <select name="scanAgentId" class="form-select form-select-sm" style="min-width: 120px;">
-                                @foreach (var option in openClawScanAgentOptions)
-                                {
-                                    <option value="@option.Value">@option.Text</option>
-                                }
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-dark">
-                                <i class="bi bi-cpu me-1"></i>Find Bugs (OpenClaw)
-                            </button>
-                        </form>
-                    }
-                    else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
-                    {
-                        <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-stars me-1"></i>Upgrade to Pro for Find Bugs
-                        </a>
+                        @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                        {
+                            <form asp-action="FindBugs" asp-route-id="@Model.Id" method="post" class="d-flex align-items-center gap-2">
+                                @Html.AntiForgeryToken()
+                                <select name="scanAgentId" class="form-select form-select-sm" style="min-width: 120px;">
+                                    @foreach (var option in openClawScanAgentOptions)
+                                    {
+                                        <option value="@option.Value" selected="@(option.Value == Model.BugScanAgentId ? "selected" : null)">
+                                            @option.Text
+                                        </option>
+                                    }
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-dark" @(isBugScanRunning ? "disabled" : null)>
+                                    @if (isBugScanProcessing)
+                                    {
+                                        <span><i class="bi bi-arrow-repeat me-1"></i>Scanning...</span>
+                                    }
+                                    else if (isBugScanQueued)
+                                    {
+                                        <span><i class="bi bi-clock-history me-1"></i>Queued...</span>
+                                    }
+                                    else
+                                    {
+                                        <span><i class="bi bi-cpu me-1"></i>Find Bugs</span>
+                                    }
+                                </button>
+                            </form>
+                        }
+                        else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
+                        {
+                            <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-stars me-1"></i>Upgrade to Pro for Find Bugs
+                            </a>
+                        }
                     }
                     <span class="badge bg-secondary">@linkedBugs.Count</span>
                 </div>
             </div>
+            @if (isOpenClawEnabled)
+            {
+                <div class="card-body border-bottom py-2 d-flex justify-content-between align-items-center">
+                    <div class="project-bugscan-progress">
+                        <span class="project-bugscan-dot @(isBugScanProcessing ? "is-pulsing" : (isBugScanQueued ? "is-queued" : ""))"></span>
+                        <span>Find Bugs Status: @Model.BugScanStatus</span>
+                    </div>
+                    @if (Model.BugScanLastRunAt.HasValue)
+                    {
+                        <span class="small text-muted">Updated @Model.BugScanLastRunAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")</span>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.BugScanLastMessage))
+                {
+                    <div class="px-3 py-2 small text-muted border-bottom">@Model.BugScanLastMessage</div>
+                }
+            }
             <div class="card-body p-0">
                 @if (!linkedBugs.Any())
                 {
@@ -720,3 +747,13 @@
 </div>
 </div>
 
+@section Scripts {
+    @if (isOpenClawEnabled && isBugScanRunning)
+    {
+        <script>
+            setTimeout(function () {
+                window.location.reload();
+            }, 7000);
+        </script>
+    }
+}

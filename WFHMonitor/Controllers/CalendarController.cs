@@ -320,7 +320,7 @@ public class CalendarController : Controller
     {
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
             return LocalRedirect(returnUrl);
-        return RedirectToAction("Index", "TaskBoard");
+        return RedirectToAction("Index", "ChangeRequest");
     }
 
     private static bool TryParseLocalDateTime(string? value, out DateTime parsed)

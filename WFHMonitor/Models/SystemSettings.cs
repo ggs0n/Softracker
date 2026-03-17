@@ -36,6 +36,7 @@ public class SystemPreference
     public int FreeProjectLimit { get; set; } = ProVersionDefaults.FreeProjectLimit;
     public int FreeBugLimit { get; set; } = ProVersionDefaults.FreeBugLimit;
     public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
+    public bool EnableOpenClawAgents { get; set; } = true;
     public bool AllowOpenClawForFreePlan { get; set; } = false;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

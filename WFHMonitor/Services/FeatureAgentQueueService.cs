@@ -65,12 +65,26 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
         var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
 
         var feature = await db.ProjectFeatures
             .Include(f => f.ChangeRequest)
             .FirstOrDefaultAsync(f => f.Id == item.FeatureId, cancellationToken);
         if (feature == null)
             return;
+
+        var settings = await systemSettings.GetProVersionSettingsAsync();
+        if (!settings.EnableOpenClawAgents)
+        {
+            feature.AgentStatus = FeatureAgentStatus.Failed;
+            feature.AgentLastRunAt = DateTime.UtcNow;
+            feature.AgentImplementationPlan = AppendTextWithLimit(
+                feature.AgentImplementationPlan,
+                $"[OpenClaw Feature Run Failed - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\nOpenClaw agents are temporarily disabled by admin.",
+                4000);
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         feature.AssignedDeveloperId = item.AssignedAgentUserId;
         feature.AgentStatus = FeatureAgentStatus.InProgress;
