@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using WFHMonitor.Models;
@@ -102,9 +104,44 @@ public class AuthController : Controller
     public async Task<IActionResult> Logout()
     {
         await _signInManager.SignOutAsync();
-        Response.Cookies.Delete("jwt_token");
-        Response.Cookies.Delete("new_user_jwt_token");
+
+        // Defense-in-depth: explicitly clear all Identity auth schemes.
+        await HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        await HttpContext.SignOutAsync(IdentityConstants.TwoFactorRememberMeScheme);
+        await HttpContext.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);
+
+        // Clear any session state if session middleware is enabled.
+        HttpContext.Features.Get<ISessionFeature>()?.Session?.Clear();
+
+        ExpireCookie("jwt_token");
+        ExpireCookie("new_user_jwt_token");
+        ExpireCookie(IdentityConstants.ApplicationScheme);
+        ExpireCookie(IdentityConstants.ExternalScheme);
+        ExpireCookie(IdentityConstants.TwoFactorRememberMeScheme);
+        ExpireCookie(IdentityConstants.TwoFactorUserIdScheme);
+
+        Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Clear-Site-Data"] = "\"cookies\", \"storage\", \"cache\"";
+
         return RedirectToAction("Login");
+    }
+
+    private void ExpireCookie(string cookieName)
+    {
+        if (string.IsNullOrWhiteSpace(cookieName))
+            return;
+
+        Response.Cookies.Delete(cookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Append(cookieName, string.Empty, new CookieOptions
+        {
+            Path = "/",
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UnixEpoch
+        });
     }
 
     public IActionResult AccessDenied() => View();
