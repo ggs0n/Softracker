@@ -100,7 +100,14 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-lg me-2"></i>Create Feature
                         </button>
-                        <a asp-action="Features" class="btn btn-outline-secondary">Cancel</a>
+                        @if (!string.IsNullOrWhiteSpace(Model.ReturnUrl))
+                        {
+                            <a href="@Model.ReturnUrl" class="btn btn-outline-secondary">Cancel</a>
+                        }
+                        else
+                        {
+                            <a asp-action="Features" asp-route-projectId="@Model.ChangeRequestId" class="btn btn-outline-secondary">Cancel</a>
+                        }
                     </div>
                 </form>
             </div>
