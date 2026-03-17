@@ -109,6 +109,7 @@ public class ChangeRequestController : Controller
             DeveloperOptions = await GetDeveloperOptionsAsync()
         };
 
+        ViewBag.CancelUrl = ResolveFeatureCancelUrl(returnUrl, projectId);
         return View(vm);
     }
 
@@ -120,6 +121,7 @@ public class ChangeRequestController : Controller
         {
             model.ProjectOptions = await GetEditableProjectOptionsAsync();
             model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            ViewBag.CancelUrl = ResolveFeatureCancelUrl(model.ReturnUrl, model.ChangeRequestId > 0 ? model.ChangeRequestId : null);
             return View(model);
         }
 
@@ -131,6 +133,7 @@ public class ChangeRequestController : Controller
             ModelState.AddModelError(nameof(model.ChangeRequestId), "Selected project not found.");
             model.ProjectOptions = await GetProjectOptionsAsync();
             model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            ViewBag.CancelUrl = ResolveFeatureCancelUrl(model.ReturnUrl, model.ChangeRequestId > 0 ? model.ChangeRequestId : null);
             return View(model);
         }
 
@@ -142,6 +145,7 @@ public class ChangeRequestController : Controller
                 ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected developer not found.");
                 model.ProjectOptions = await GetEditableProjectOptionsAsync();
                 model.DeveloperOptions = await GetDeveloperOptionsAsync();
+                ViewBag.CancelUrl = ResolveFeatureCancelUrl(model.ReturnUrl, model.ChangeRequestId > 0 ? model.ChangeRequestId : null);
                 return View(model);
             }
         }
@@ -156,6 +160,7 @@ public class ChangeRequestController : Controller
             ModelState.AddModelError(nameof(model.Name), "This feature already exists for the selected project.");
             model.ProjectOptions = await GetProjectOptionsAsync();
             model.DeveloperOptions = await GetDeveloperOptionsAsync();
+            ViewBag.CancelUrl = ResolveFeatureCancelUrl(model.ReturnUrl, model.ChangeRequestId > 0 ? model.ChangeRequestId : null);
             return View(model);
         }
 
@@ -1014,6 +1019,20 @@ public class ChangeRequestController : Controller
             return LocalRedirect(returnUrl);
 
         return RedirectToAction(nameof(Details), new { id = crId });
+    }
+
+    private static string ResolveFeatureCancelUrl(string? returnUrl, int? projectId)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Uri.TryCreate(returnUrl, UriKind.Relative, out var relativeUri))
+        {
+            var relativePath = relativeUri.OriginalString;
+            if (relativePath.StartsWith('/') && !relativePath.StartsWith("//"))
+                return relativePath;
+        }
+
+        return projectId.HasValue
+            ? $"/ChangeRequest/Features?projectId={projectId.Value}"
+            : "/ChangeRequest/Features";
     }
 
     private async Task<List<ChangeRequest>> GetVisibleProjectsAsync(IQueryable<ChangeRequest> query)
