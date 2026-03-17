@@ -31,7 +31,7 @@ public class BugService : IBugService
         _notificationService = notificationService;
     }
 
-    public async Task<List<BugReport>> GetIndexBugsAsync(bool restrictToAssignedUser, string? userId)
+    public async Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId)
     {
         IQueryable<BugReport> query = _db.BugReports
             .Include(b => b.ChangeRequest)
@@ -39,8 +39,22 @@ public class BugService : IBugService
             .Include(b => b.CreatedBy)
             .AsNoTracking();
 
-        if (restrictToAssignedUser)
-            query = query.Where(b => b.AssignedDeveloperId == userId);
+        if (!isAdmin)
+        {
+            if (orgTeamId.HasValue)
+            {
+                query = query.Where(b =>
+                    b.ChangeRequestId == null ||
+                    !b.ChangeRequest!.OrgTeamId.HasValue ||
+                    b.ChangeRequest.OrgTeamId == orgTeamId.Value);
+            }
+            else
+            {
+                query = query.Where(b =>
+                    b.ChangeRequestId == null ||
+                    !b.ChangeRequest!.OrgTeamId.HasValue);
+            }
+        }
 
         return await query
             .OrderByDescending(b => b.CreatedAt)
@@ -68,14 +82,14 @@ public class BugService : IBugService
         return _db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
     }
 
-    public async Task PopulateFormOptionsAsync(BugFormViewModel model)
+    public async Task PopulateFormOptionsAsync(BugFormViewModel model, bool isAdmin, int? orgTeamId)
     {
         model.DeveloperOptions = await GetDeveloperOptionsAsync();
         model.AgentOptions = await GetAgentOptionsAsync();
-        model.ChangeRequestOptions = await GetChangeRequestOptionsAsync();
+        model.ChangeRequestOptions = await GetChangeRequestOptionsAsync(isAdmin, orgTeamId);
     }
 
-    public async Task<BugFormViewModel?> BuildEditViewModelAsync(int id)
+    public async Task<BugFormViewModel?> BuildEditViewModelAsync(int id, bool isAdmin, int? orgTeamId)
     {
         var bug = await _db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
         if (bug == null) return null;
@@ -98,7 +112,7 @@ public class BugService : IBugService
             AssignedAgentId = bug.AssigneeType == BugAssigneeType.Agent ? bug.AssignedDeveloperId : null
         };
 
-        await PopulateFormOptionsAsync(vm);
+        await PopulateFormOptionsAsync(vm, isAdmin, orgTeamId);
         return vm;
     }
 
@@ -375,9 +389,18 @@ public class BugService : IBugService
             .ToList();
     }
 
-    private Task<List<SelectListItem>> GetChangeRequestOptionsAsync()
+    private Task<List<SelectListItem>> GetChangeRequestOptionsAsync(bool isAdmin, int? orgTeamId)
     {
-        return _db.ChangeRequests
+        var query = _db.ChangeRequests.AsQueryable();
+        if (!isAdmin)
+        {
+            if (orgTeamId.HasValue)
+                query = query.Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == orgTeamId.Value);
+            else
+                query = query.Where(c => !c.OrgTeamId.HasValue);
+        }
+
+        return query
             .OrderByDescending(c => c.CreatedAt)
             .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
             .ToListAsync();

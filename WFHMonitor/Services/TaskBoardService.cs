@@ -31,13 +31,38 @@ public class TaskBoardService : ITaskBoardService
             query = query.Where(t => t.AssigneeId == userId);
 
         var tasks = await query.OrderBy(t => t.DueDate).ToListAsync();
+        var assignedFeatures = new List<ProjectFeature>();
+        var assignedBugs = new List<BugReport>();
+
+        if (!isAdmin && !string.IsNullOrWhiteSpace(userId))
+        {
+            assignedFeatures = await _db.ProjectFeatures
+                .Include(f => f.ChangeRequest)
+                .Include(f => f.AssignedDeveloper)
+                .Where(f => f.AssignedDeveloperId == userId)
+                .OrderBy(f => f.TimelineEnd ?? f.TimelineStart ?? DateTime.MaxValue)
+                .ThenBy(f => f.Name)
+                .AsNoTracking()
+                .ToListAsync();
+
+            assignedBugs = await _db.BugReports
+                .Include(b => b.ChangeRequest)
+                .Include(b => b.AssignedDeveloper)
+                .Where(b => b.AssignedDeveloperId == userId && b.AssigneeType == BugAssigneeType.Developer)
+                .OrderBy(b => b.Status == BugStatus.Complete ? 1 : 0)
+                .ThenByDescending(b => b.UpdatedAt)
+                .AsNoTracking()
+                .ToListAsync();
+        }
 
         return new TaskBoardViewModel
         {
             ToDo = tasks.Where(t => t.Status == WorkTaskStatus.ToDo).ToList(),
             InProgress = tasks.Where(t => t.Status == WorkTaskStatus.InProgress).ToList(),
             Blocked = tasks.Where(t => t.Status == WorkTaskStatus.Blocked).ToList(),
-            Done = tasks.Where(t => t.Status == WorkTaskStatus.Done).ToList()
+            Done = tasks.Where(t => t.Status == WorkTaskStatus.Done).ToList(),
+            AssignedFeatures = assignedFeatures,
+            AssignedBugs = assignedBugs
         };
     }
 

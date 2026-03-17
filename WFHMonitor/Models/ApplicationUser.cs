@@ -26,6 +26,8 @@ public class ApplicationUser : IdentityUser
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
     public OrganizationTeam OrganizationTeam { get; set; } = OrganizationTeam.Unassigned;
+    public int? OrgTeamId { get; set; }
+    public OrgTeam? OrgTeam { get; set; }
     public string? OutlookCalendarIcsUrl { get; set; }
     public DateTime? OutlookCalendarLastSyncAt { get; set; }
 

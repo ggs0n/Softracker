@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WFHMonitor.Data;
@@ -10,225 +11,234 @@ namespace WFHMonitor.Controllers;
 [Authorize(Roles = "Admin,Tester,Developer,Agent")]
 public class AgentController : Controller
 {
+    private static readonly string[] EmployeeRoles = ["Employee", "Developer", "Tester"];
+    private static readonly string[] AgentPalette =
+    [
+        "#22d3ee",
+        "#34d399",
+        "#f59e0b",
+        "#60a5fa",
+        "#f472b6",
+        "#a78bfa",
+        "#fb7185",
+        "#4ade80"
+    ];
+    private static readonly string[] EmployeePalette =
+    [
+        "#93c5fd",
+        "#86efac",
+        "#fde68a",
+        "#f9a8d4",
+        "#c4b5fd",
+        "#5eead4"
+    ];
+
     private readonly ApplicationDbContext _db;
-    private readonly IConfiguration _configuration;
-    private readonly IWebHostEnvironment _env;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    private static readonly string[] AllowedPhotoExts = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-
-    public AgentController(ApplicationDbContext db, IConfiguration configuration, IWebHostEnvironment env)
+    public AgentController(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
     {
         _db = db;
-        _configuration = configuration;
-        _env = env;
+        _userManager = userManager;
     }
 
     public async Task<IActionResult> Index()
     {
-        var agentItems = await _db.BugReports
+        var currentUser = await _userManager.GetUserAsync(User);
+        var isAdmin = User.IsInRole("Admin");
+        var viewerTeamId = currentUser?.OrgTeamId;
+
+        var orgTeams = await _db.OrgTeams
             .AsNoTracking()
-            .Where(b => b.AssigneeType == BugAssigneeType.Agent)
-            .OrderByDescending(b => b.UpdatedAt)
-            .Select(b => new AgentWorkItemViewModel
+            .ToDictionaryAsync(t => t.Id, t => t.Name);
+
+        var profile = await _db.OrganizationProfiles
+            .Include(p => p.CeoUser)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == 1);
+
+        var agentUsers = (await _userManager.GetUsersInRoleAsync("Agent"))
+            .Where(u => IsVisibleToViewer(u.OrgTeamId, isAdmin, viewerTeamId))
+            .OrderBy(u => u.FullName)
+            .ToList();
+
+        var employeeRoleMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var employeesById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
+        foreach (var role in EmployeeRoles)
+        {
+            var users = await _userManager.GetUsersInRoleAsync(role);
+            foreach (var user in users)
             {
-                Id = b.Id,
-                BugNumber = b.BugNumber,
-                Title = b.Title,
-                AgentStatus = b.AgentStatus.ToString(),
+                if (!IsVisibleToViewer(user.OrgTeamId, isAdmin, viewerTeamId))
+                    continue;
+
+                if (!employeesById.ContainsKey(user.Id))
+                    employeesById[user.Id] = user;
+                if (!employeeRoleMap.ContainsKey(user.Id))
+                    employeeRoleMap[user.Id] = role;
+            }
+        }
+
+        var visibleAgentIds = agentUsers
+            .Select(a => a.Id)
+            .ToList();
+
+        var activeBugStatuses = new[] { BugAgentStatus.Queued, BugAgentStatus.InProgress, BugAgentStatus.Blocked };
+        var activeBugAssignments = await _db.BugReports
+            .AsNoTracking()
+            .Where(b =>
+                b.AssigneeType == BugAssigneeType.Agent &&
+                b.AssignedDeveloperId != null &&
+                visibleAgentIds.Contains(b.AssignedDeveloperId) &&
+                activeBugStatuses.Contains(b.AgentStatus))
+            .Select(b => new AgentTaskAssignment
+            {
+                AgentId = b.AssignedDeveloperId!,
+                WorkType = "Bug",
+                WorkNumber = b.BugNumber,
+                WorkTitle = b.Title,
                 UpdatedAt = b.UpdatedAt
             })
             .ToListAsync();
 
-        var runningAgentItems = agentItems
-            .Where(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.InProgress), StringComparison.Ordinal))
-            .ToList();
-
-        var queueSnapshot = new AgentQueueSnapshotViewModel
-        {
-            Total = agentItems.Count,
-            Queued = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.Queued), StringComparison.Ordinal)),
-            InProgress = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.InProgress), StringComparison.Ordinal)),
-            Blocked = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.Blocked), StringComparison.Ordinal)),
-            PrRaised = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.PrRaised), StringComparison.Ordinal)),
-            Failed = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.Failed), StringComparison.Ordinal))
-        };
-
-        var recentActivities = await _db.BugActivities
+        var activeFeatureAssignments = await _db.ProjectFeatures
             .AsNoTracking()
-            .Include(a => a.BugReport)
-            .Where(a => a.BugReport != null && a.BugReport.AssigneeType == BugAssigneeType.Agent)
-            .OrderByDescending(a => a.CreatedAt)
-            .Take(30)
-            .Select(a => new AgentActivityItemViewModel
+            .Where(f =>
+                f.AssignedDeveloperId != null &&
+                visibleAgentIds.Contains(f.AssignedDeveloperId) &&
+                f.Status != CrStatus.Done &&
+                f.AgentStatus != FeatureAgentStatus.PrRaised)
+            .Select(f => new AgentTaskAssignment
             {
-                BugId = a.BugReportId,
-                BugNumber = a.BugReport!.BugNumber,
-                Title = a.BugReport!.Title,
-                Action = a.Action,
-                StatusTransition = a.OldStatus.HasValue || a.NewStatus.HasValue
-                    ? $"{(a.OldStatus.HasValue ? a.OldStatus.Value.ToString() : "-")} -> {(a.NewStatus.HasValue ? a.NewStatus.Value.ToString() : "-")}"
-                    : null,
-                CreatedAt = a.CreatedAt
+                AgentId = f.AssignedDeveloperId!,
+                WorkType = "Feature",
+                WorkNumber = f.FeatureNumber,
+                WorkTitle = f.Name,
+                UpdatedAt = f.AgentLastRunAt ?? f.CreatedAt
             })
             .ToListAsync();
 
-        var cronJobs = _configuration
-            .GetSection("AgentMonitoring:CronJobs")
-            .Get<List<CronJobStatusViewModel>>() ?? new List<CronJobStatusViewModel>();
-
-        var runningCronJobs = cronJobs
-            .Where(j => j.IsEnabled && j.IsRunning)
+        var activeAssignments = activeBugAssignments
+            .Concat(activeFeatureAssignments)
             .ToList();
 
-        var agents = LoadOpenClawAgents();
-        var mainAgent = agents.FirstOrDefault(a => string.Equals(a.Name, "OpenClaw Main", StringComparison.Ordinal));
-        if (mainAgent != null)
-        {
-            mainAgent.Status = runningAgentItems.Count > 0 ? "Running" : "Idle";
-            mainAgent.RunningWorkItems = runningAgentItems.Count;
-            mainAgent.QueuedWorkItems = agentItems.Count(i => string.Equals(i.AgentStatus, nameof(BugAgentStatus.Queued), StringComparison.Ordinal));
+        var assignmentLookup = activeAssignments
+            .GroupBy(a => a.AgentId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.UpdatedAt).ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
-            // Performance stats
-            mainAgent.TotalAssigned = agentItems.Count;
-            mainAgent.Completed = queueSnapshot.PrRaised;
-            mainAgent.Failed = queueSnapshot.Failed;
-            mainAgent.Blocked = queueSnapshot.Blocked;
-
-            if (mainAgent.TotalAssigned > 0)
+        var agents = agentUsers
+            .Select((agent, index) =>
             {
-                // Score = (completed * 100 - failed * 40 - blocked * 10) / total, clamped 0-100
-                var raw = (mainAgent.Completed * 100 - mainAgent.Failed * 40 - mainAgent.Blocked * 10)
-                          / (double)mainAgent.TotalAssigned;
-                mainAgent.PerformanceScore = Math.Clamp((int)Math.Round(raw), 0, 100);
-            }
-        }
+                var hasAssignments = assignmentLookup.TryGetValue(agent.Id, out var list);
+                var activeCount = hasAssignments ? list!.Count : 0;
+                var latest = hasAssignments ? list![0] : null;
 
-        // Resolve uploaded photos
-        var uploadsDir = Path.Combine(_env.WebRootPath, "uploads", "agents");
-        foreach (var agent in agents)
-        {
-            foreach (var ext in AllowedPhotoExts)
-            {
-                var file = Path.Combine(uploadsDir, agent.ProfileFolder + ext);
-                if (System.IO.File.Exists(file))
+                var deskColumn = index % 4;
+                var deskRow = index / 4;
+                var workLeft = 14 + (deskColumn * 20);
+                var workTop = 18 + (deskRow * 18);
+                var idleLeft = 24 + ((index % 6) * 10);
+                var idleTop = 70 + ((index / 6) * 6);
+
+                return new AgentOfficeAvatarViewModel
                 {
-                    agent.PhotoUrl = $"/uploads/agents/{agent.ProfileFolder}{ext}";
-                    break;
-                }
-            }
-        }
+                    UserId = agent.Id,
+                    Name = string.IsNullOrWhiteSpace(agent.FullName) ? (agent.UserName ?? "Agent") : agent.FullName,
+                    Email = agent.Email ?? "-",
+                    TeamName = ResolveTeamName(agent.OrgTeamId, orgTeams),
+                    WorkspaceName = $"Desk {index + 1:00}",
+                    IsWorking = activeCount > 0,
+                    ActiveTaskCount = activeCount,
+                    TaskSummary = latest == null
+                        ? "Idle - waiting for assignment"
+                        : $"{latest.WorkType}: {latest.WorkNumber} - {TrimSummary(latest.WorkTitle, 36)}",
+                    AccentColor = AgentPalette[index % AgentPalette.Length],
+                    IdleLeftPct = idleLeft,
+                    IdleTopPct = idleTop,
+                    WorkLeftPct = workLeft,
+                    WorkTopPct = workTop
+                };
+            })
+            .ToList();
 
+        var employees = employeesById.Values
+            .OrderBy(e => e.FullName)
+            .Select((employee, index) =>
+            {
+                var row = index / 8;
+                var col = index % 8;
+                return new OfficeEmployeeAvatarViewModel
+                {
+                    UserId = employee.Id,
+                    Name = string.IsNullOrWhiteSpace(employee.FullName) ? (employee.UserName ?? "Employee") : employee.FullName,
+                    Role = employeeRoleMap.TryGetValue(employee.Id, out var role) ? role : "Employee",
+                    TeamName = ResolveTeamName(employee.OrgTeamId, orgTeams),
+                    AccentColor = EmployeePalette[index % EmployeePalette.Length],
+                    LeftPct = 8 + (col * 10),
+                    TopPct = 84 + (row * 5)
+                };
+            })
+            .ToList();
+
+        var visibleTeamCount = await _db.OrgTeams.CountAsync();
         var vm = new AgentDashboardViewModel
         {
+            CeoName = profile?.CeoUser?.FullName
+                ?? (string.IsNullOrWhiteSpace(currentUser?.FullName) ? "CEO" : currentUser!.FullName),
+            CeoEmail = profile?.CeoUser?.Email
+                ?? currentUser?.Email
+                ?? string.Empty,
+            TeamCount = visibleTeamCount,
+            AgentCount = agents.Count,
+            EmployeeCount = employees.Count,
+            WorkingAgentCount = agents.Count(a => a.IsWorking),
+            ActiveTaskCount = agents.Sum(a => a.ActiveTaskCount),
+            GeneratedAtUtc = DateTime.UtcNow,
             Agents = agents,
-            RunningAgentWorkItems = runningAgentItems,
-            AgentWorkItems = agentItems,
-            QueueSnapshot = queueSnapshot,
-            RecentActivities = recentActivities,
-            RunningCronJobs = runningCronJobs,
-            CronJobs = cronJobs
+            Employees = employees
         };
 
-        ViewData["Title"] = "Agent";
+        ViewData["Title"] = "Agent Office";
         return View(vm);
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> UploadPhoto(string profileFolder, IFormFile photo)
+    private static bool IsVisibleToViewer(int? entityTeamId, bool isAdmin, int? viewerTeamId)
     {
-        if (string.IsNullOrWhiteSpace(profileFolder) || photo == null || photo.Length == 0)
-        {
-            TempData["Error"] = "Invalid upload request.";
-            return RedirectToAction(nameof(Index));
-        }
+        if (isAdmin)
+            return true;
 
-        // Sanitise the folder slug — only allow safe filename characters
-        var slug = System.Text.RegularExpressions.Regex.Replace(profileFolder, @"[^a-zA-Z0-9_\-]", "");
-        if (string.IsNullOrWhiteSpace(slug))
-        {
-            TempData["Error"] = "Invalid agent identifier.";
-            return RedirectToAction(nameof(Index));
-        }
+        if (!viewerTeamId.HasValue)
+            return !entityTeamId.HasValue;
 
-        var ext = Path.GetExtension(photo.FileName).ToLowerInvariant();
-        if (!AllowedPhotoExts.Contains(ext))
-        {
-            TempData["Error"] = "Only image files (jpg, png, gif, webp) are allowed.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        if (photo.Length > 5 * 1024 * 1024)
-        {
-            TempData["Error"] = "Photo must be under 5 MB.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var dir = Path.Combine(_env.WebRootPath, "uploads", "agents");
-        Directory.CreateDirectory(dir);
-
-        // Delete any previous photo for this agent (different extension)
-        foreach (var oldExt in AllowedPhotoExts)
-        {
-            var old = Path.Combine(dir, slug + oldExt);
-            if (System.IO.File.Exists(old)) System.IO.File.Delete(old);
-        }
-
-        var dest = Path.Combine(dir, slug + ext);
-        await using var stream = new FileStream(dest, FileMode.Create);
-        await photo.CopyToAsync(stream);
-
-        TempData["Success"] = "Agent photo updated.";
-        return RedirectToAction(nameof(Index));
+        return !entityTeamId.HasValue || entityTeamId.Value == viewerTeamId.Value;
     }
 
-    private static List<AgentInfoViewModel> LoadOpenClawAgents()
+    private static string ResolveTeamName(int? teamId, IReadOnlyDictionary<int, string> teamLookup)
     {
-        var result = new List<AgentInfoViewModel>();
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var openClawAgentsPath = Path.Combine(userProfile, ".openclaw", "agents");
+        if (teamId.HasValue && teamLookup.TryGetValue(teamId.Value, out var name))
+            return name;
 
-        if (!Directory.Exists(openClawAgentsPath))
-        {
-            return new List<AgentInfoViewModel>
-            {
-                new()
-                {
-                    Name = "OpenClaw Main",
-                    Description = "Default OpenClaw agent profile.",
-                    Status = "Unknown",
-                    ProfileFolder = "main"
-                }
-            };
-        }
+        return "Unassigned";
+    }
 
-        var folders = Directory.GetDirectories(openClawAgentsPath)
-            .Select(Path.GetFileName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+    private static string TrimSummary(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
 
-        foreach (var folder in folders)
-        {
-            var name = string.Equals(folder, "main", StringComparison.OrdinalIgnoreCase)
-                ? "OpenClaw Main"
-                : $"OpenClaw Agent {folder}";
+        var clean = value.Trim();
+        return clean.Length <= maxLength ? clean : $"{clean[..maxLength].Trim()}...";
+    }
 
-            var description = string.Equals(folder, "main", StringComparison.OrdinalIgnoreCase)
-                ? "Default OpenClaw agent profile."
-                : $"OpenClaw agent instance from profile folder '{folder}'.";
-
-            result.Add(new AgentInfoViewModel
-            {
-                Name = name,
-                Description = description,
-                Status = "Idle",
-                RunningWorkItems = 0,
-                QueuedWorkItems = 0,
-                ProfileFolder = folder!
-            });
-        }
-
-        return result;
+    private sealed class AgentTaskAssignment
+    {
+        public string AgentId { get; init; } = string.Empty;
+        public string WorkType { get; init; } = string.Empty;
+        public string WorkNumber { get; init; } = string.Empty;
+        public string WorkTitle { get; init; } = string.Empty;
+        public DateTime UpdatedAt { get; init; }
     }
 }

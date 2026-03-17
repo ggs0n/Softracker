@@ -21,8 +21,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BugActivity> BugActivities => Set<BugActivity>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
     public DbSet<ProjectFeature> ProjectFeatures => Set<ProjectFeature>();
+    public DbSet<FeatureScreenshot> FeatureScreenshots => Set<FeatureScreenshot>();
     public DbSet<RepositoryFeature> RepositoryFeatures => Set<RepositoryFeature>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<ModulePermissionSetting> ModulePermissionSettings => Set<ModulePermissionSetting>();
+    public DbSet<SystemPreference> SystemPreferences => Set<SystemPreference>();
+    public DbSet<OrgTeam> OrgTeams => Set<OrgTeam>();
+    public DbSet<OrganizationProfile> OrganizationProfiles => Set<OrganizationProfile>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -48,6 +53,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             e.Property(u => u.StripeSubscriptionId)
                 .HasMaxLength(100);
+
+            e.HasOne(u => u.OrgTeam)
+                .WithMany()
+                .HasForeignKey(u => u.OrgTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<WorkTask>(e =>
@@ -106,6 +116,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany()
              .HasForeignKey(c => c.CreatedById)
              .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(c => c.OrgTeam)
+             .WithMany()
+             .HasForeignKey(c => c.OrgTeamId)
+             .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<ChangeRequestPic>(e =>
@@ -225,10 +240,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(f => f.ChangeRequestId);
             e.HasIndex(f => f.AssignedDeveloperId);
+            e.HasIndex(f => f.AgentStatus);
             e.HasIndex(f => f.FeatureNumber).IsUnique();
 
             e.Property(f => f.FeatureNumber)
              .HasMaxLength(20);
+
+            e.Property(f => f.ModuleImpacted)
+             .HasMaxLength(200);
+
+            e.Property(f => f.LinkedBugs)
+             .HasMaxLength(1000);
 
             e.Property(f => f.Status)
              .HasConversion<string>()
@@ -243,7 +265,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(f => f.Stage)
              .HasConversion<string>()
              .HasMaxLength(30)
-             .HasDefaultValue(CrStage.ProjectStart);
+             .HasDefaultValue(CrStage.Development);
+
+            e.Property(f => f.AgentStatus)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(FeatureAgentStatus.None);
+
+            e.Property(f => f.AgentImplementationPlan)
+             .HasMaxLength(4000);
 
             e.HasOne(f => f.ChangeRequest)
              .WithMany(c => c.Features)
@@ -254,6 +284,16 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany()
              .HasForeignKey(f => f.AssignedDeveloperId)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<FeatureScreenshot>(e =>
+        {
+            e.HasIndex(s => s.ProjectFeatureId);
+
+            e.HasOne(s => s.ProjectFeature)
+             .WithMany(f => f.Screenshots)
+             .HasForeignKey(s => s.ProjectFeatureId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<RepositoryFeature>(e =>
@@ -277,6 +317,50 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany(u => u.Notifications)
              .HasForeignKey(n => n.RecipientId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ModulePermissionSetting>(e =>
+        {
+            e.HasIndex(m => m.ModuleKey).IsUnique();
+
+            e.Property(m => m.ModuleKey)
+                .HasMaxLength(50);
+
+            e.Property(m => m.ViewRolesCsv)
+                .HasMaxLength(400);
+
+            e.Property(m => m.ModifyRolesCsv)
+                .HasMaxLength(400);
+        });
+
+        builder.Entity<SystemPreference>(e =>
+        {
+            e.HasKey(s => s.Id);
+
+            e.Property(s => s.BellNotificationSoundEnabled)
+                .HasDefaultValue(true);
+
+            e.Property(s => s.BellNotificationSoundOption)
+                .HasMaxLength(30)
+                .HasDefaultValue(BellSoundOptions.Classic);
+        });
+
+        builder.Entity<OrgTeam>(e =>
+        {
+            e.HasIndex(t => t.Name).IsUnique();
+
+            e.Property(t => t.Name)
+                .HasMaxLength(100);
+        });
+
+        builder.Entity<OrganizationProfile>(e =>
+        {
+            e.HasKey(p => p.Id);
+
+            e.HasOne(p => p.CeoUser)
+                .WithMany()
+                .HasForeignKey(p => p.CeoUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

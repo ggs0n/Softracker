@@ -16,95 +16,224 @@
 
 @if (User.IsInRole("Developer"))
 {
-    <div class="dp" style="--dp-color:var(--accent)">
-        <div class="dp-header">
-            <div class="dp-header-icon" style="background:var(--accent-bg);color:var(--accent)">
-                <i class="bi bi-list-check"></i>
+    var assignedTasks = Model.AssignedTasks.ToList();
+    var assignedFeatures = Model.AssignedFeatures;
+    var assignedBugs = Model.AssignedBugs;
+    var blockedTaskCount = assignedTasks.Count(t => t.Status == WorkTaskStatus.Blocked);
+    var overdueTaskCount = assignedTasks.Count(t =>
+        t.DueDate.HasValue &&
+        t.DueDate.Value.Date < DateTime.Today &&
+        t.Status != WorkTaskStatus.Done);
+    var openBugCount = assignedBugs.Count(b => b.Status != BugStatus.Complete);
+    var activeFeatureCount = assignedFeatures.Count(f => f.Status != CrStatus.Done);
+    var riskItemCount = overdueTaskCount + blockedTaskCount;
+
+    <div class="row g-3 mb-4 stagger">
+        <div class="col-sm-6 col-lg-3">
+            <div class="dash-stat dash-stat-blue">
+                <div class="dash-stat-icon"><i class="bi bi-list-task"></i></div>
+                <div class="dash-stat-value">@assignedTasks.Count</div>
+                <div class="dash-stat-label">Assigned tasks</div>
             </div>
-            <span class="dp-header-title">My Assigned Tasks</span>
-            <span class="dp-header-count">@Model.AssignedTasks.Count() tasks</span>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="dash-stat dash-stat-emerald">
+                <div class="dash-stat-icon"><i class="bi bi-collection"></i></div>
+                <div class="dash-stat-value">@assignedFeatures.Count</div>
+                <div class="dash-stat-label">Assigned features</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="dash-stat dash-stat-rose">
+                <div class="dash-stat-icon"><i class="bi bi-bug"></i></div>
+                <div class="dash-stat-value">@openBugCount<span style="font-size:0.85rem;font-weight:600;opacity:0.55">/@assignedBugs.Count</span></div>
+                <div class="dash-stat-label">Open bugs</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="dash-stat dash-stat-amber">
+                <div class="dash-stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="dash-stat-value">@riskItemCount</div>
+                <div class="dash-stat-label">Risk items</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-list-section mb-4">
+        <div class="task-list-header success">
+            <i class="bi bi-diagram-3"></i>
+            Assigned Features
+            <span class="ms-auto badge rounded-pill" style="background:rgba(5,150,105,0.14); color:#059669; font-size:0.67rem">@activeFeatureCount active</span>
         </div>
 
-        @if (!Model.AssignedTasks.Any())
+        @if (!assignedFeatures.Any())
         {
-            <div class="dp-empty">
-                <i class="bi bi-inbox"></i>
-                No tasks assigned to you
+            <div class="task-list-empty">
+                <i class="bi bi-inbox" style="font-size:1.5rem; opacity:0.25; display:block; margin-bottom:6px"></i>
+                No features assigned to you.
             </div>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="dp-table">
-                    <thead>
-                        <tr>
-                            <th>Title</th>
-                            <th>Detail</th>
-                            <th>Timeline</th>
-                            <th>Related</th>
-                            <th>Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var task in Model.AssignedTasks)
-                        {
-                            var stCls = task.Status.ToString() switch {
-                                "ToDo"       => "dp-badge-slate",
-                                "InProgress" => "dp-badge-indigo",
-                                "Blocked"    => "dp-badge-red",
-                                "Done"       => "dp-badge-green",
-                                _            => "dp-badge-slate"
-                            };
-                            <tr>
-                                <td class="dp-cell-title">@task.Title</td>
-                                <td class="dp-cell-muted">@(string.IsNullOrWhiteSpace(task.Details) ? "—" : task.Details)</td>
-                                <td class="dp-cell-muted" style="font-size:0.75rem;white-space:nowrap">
-                                    @if (task.TimelineStart.HasValue || task.TimelineEnd.HasValue)
-                                    {
-                                        var hasInvalidTimeline = task.TimelineStart.HasValue && task.TimelineEnd.HasValue && task.TimelineEnd.Value.Date < task.TimelineStart.Value.Date;
-                                        if (hasInvalidTimeline)
-                                        {
-                                            <span class="text-danger">Invalid timeline</span>
-                                        }
-                                        else
-                                        {
-                                            @(task.TimelineStart?.ToString("yyyy-MM-dd"))<span class="mx-1" style="color:#334155">→</span>@(task.TimelineEnd?.ToString("yyyy-MM-dd"))
-                                        }
-                                    }
-                                    else if (task.DueDate.HasValue)
-                                    {
-                                        <span>Due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
-                                    }
-                                    else { <span>—</span> }
-                                </td>
-                                <td>
-                                    @if (task.ChangeRequest != null)
-                                    {
-                                        <span class="dp-badge dp-badge-indigo me-1">@task.ChangeRequest.CrNumber</span>
-                                    }
-                                    @if (task.BugReport != null)
-                                    {
-                                        <span class="dp-badge dp-badge-red">@task.BugReport.BugNumber</span>
-                                    }
-                                    @if (task.ChangeRequest == null && task.BugReport == null)
-                                    {
-                                        <span class="dp-cell-muted">—</span>
-                                    }
-                                </td>
-                                <td><span class="dp-badge @stCls">@task.Status</span></td>
-                                <td>
-                                    <a asp-action="Edit" asp-route-id="@task.Id" class="dp-btn" title="View / Edit">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="dev-entity-grid">
+                @foreach (var feature in assignedFeatures)
+                {
+                    var featureStatusClass = feature.Status switch
+                    {
+                        CrStatus.Done => "dp-badge-green",
+                        CrStatus.InProgress => "dp-badge-indigo",
+                        CrStatus.InReview or CrStatus.Approved => "dp-badge-sky",
+                        CrStatus.Rejected => "dp-badge-red",
+                        _ => "dp-badge-slate"
+                    };
+
+                    var featurePriorityClass = feature.Priority switch
+                    {
+                        CrPriority.Critical => "dp-badge-red",
+                        CrPriority.High => "dp-badge-amber",
+                        CrPriority.Medium => "dp-badge-indigo",
+                        _ => "dp-badge-slate"
+                    };
+
+                    <article class="dev-entity-card">
+                        <div class="dev-entity-head">
+                            <div>
+                                <div class="dev-entity-code">@feature.FeatureNumber</div>
+                                <a asp-controller="ChangeRequest"
+                                   asp-action="FeatureDetails"
+                                   asp-route-featureId="@feature.Id"
+                                   class="dev-entity-title">
+                                    @feature.Name
+                                </a>
+                            </div>
+                            <span class="dp-badge @featureStatusClass">@feature.Status</span>
+                        </div>
+
+                        <div class="dev-entity-badges">
+                            <span class="dp-badge @featurePriorityClass">@feature.Priority</span>
+                            <span class="dp-badge dp-badge-sky">@feature.Stage</span>
+                            @if (feature.ChangeRequest != null)
+                            {
+                                <a asp-controller="ChangeRequest"
+                                   asp-action="Details"
+                                   asp-route-id="@feature.ChangeRequestId"
+                                   class="dev-link-badge">
+                                    @feature.ChangeRequest.CrNumber
+                                </a>
+                            }
+                        </div>
+
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Description</div>
+                            <div class="dev-entity-value">@(string.IsNullOrWhiteSpace(feature.Description) ? "-" : feature.Description)</div>
+                        </div>
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Timeline</div>
+                            <div class="dev-entity-value">
+                                @if (feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue)
+                                {
+                                    @(feature.TimelineStart?.ToString("yyyy-MM-dd")) <span class="mx-1">-></span> @(feature.TimelineEnd?.ToString("yyyy-MM-dd"))
+                                }
+                                else
+                                {
+                                    @:-
+                                }
+                            </div>
+                        </div>
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Project</div>
+                            <div class="dev-entity-value">@(feature.ChangeRequest?.Title ?? "-")</div>
+                        </div>
+                    </article>
+                }
             </div>
         }
     </div>
+
+    <div class="task-list-section mb-4">
+        <div class="task-list-header danger">
+            <i class="bi bi-bug"></i>
+            Assigned Bugs
+            <span class="ms-auto badge rounded-pill" style="background:rgba(220,38,38,0.1); color:#dc2626; font-size:0.67rem">@openBugCount open</span>
+        </div>
+
+        @if (!assignedBugs.Any())
+        {
+            <div class="task-list-empty">
+                <i class="bi bi-inbox" style="font-size:1.5rem; opacity:0.25; display:block; margin-bottom:6px"></i>
+                No bugs assigned to you.
+            </div>
+        }
+        else
+        {
+            <div class="dev-entity-grid">
+                @foreach (var bug in assignedBugs)
+                {
+                    var bugStatusClass = bug.Status switch
+                    {
+                        BugStatus.Complete => "dp-badge-green",
+                        BugStatus.Testing => "dp-badge-indigo",
+                        _ => "dp-badge-red"
+                    };
+
+                    <article class="dev-entity-card">
+                        <div class="dev-entity-head">
+                            <div>
+                                <div class="dev-entity-code">@bug.BugNumber</div>
+                                <a asp-controller="Bug"
+                                   asp-action="Details"
+                                   asp-route-id="@bug.Id"
+                                   class="dev-entity-title">
+                                    @bug.Title
+                                </a>
+                            </div>
+                            <span class="dp-badge @bugStatusClass">@bug.Status</span>
+                        </div>
+
+                        <div class="dev-entity-badges">
+                            @if (bug.ChangeRequest != null)
+                            {
+                                <a asp-controller="ChangeRequest"
+                                   asp-action="Details"
+                                   asp-route-id="@bug.ChangeRequestId"
+                                   class="dev-link-badge">
+                                    @bug.ChangeRequest.CrNumber
+                                </a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(bug.ModuleImpacted))
+                            {
+                                <span class="dp-badge dp-badge-slate">@bug.ModuleImpacted</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(bug.PullRequestUrl))
+                            {
+                                <a href="@bug.PullRequestUrl" target="_blank" rel="noopener" class="dev-link-badge">
+                                    PR Link
+                                </a>
+                            }
+                        </div>
+
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Description</div>
+                            <div class="dev-entity-value">@(string.IsNullOrWhiteSpace(bug.Description) ? "-" : bug.Description)</div>
+                        </div>
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Workflow</div>
+                            <div class="dev-entity-value">@(string.IsNullOrWhiteSpace(bug.Workflow) ? "-" : bug.Workflow)</div>
+                        </div>
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Steps To Reproduce</div>
+                            <div class="dev-entity-value">@(string.IsNullOrWhiteSpace(bug.StepsToReproduce) ? "-" : bug.StepsToReproduce)</div>
+                        </div>
+                        <div class="dev-entity-field">
+                            <div class="dev-entity-label">Last Updated</div>
+                            <div class="dev-entity-value">@bug.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+
 }
 else
 {

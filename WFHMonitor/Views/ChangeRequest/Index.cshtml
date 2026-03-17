@@ -11,11 +11,9 @@
     };
     var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
     {
-        (WFHMonitor.Models.CrStage.ProjectStart, "Project Start"),
         (WFHMonitor.Models.CrStage.Development, "Development"),
         (WFHMonitor.Models.CrStage.Testing, "Testing"),
-        (WFHMonitor.Models.CrStage.Deploy, "Deploy"),
-        (WFHMonitor.Models.CrStage.DeploymentComplete, "Deployment Complete")
+        (WFHMonitor.Models.CrStage.Deploy, "Deploy")
     };
 }
 
@@ -404,7 +402,12 @@
                 var totalFeatures = cr.Features.Count;
                 var completedFeatures = cr.Features.Count(f => f.IsCompleted);
                 var featurePercent = totalFeatures == 0 ? 0 : (int)Math.Round(completedFeatures * 100.0 / totalFeatures);
-                var currentStageIndex = stageItems.FindIndex(s => s.Stage == cr.Stage);
+                var normalizedStage = cr.Stage == WFHMonitor.Models.CrStage.ProjectStart
+                    ? WFHMonitor.Models.CrStage.Development
+                    : cr.Stage == WFHMonitor.Models.CrStage.DeploymentComplete
+                        ? WFHMonitor.Models.CrStage.Deploy
+                        : cr.Stage;
+                var currentStageIndex = stageItems.FindIndex(s => s.Stage == normalizedStage);
                 if (currentStageIndex < 0) currentStageIndex = 0;
 
                 var summary = string.IsNullOrWhiteSpace(cr.Description)

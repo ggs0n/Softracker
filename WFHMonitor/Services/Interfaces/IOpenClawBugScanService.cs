@@ -15,6 +15,12 @@ public interface IOpenClawBugScanService
         BugReport bug,
         string? fixAgentId = null,
         CancellationToken cancellationToken = default);
+
+    Task<OpenClawFeatureImplementResult> ImplementFeatureAsync(
+        ProjectFeature feature,
+        ChangeRequest? project = null,
+        string? featureAgentId = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record OpenClawBugScanResult(
@@ -33,3 +39,8 @@ public sealed record OpenClawBugFixResult(
     bool Succeeded,
     string Error,
     string FixPlan);
+
+public sealed record OpenClawFeatureImplementResult(
+    bool Succeeded,
+    string Error,
+    string ImplementationPlan);

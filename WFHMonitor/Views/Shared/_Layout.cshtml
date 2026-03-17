@@ -3,6 +3,7 @@
 @using WFHMonitor.Models
 @using WFHMonitor.Services.Interfaces
 @inject INotificationService NotificationService
+@inject ISystemSettingsService SystemSettingsService
 @inject UserManager<ApplicationUser> UserManager
 
 <!DOCTYPE html>
@@ -31,6 +32,7 @@
     var currentUser = string.IsNullOrWhiteSpace(userId)
         ? null
         : await UserManager.FindByIdAsync(userId);
+    var runtimeAccess = await SystemSettingsService.BuildRuntimeAccessAsync(User);
     var isProActive = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && currentUser.IsProSubscriptionActive;
     var isProPending = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && !currentUser.IsProSubscriptionActive;
     var planIndicatorClass = isProActive ? "pro" : isProPending ? "pending" : "free";
@@ -45,6 +47,7 @@
     var isMonitorSectionActive = ctrl == "Monitor";
     var isPaymentSectionActive = ctrl == "Payment";
     var isTeamSectionActive = ctrl == "Team" || ctrl == "Agent" || (ctrl == "Admin" && act == "Employees");
+    var canShowProjectsGroup = runtimeAccess.CanViewAllProjects || runtimeAccess.CanViewFeatures || runtimeAccess.CanViewBugs;
 
     <aside class="sidebar">
         <a class="sidebar-brand" asp-controller="Home" asp-action="Index">
@@ -85,40 +88,49 @@
 
         <div class="sidebar-section-label">Management</div>
         <ul class="sidebar-nav">
-            <li class="sidebar-nav-group">
-                <a href="#projectsNavGroup"
-                   data-bs-toggle="collapse"
-                   role="button"
-                   aria-expanded="@(isProjectsSectionActive ? "true" : "false")"
-                   aria-controls="projectsNavGroup"
-                   class="sidebar-group-toggle @(isProjectsSectionActive ? "active" : "")">
-                    <span><i class="bi bi-file-earmark-diff"></i> Projects</span>
-                    <i class="bi bi-chevron-down sidebar-group-chevron"></i>
-                </a>
-                <ul class="sidebar-subnav collapse @(isProjectsSectionActive ? "show" : "")" id="projectsNavGroup">
-                    <li>
-                        <a asp-controller="ChangeRequest" asp-action="Index"
-                           class="@(ctrl == "ChangeRequest" && act != "Features" ? "active" : "")">
-                            <i class="bi bi-grid-1x2"></i> All Projects
-                        </a>
-                    </li>
-                    <li>
-                        <a asp-controller="ChangeRequest" asp-action="Features"
-                           class="@(ctrl == "ChangeRequest" && act == "Features" ? "active" : "")">
-                            <i class="bi bi-list-check"></i> Features
-                        </a>
-                    </li>
-                    @if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
-                    {
-                        <li>
-                            <a asp-controller="Bug" asp-action="Index"
-                               class="@(ctrl == "Bug" ? "active" : "")">
-                                <i class="bi bi-bug"></i> Bugs
-                            </a>
-                        </li>
-                    }
-                </ul>
-            </li>
+            @if (canShowProjectsGroup)
+            {
+                <li class="sidebar-nav-group">
+                    <a href="#projectsNavGroup"
+                       data-bs-toggle="collapse"
+                       role="button"
+                       aria-expanded="@(isProjectsSectionActive ? "true" : "false")"
+                       aria-controls="projectsNavGroup"
+                       class="sidebar-group-toggle @(isProjectsSectionActive ? "active" : "")">
+                        <span><i class="bi bi-file-earmark-diff"></i> Projects</span>
+                        <i class="bi bi-chevron-down sidebar-group-chevron"></i>
+                    </a>
+                    <ul class="sidebar-subnav collapse @(isProjectsSectionActive ? "show" : "")" id="projectsNavGroup">
+                        @if (runtimeAccess.CanViewAllProjects)
+                        {
+                            <li>
+                                <a asp-controller="ChangeRequest" asp-action="Index"
+                                   class="@(ctrl == "ChangeRequest" && act != "Features" ? "active" : "")">
+                                    <i class="bi bi-grid-1x2"></i> All Projects
+                                </a>
+                            </li>
+                        }
+                        @if (runtimeAccess.CanViewFeatures)
+                        {
+                            <li>
+                                <a asp-controller="ChangeRequest" asp-action="Features"
+                                   class="@(ctrl == "ChangeRequest" && act == "Features" ? "active" : "")">
+                                    <i class="bi bi-list-check"></i> Features
+                                </a>
+                            </li>
+                        }
+                        @if (runtimeAccess.CanViewBugs)
+                        {
+                            <li>
+                                <a asp-controller="Bug" asp-action="Index"
+                                   class="@(ctrl == "Bug" ? "active" : "")">
+                                    <i class="bi bi-bug"></i> Bugs
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </li>
+            }
             @if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
             {
                 <li>
@@ -202,6 +214,9 @@
                     <button class="btn btn-sm btn-outline-secondary notification-btn"
                             id="notificationBellButton"
                             type="button"
+                            data-initial-unread="@notificationBell.UnreadCount"
+                            data-bell-sound-enabled="@(runtimeAccess.BellNotificationSoundEnabled.ToString().ToLowerInvariant())"
+                            data-bell-sound-option="@runtimeAccess.BellNotificationSoundOption"
                             data-bs-toggle="dropdown"
                             data-bs-auto-close="outside"
                             aria-expanded="false">
@@ -215,6 +230,12 @@
                         @await Html.PartialAsync("_NotificationDropdown", notificationDropdownModel)
                     </div>
                 </div>
+                @if (User.IsInRole("Admin"))
+                {
+                    <a asp-controller="Settings" asp-action="Index" class="btn btn-sm btn-outline-secondary notification-btn settings-top-btn" title="Settings">
+                        <i class="bi bi-gear"></i>
+                    </a>
+                }
             </div>
         </div>
 
@@ -261,6 +282,14 @@ else
         }
 
         let isRefreshing = false;
+        let previousUnreadCount = parseInt(bellButton.getAttribute('data-initial-unread') || '0', 10);
+        if (Number.isNaN(previousUnreadCount)) {
+            previousUnreadCount = 0;
+        }
+
+        const isBellSoundEnabled = (bellButton.getAttribute('data-bell-sound-enabled') || '').toLowerCase() === 'true';
+        const bellSoundOption = (bellButton.getAttribute('data-bell-sound-option') || 'classic').toLowerCase();
+        let audioContext = null;
 
         function updateBadge(unreadCount) {
             const count = Number.isFinite(unreadCount) ? unreadCount : 0;
@@ -280,6 +309,77 @@ else
             }
 
             badge.textContent = count > 99 ? '99+' : String(count);
+        }
+
+        function getAudioContext() {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) {
+                return null;
+            }
+
+            if (!audioContext) {
+                audioContext = new AudioCtx();
+            }
+
+            return audioContext;
+        }
+
+        document.addEventListener('click', function () {
+            const ctx = getAudioContext();
+            if (ctx && ctx.state === 'suspended') {
+                ctx.resume().catch(function () { });
+            }
+        }, { once: true });
+
+        function playNotificationSound() {
+            if (!isBellSoundEnabled) {
+                return;
+            }
+
+            const ctx = getAudioContext();
+            if (!ctx) {
+                return;
+            }
+
+            try {
+                const now = ctx.currentTime;
+                const playTone = function (freq, startOffset, duration, volume, type) {
+                    const oscillator = ctx.createOscillator();
+                    const gain = ctx.createGain();
+
+                    oscillator.type = type || 'sine';
+                    oscillator.frequency.setValueAtTime(freq, now + startOffset);
+
+                    gain.gain.setValueAtTime(0.0001, now + startOffset);
+                    gain.gain.exponentialRampToValueAtTime(volume, now + startOffset + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+                    oscillator.connect(gain);
+                    gain.connect(ctx.destination);
+                    oscillator.start(now + startOffset);
+                    oscillator.stop(now + startOffset + duration + 0.02);
+                };
+
+                switch (bellSoundOption) {
+                    case 'soft':
+                        playTone(740, 0.00, 0.22, 0.07, 'sine');
+                        break;
+                    case 'chime':
+                        playTone(880, 0.00, 0.12, 0.09, 'triangle');
+                        playTone(1175, 0.14, 0.16, 0.08, 'triangle');
+                        break;
+                    case 'alert':
+                        playTone(780, 0.00, 0.08, 0.10, 'square');
+                        playTone(980, 0.10, 0.08, 0.10, 'square');
+                        playTone(780, 0.20, 0.09, 0.09, 'square');
+                        break;
+                    default:
+                        playTone(920, 0.00, 0.16, 0.10, 'sine');
+                        break;
+                }
+            } catch {
+                // Ignore browser audio errors.
+            }
         }
 
         async function refreshNotificationBell() {
@@ -307,7 +407,14 @@ else
                 const menu = dropdownHost.querySelector('.notification-menu');
                 const unreadRaw = menu ? menu.getAttribute('data-unread-count') : '0';
                 const unreadCount = parseInt(unreadRaw || '0', 10);
-                updateBadge(Number.isNaN(unreadCount) ? 0 : unreadCount);
+                const normalizedUnread = Number.isNaN(unreadCount) ? 0 : unreadCount;
+
+                if (normalizedUnread > previousUnreadCount) {
+                    playNotificationSound();
+                }
+
+                previousUnreadCount = normalizedUnread;
+                updateBadge(normalizedUnread);
             } catch {
                 // Ignore transient polling errors.
             } finally {

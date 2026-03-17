@@ -1,0 +1,218 @@
+@model WFHMonitor.ViewModels.SettingsPageViewModel
+@{
+    ViewData["Title"] = "Settings";
+    var isModulePermissionMenu = string.Equals(Model.ActiveMenu, "ModulePermission", StringComparison.OrdinalIgnoreCase);
+    var isBellNotificationMenu = string.Equals(Model.ActiveMenu, "BellNotification", StringComparison.OrdinalIgnoreCase);
+    var soundOptions = new (string Value, string Label)[]
+    {
+        ("classic", "Classic Bell"),
+        ("soft", "Soft Ping"),
+        ("chime", "Double Chime"),
+        ("alert", "Alert Tone")
+    };
+}
+
+<div class="mod-header mb-4">
+    <div class="mod-header-left">
+        <h1 class="mod-title"><i class="bi bi-gear" style="color:var(--accent)"></i> Settings</h1>
+        <p class="mod-subtitle">Admin controls for module access and notification behavior</p>
+    </div>
+</div>
+
+<div class="settings-layout">
+    <aside class="settings-menu">
+        <a asp-action="Index"
+           asp-route-menu="ModulePermission"
+           class="settings-menu-item @(isModulePermissionMenu ? "active" : "")">
+            <i class="bi bi-shield-lock"></i>
+            <span>
+                <strong>Module Permission</strong>
+                <small>Choose who can view and modify modules</small>
+            </span>
+        </a>
+
+        <a asp-action="Index"
+           asp-route-menu="BellNotification"
+           class="settings-menu-item @(isBellNotificationMenu ? "active" : "")">
+            <i class="bi bi-bell"></i>
+            <span>
+                <strong>Bell Notification</strong>
+                <small>Enable or disable notification sound</small>
+            </span>
+        </a>
+    </aside>
+
+    <section class="settings-content">
+        @if (isModulePermissionMenu)
+        {
+            <div class="card">
+                <div class="card-header bg-light fw-semibold">
+                    <i class="bi bi-shield-lock me-2"></i>Module Permission
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveModulePermissions" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ActiveMenu" value="ModulePermission" />
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle settings-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Module</th>
+                                        <th>Who Can View</th>
+                                        <th>Who Can Modify</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (var i = 0; i < Model.Modules.Count; i++)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <input type="hidden" asp-for="Modules[i].ModuleKey" />
+                                                <input type="hidden" asp-for="Modules[i].DisplayName" />
+                                                <span class="fw-semibold">@Model.Modules[i].DisplayName</span>
+                                            </td>
+                                            <td>
+                                                <div class="settings-role-grid">
+                                                    <label><input asp-for="Modules[i].CanViewAdmin" type="checkbox" /> Admin</label>
+                                                    <label><input asp-for="Modules[i].CanViewTester" type="checkbox" /> Tester</label>
+                                                    <label><input asp-for="Modules[i].CanViewDeveloper" type="checkbox" /> Developer</label>
+                                                    <label><input asp-for="Modules[i].CanViewAgent" type="checkbox" /> Agent</label>
+                                                    <label><input asp-for="Modules[i].CanViewEmployee" type="checkbox" /> Employee</label>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="settings-role-grid">
+                                                    <label><input asp-for="Modules[i].CanModifyAdmin" type="checkbox" /> Admin</label>
+                                                    <label><input asp-for="Modules[i].CanModifyTester" type="checkbox" /> Tester</label>
+                                                    <label><input asp-for="Modules[i].CanModifyDeveloper" type="checkbox" /> Developer</label>
+                                                    <label><input asp-for="Modules[i].CanModifyAgent" type="checkbox" /> Agent</label>
+                                                    <label><input asp-for="Modules[i].CanModifyEmployee" type="checkbox" /> Employee</label>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit" class="dp-btn-primary">
+                                <i class="bi bi-check2-circle"></i> Save Module Permission
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+
+        @if (isBellNotificationMenu)
+        {
+            <div class="card">
+                <div class="card-header bg-light fw-semibold">
+                    <i class="bi bi-bell me-2"></i>Bell Notification
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveBellNotification" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ActiveMenu" value="BellNotification" />
+
+                        <div class="settings-toggle-row mb-3">
+                            <div>
+                                <div class="fw-semibold">Notification Sound</div>
+                                <div class="text-muted small">Play a short sound when unread bell notification count increases.</div>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" asp-for="BellNotificationSoundEnabled" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="BellNotificationSoundOption" class="form-label fw-semibold">Sound Type</label>
+                            <select asp-for="BellNotificationSoundOption" class="form-select form-select-sm" id="bellSoundOptionSelect">
+                                @foreach (var option in soundOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
+                            <div class="text-muted small mt-1">Choose which sound plays when new bell notifications arrive.</div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" id="testBellSoundButton" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-volume-up me-1"></i>Test Sound
+                            </button>
+                            <button type="submit" class="dp-btn-primary">
+                                <i class="bi bi-check2-circle"></i> Save Bell Notification
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const testButton = document.getElementById('testBellSoundButton');
+            const soundOptionSelect = document.getElementById('bellSoundOptionSelect');
+            if (!testButton) {
+                return;
+            }
+
+            function playSoundProfile(soundOption) {
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) {
+                        return;
+                    }
+
+                    const ctx = new AudioCtx();
+                    const now = ctx.currentTime;
+                    const playTone = function (freq, startOffset, duration, volume, type) {
+                        const oscillator = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        oscillator.type = type || 'sine';
+                        oscillator.frequency.setValueAtTime(freq, now + startOffset);
+
+                        gain.gain.setValueAtTime(0.0001, now + startOffset);
+                        gain.gain.exponentialRampToValueAtTime(volume, now + startOffset + 0.01);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+                        oscillator.connect(gain);
+                        gain.connect(ctx.destination);
+                        oscillator.start(now + startOffset);
+                        oscillator.stop(now + startOffset + duration + 0.02);
+                    };
+
+                    switch ((soundOption || 'classic').toLowerCase()) {
+                        case 'soft':
+                            playTone(740, 0.00, 0.22, 0.07, 'sine');
+                            break;
+                        case 'chime':
+                            playTone(880, 0.00, 0.12, 0.09, 'triangle');
+                            playTone(1175, 0.14, 0.16, 0.08, 'triangle');
+                            break;
+                        case 'alert':
+                            playTone(780, 0.00, 0.08, 0.10, 'square');
+                            playTone(980, 0.10, 0.08, 0.10, 'square');
+                            playTone(780, 0.20, 0.09, 0.09, 'square');
+                            break;
+                        default:
+                            playTone(920, 0.00, 0.16, 0.10, 'sine');
+                            break;
+                    }
+                } catch {
+                    // Ignore unsupported browser or autoplay restrictions.
+                }
+            }
+
+            testButton.addEventListener('click', function () {
+                const selected = soundOptionSelect ? soundOptionSelect.value : 'classic';
+                playSoundProfile(selected);
+            });
+        })();
+    </script>
+}

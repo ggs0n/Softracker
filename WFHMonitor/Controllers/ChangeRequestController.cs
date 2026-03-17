@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
@@ -18,13 +19,30 @@ namespace WFHMonitor.Controllers;
 public class ChangeRequestController : Controller
 {
     private const int FreeChangeRequestLimit = 5;
+    private static readonly HashSet<string> AllProjectsViewActions = [nameof(Index), nameof(Details)];
+    private static readonly HashSet<string> FeaturesViewActions = [nameof(Features), nameof(FeatureDetails)];
+    private static readonly HashSet<string> FeaturesModifyActions =
+    [
+        nameof(CreateFeature),
+        nameof(EditFeature),
+        nameof(DeleteFeature),
+        nameof(PickupFeature),
+        nameof(AssignFeatureToAgent),
+        nameof(UploadFeatureScreenshot),
+        nameof(DeleteFeatureScreenshot),
+        nameof(AddFeature),
+        nameof(ToggleFeature)
+    ];
 
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IGitHubService _gitHub;
     private readonly IBugService _bugService;
     private readonly IOpenClawBugScanService _openClawBugScanService;
+    private readonly IFeatureAgentQueueService _featureAgentQueueService;
+    private readonly INotificationService _notificationService;
     private readonly OpenClawSettings _openClawSettings;
+    private readonly ISystemSettingsService _systemSettingsService;
     private readonly IWebHostEnvironment env;
 
     public ChangeRequestController(
@@ -33,6 +51,9 @@ public class ChangeRequestController : Controller
         IGitHubService gitHub,
         IBugService bugService,
         IOpenClawBugScanService openClawBugScanService,
+        IFeatureAgentQueueService featureAgentQueueService,
+        INotificationService notificationService,
+        ISystemSettingsService systemSettingsService,
         Microsoft.Extensions.Options.IOptions<OpenClawSettings> openClawSettings,
         IWebHostEnvironment env)
     {
@@ -41,8 +62,35 @@ public class ChangeRequestController : Controller
         _gitHub = gitHub;
         _bugService = bugService;
         _openClawBugScanService = openClawBugScanService;
+        _featureAgentQueueService = featureAgentQueueService;
+        _notificationService = notificationService;
+        _systemSettingsService = systemSettingsService;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
         this.env = env;
+    }
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var actionName = context.ActionDescriptor.RouteValues.TryGetValue("action", out var action)
+            ? action ?? string.Empty
+            : string.Empty;
+
+        var permissionCheck = ResolvePermissionCheck(actionName);
+        if (permissionCheck is not null)
+        {
+            var (moduleKey, requiresModify) = permissionCheck.Value;
+            var allowed = requiresModify
+                ? await _systemSettingsService.CanModifyModuleAsync(User, moduleKey)
+                : await _systemSettingsService.CanViewModuleAsync(User, moduleKey);
+
+            if (!allowed)
+            {
+                context.Result = Forbid();
+                return;
+            }
+        }
+
+        await next();
     }
 
     public async Task<IActionResult> Index()
@@ -83,17 +131,18 @@ public class ChangeRequestController : Controller
             .Include(f => f.ChangeRequest)
                 .ThenInclude(c => c!.CreatedBy)
             .Include(f => f.AssignedDeveloper)
+            .Include(f => f.Screenshots.OrderByDescending(s => s.UploadedAt))
             .AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == featureId);
         if (feature == null) return NotFound();
+        if (!await CanViewProjectAsync(feature.ChangeRequestId))
+            return Forbid();
 
-        if (User.IsInRole("Developer"))
-        {
-            var userId = _userManager.GetUserId(User);
-            var hasAccess = await _db.ChangeRequestPics
-                .AnyAsync(p => p.ChangeRequestId == feature.ChangeRequestId && p.EmployeeId == userId);
-            if (!hasAccess) return Forbid();
-        }
+        var currentUser = await _userManager.GetUserAsync(User);
+        ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
+        ViewBag.OpenClawFeatureAgentOptions = GetOpenClawFeatureAgentOptions();
+        if (User.IsInRole("Admin") || User.IsInRole("Agent"))
+            ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
 
         return View(feature);
     }
@@ -108,6 +157,7 @@ public class ChangeRequestController : Controller
             ProjectOptions = await GetProjectOptionsAsync(),
             DeveloperOptions = await GetDeveloperOptionsAsync()
         };
+        EnsureDefaultFeatureTimeline(vm);
 
         return View(vm);
     }
@@ -116,6 +166,8 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateFeature(CreateProjectFeatureViewModel model)
     {
+        EnsureDefaultFeatureTimeline(model);
+
         if (!ModelState.IsValid)
         {
             model.ProjectOptions = await GetEditableProjectOptionsAsync();
@@ -137,9 +189,9 @@ public class ChangeRequestController : Controller
         if (!string.IsNullOrWhiteSpace(model.AssignedDeveloperId))
         {
             var assignedUser = await _userManager.FindByIdAsync(model.AssignedDeveloperId);
-            if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+            if (assignedUser == null || !await IsFeatureAssigneeValidAsync(assignedUser))
             {
-                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected developer not found.");
+                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected assignee must be a Developer or Agent.");
                 model.ProjectOptions = await GetEditableProjectOptionsAsync();
                 model.DeveloperOptions = await GetDeveloperOptionsAsync();
                 return View(model);
@@ -162,12 +214,15 @@ public class ChangeRequestController : Controller
         var isCompleted = model.Status == CrStatus.Done;
         var featureNumber = await GenerateNextFeatureNumberAsync(DateTime.UtcNow.Year);
 
-        _db.ProjectFeatures.Add(new ProjectFeature
+        var feature = new ProjectFeature
         {
             ChangeRequestId = model.ChangeRequestId,
             FeatureNumber = featureNumber,
             Name = normalizedName,
             Description = model.Description?.Trim(),
+            ModuleImpacted = model.ModuleImpacted?.Trim(),
+            LinkedBugs = model.LinkedBugs?.Trim(),
+            PullRequestUrl = model.PullRequestUrl?.Trim(),
             Status = model.Status,
             Priority = model.Priority,
             Stage = model.Stage,
@@ -178,9 +233,11 @@ public class ChangeRequestController : Controller
                 : model.AssignedDeveloperId.Trim(),
             IsCompleted = isCompleted,
             IsAutoDetected = false
-        });
+        };
+        _db.ProjectFeatures.Add(feature);
 
         await _db.SaveChangesAsync();
+        await NotifyDeveloperFeatureAssignmentAsync(feature);
         TempData["Success"] = $"Feature \"{normalizedName}\" created.";
 
         if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
@@ -204,6 +261,9 @@ public class ChangeRequestController : Controller
             ChangeRequestId = feature.ChangeRequestId,
             Name = feature.Name,
             Description = feature.Description,
+            ModuleImpacted = feature.ModuleImpacted,
+            LinkedBugs = feature.LinkedBugs,
+            PullRequestUrl = feature.PullRequestUrl,
             Status = feature.Status,
             Priority = feature.Priority,
             Stage = feature.Stage,
@@ -248,9 +308,9 @@ public class ChangeRequestController : Controller
         if (!string.IsNullOrWhiteSpace(model.AssignedDeveloperId))
         {
             var assignedUser = await _userManager.FindByIdAsync(model.AssignedDeveloperId);
-            if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+            if (assignedUser == null || !await IsFeatureAssigneeValidAsync(assignedUser))
             {
-                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected developer not found.");
+                ModelState.AddModelError(nameof(model.AssignedDeveloperId), "Selected assignee must be a Developer or Agent.");
                 model.ProjectOptions = await GetProjectOptionsAsync();
                 model.DeveloperOptions = await GetDeveloperOptionsAsync();
                 return View(model);
@@ -270,9 +330,14 @@ public class ChangeRequestController : Controller
             return View(model);
         }
 
+        var oldAssignedDeveloperId = feature.AssignedDeveloperId;
+
         feature.ChangeRequestId = model.ChangeRequestId;
         feature.Name = normalizedName;
         feature.Description = model.Description?.Trim();
+        feature.ModuleImpacted = model.ModuleImpacted?.Trim();
+        feature.LinkedBugs = model.LinkedBugs?.Trim();
+        feature.PullRequestUrl = model.PullRequestUrl?.Trim();
         feature.Status = model.Status;
         feature.Priority = model.Priority;
         feature.Stage = model.Stage;
@@ -284,6 +349,7 @@ public class ChangeRequestController : Controller
         feature.IsCompleted = model.Status == CrStatus.Done;
 
         await _db.SaveChangesAsync();
+        await NotifyDeveloperFeatureAssignmentAsync(feature, oldAssignedDeveloperId);
         TempData["Success"] = $"Feature \"{feature.Name}\" updated.";
 
         if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
@@ -292,12 +358,166 @@ public class ChangeRequestController : Controller
         return RedirectToAction(nameof(Features), new { projectId = model.ChangeRequestId });
     }
 
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Agent")]
+    public async Task<IActionResult> PickupFeature(int featureId, string? featureAgentId, string? assignedAgentId, string? returnUrl)
+    {
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var currentUser = await _userManager.FindByIdAsync(userId);
+        if (currentUser == null || !HasActiveProAccess(currentUser))
+        {
+            TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
+            return RedirectToAction("Index", "Payment");
+        }
+
+        var feature = await _db.ProjectFeatures
+            .FirstOrDefaultAsync(f => f.Id == featureId);
+        if (feature == null) return NotFound();
+        if (!await CanViewProjectAsync(feature.ChangeRequestId))
+            return Forbid();
+
+        var configuredFeatureAgentIds = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
+        var selectedFeatureAgentId = string.IsNullOrWhiteSpace(featureAgentId)
+            ? configuredFeatureAgentIds.FirstOrDefault() ?? "main"
+            : featureAgentId.Trim();
+        if (configuredFeatureAgentIds.Count > 0 &&
+            !configuredFeatureAgentIds.Any(a => a.Equals(selectedFeatureAgentId, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = "Selected OpenClaw feature agent is not allowed by configuration.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var assignToAgentId = string.IsNullOrWhiteSpace(assignedAgentId)
+            ? userId
+            : assignedAgentId.Trim();
+        if (string.IsNullOrWhiteSpace(assignToAgentId))
+        {
+            TempData["Error"] = "Agent user not found. Create an Agent user first.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var assignedUser = await _userManager.FindByIdAsync(assignToAgentId);
+        if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Agent"))
+        {
+            TempData["Error"] = "Selected app agent user is invalid.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        if (User.IsInRole("Agent") && !string.Equals(assignToAgentId, userId, StringComparison.Ordinal))
+            return Forbid();
+
+        if (User.IsInRole("Agent"))
+        {
+            if (!string.IsNullOrWhiteSpace(feature.AssignedDeveloperId) &&
+                !string.Equals(feature.AssignedDeveloperId, userId, StringComparison.Ordinal))
+            {
+                TempData["Error"] = "This feature is already assigned to another user.";
+                return RedirectFeatureLocal(returnUrl, featureId);
+            }
+        }
+
+        var wasAgentProcessing = feature.AgentStatus is FeatureAgentStatus.Queued or FeatureAgentStatus.InProgress;
+        feature.AssignedDeveloperId = assignToAgentId;
+        feature.AgentStatus = FeatureAgentStatus.Queued;
+        feature.AgentLastRunAt = DateTime.UtcNow;
+        if (feature.Status == CrStatus.Draft)
+            feature.Status = CrStatus.InProgress;
+        if (feature.Stage == CrStage.ProjectStart || feature.Stage == CrStage.DeploymentComplete)
+            feature.Stage = CrStage.Development;
+
+        await _db.SaveChangesAsync();
+        await _featureAgentQueueService.EnqueueAsync(new FeatureAgentQueueItem(
+            feature.Id,
+            selectedFeatureAgentId,
+            assignToAgentId,
+            userId),
+            HttpContext.RequestAborted);
+
+        TempData["Success"] = wasAgentProcessing
+            ? $"OpenClaw feature run re-queued with '{selectedFeatureAgentId}'."
+            : $"OpenClaw feature run queued with '{selectedFeatureAgentId}'.";
+        return RedirectFeatureLocal(returnUrl, featureId);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AssignFeatureToAgent(int featureId, string assignedAgentId, string? featureAgentId, string? returnUrl)
+    {
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var currentUser = await _userManager.FindByIdAsync(userId);
+        if (currentUser == null || !HasActiveProAccess(currentUser))
+        {
+            TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
+            return RedirectToAction("Index", "Payment");
+        }
+
+        assignedAgentId = (assignedAgentId ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(assignedAgentId))
+        {
+            TempData["Error"] = "Please select an agent.";
+            return RedirectToAction(nameof(FeatureDetails), new { featureId });
+        }
+
+        var feature = await _db.ProjectFeatures
+            .FirstOrDefaultAsync(f => f.Id == featureId);
+        if (feature == null) return NotFound();
+        if (!await CanEditFeatureProjectAsync(feature.ChangeRequestId))
+            return Forbid();
+
+        var configuredFeatureAgentIds = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
+        var selectedFeatureAgentId = string.IsNullOrWhiteSpace(featureAgentId)
+            ? configuredFeatureAgentIds.FirstOrDefault() ?? "main"
+            : featureAgentId.Trim();
+        if (configuredFeatureAgentIds.Count > 0 &&
+            !configuredFeatureAgentIds.Any(a => a.Equals(selectedFeatureAgentId, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = "Selected OpenClaw feature agent is not allowed by configuration.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var agentUser = await _userManager.FindByIdAsync(assignedAgentId);
+        if (agentUser == null || !await _userManager.IsInRoleAsync(agentUser, "Agent"))
+        {
+            TempData["Error"] = "Selected agent user is invalid.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var wasAgentProcessing = feature.AgentStatus is FeatureAgentStatus.Queued or FeatureAgentStatus.InProgress;
+        feature.AssignedDeveloperId = agentUser.Id;
+        feature.AgentStatus = FeatureAgentStatus.Queued;
+        feature.AgentLastRunAt = DateTime.UtcNow;
+        if (feature.Status == CrStatus.Draft)
+            feature.Status = CrStatus.InProgress;
+        if (feature.Stage == CrStage.ProjectStart || feature.Stage == CrStage.DeploymentComplete)
+            feature.Stage = CrStage.Development;
+        await _db.SaveChangesAsync();
+        await _featureAgentQueueService.EnqueueAsync(new FeatureAgentQueueItem(
+            feature.Id,
+            selectedFeatureAgentId,
+            agentUser.Id,
+            userId),
+            HttpContext.RequestAborted);
+
+        TempData["Success"] = wasAgentProcessing
+            ? $"Feature re-queued for agent {agentUser.FullName} with '{selectedFeatureAgentId}'."
+            : $"Feature assigned to agent {agentUser.FullName} and queued with '{selectedFeatureAgentId}'.";
+        return RedirectFeatureLocal(returnUrl, featureId);
+    }
+
     public async Task<IActionResult> Details(int id)
     {
         var projectForSync = await _db.ChangeRequests
             .AsTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (projectForSync == null) return NotFound();
+        if (!await CanViewProjectAsync(projectForSync.Id))
+            return Forbid();
 
         if (TryResolveGitHubConfig(projectForSync, out var syncOwner, out var syncRepo, out var syncBranch))
         {
@@ -430,7 +650,11 @@ public class ChangeRequestController : Controller
         if (cr == null)
             throw new InvalidOperationException("Unable to create project number. Please retry.");
 
-        foreach (var pic in model.Pics.Where(p => !string.IsNullOrEmpty(p.EmployeeId)))
+        var selectedPics = model.Pics
+            .Where(p => !string.IsNullOrWhiteSpace(p.EmployeeId))
+            .ToList();
+
+        foreach (var pic in selectedPics)
         {
             _db.ChangeRequestPics.Add(new ChangeRequestPic
             {
@@ -457,6 +681,7 @@ public class ChangeRequestController : Controller
         }
 
         await _db.SaveChangesAsync();
+        await NotifyDeveloperProjectAssignmentsAsync(cr, selectedPics);
 
         TempData["Success"] = $"Project {cr.CrNumber} created.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
@@ -579,6 +804,11 @@ public class ChangeRequestController : Controller
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
 
+        var oldPicEmployeeIds = cr.Pics
+            .Where(p => !string.IsNullOrWhiteSpace(p.EmployeeId))
+            .Select(p => p.EmployeeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         cr.Title = model.Title;
         cr.Description = model.Description;
         cr.Status = model.Status;
@@ -597,7 +827,11 @@ public class ChangeRequestController : Controller
         cr.UpdatedAt = DateTime.UtcNow;
 
         _db.ChangeRequestPics.RemoveRange(cr.Pics);
-        foreach (var pic in model.Pics.Where(p => !string.IsNullOrEmpty(p.EmployeeId)))
+        var selectedPics = model.Pics
+            .Where(p => !string.IsNullOrWhiteSpace(p.EmployeeId))
+            .ToList();
+
+        foreach (var pic in selectedPics)
         {
             _db.ChangeRequestPics.Add(new ChangeRequestPic
             {
@@ -608,6 +842,7 @@ public class ChangeRequestController : Controller
         }
 
         await _db.SaveChangesAsync();
+        await NotifyDeveloperProjectAssignmentsAsync(cr, selectedPics, oldPicEmployeeIds);
         TempData["Success"] = "Project updated.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
     }
@@ -619,6 +854,8 @@ public class ChangeRequestController : Controller
         var cr = await _db.ChangeRequests
             .Include(c => c.ArchSpecImages)
             .Include(c => c.Documents)
+            .Include(c => c.Features)
+                .ThenInclude(f => f.Screenshots)
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
 
@@ -627,6 +864,11 @@ public class ChangeRequestController : Controller
             DeleteImageFile(img.FileName, env);
         foreach (var doc in cr.Documents)
             DeleteDocumentFile(doc.FileName, env);
+        foreach (var feature in cr.Features)
+        {
+            foreach (var shot in feature.Screenshots)
+                DeleteFeatureScreenshotFile(shot.FileName, env);
+        }
 
         _db.ChangeRequests.Remove(cr);
         await _db.SaveChangesAsync();
@@ -852,6 +1094,8 @@ public class ChangeRequestController : Controller
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (project == null) return NotFound();
+        if (!await CanViewProjectAsync(project.Id))
+            return Forbid();
 
         var userId = _userManager.GetUserId(User);
         if (string.IsNullOrWhiteSpace(userId))
@@ -862,13 +1106,6 @@ public class ChangeRequestController : Controller
         {
             TempData["Error"] = "Find Bugs (OpenClaw) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
-        }
-
-        if (User.IsInRole("Developer"))
-        {
-            var hasAccess = await _db.ChangeRequestPics
-                .AnyAsync(p => p.ChangeRequestId == id && p.EmployeeId == userId);
-            if (!hasAccess) return Forbid();
         }
 
         var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
@@ -970,9 +1207,10 @@ public class ChangeRequestController : Controller
             FeatureNumber = await GenerateNextFeatureNumberAsync(DateTime.UtcNow.Year),
             Name = name.Trim(),
             Description = description?.Trim(),
+            ModuleImpacted = "General",
             Status = CrStatus.Draft,
             Priority = CrPriority.Medium,
-            Stage = CrStage.ProjectStart,
+            Stage = CrStage.Development,
             IsCompleted = false
         });
         await _db.SaveChangesAsync();
@@ -1001,10 +1239,15 @@ public class ChangeRequestController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteFeature(int featureId, string? returnUrl)
     {
-        var feature = await _db.ProjectFeatures.FindAsync(featureId);
+        var feature = await _db.ProjectFeatures
+            .Include(f => f.Screenshots)
+            .FirstOrDefaultAsync(f => f.Id == featureId);
         if (feature == null) return NotFound();
 
         var crId = feature.ChangeRequestId;
+        foreach (var shot in feature.Screenshots)
+            DeleteFeatureScreenshotFile(shot.FileName, env);
+
         _db.ProjectFeatures.Remove(feature);
         await _db.SaveChangesAsync();
 
@@ -1016,15 +1259,95 @@ public class ChangeRequestController : Controller
         return RedirectToAction(nameof(Details), new { id = crId });
     }
 
-    private async Task<List<ChangeRequest>> GetVisibleProjectsAsync(IQueryable<ChangeRequest> query)
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Developer,Agent")]
+    public async Task<IActionResult> UploadFeatureScreenshot(int featureId, IFormFile file, string? returnUrl)
     {
-        if (!User.IsInRole("Developer"))
-            return await query.ToListAsync();
+        var feature = await _db.ProjectFeatures
+            .Include(f => f.ChangeRequest)
+            .FirstOrDefaultAsync(f => f.Id == featureId);
+        if (feature == null) return NotFound();
+        if (!await CanViewProjectAsync(feature.ChangeRequestId))
+            return Forbid();
 
         var userId = _userManager.GetUserId(User);
-        return await query
-            .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
-            .ToListAsync();
+        if (!CanManageFeatureEvidence(feature, userId))
+            return Forbid();
+
+        if (file == null || file.Length == 0)
+        {
+            TempData["Error"] = "Please select a screenshot file.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowed.Contains(ext))
+        {
+            TempData["Error"] = "Only image files (jpg, png, gif, webp) are allowed.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        if (file.Length > 10 * 1024 * 1024)
+        {
+            TempData["Error"] = "Screenshot must be under 10 MB.";
+            return RedirectFeatureLocal(returnUrl, featureId);
+        }
+
+        var fileName = $"{featureId}_{Guid.NewGuid():N}{ext}";
+        var folder = Path.Combine(env.WebRootPath, "uploads", "features", "screenshots");
+        Directory.CreateDirectory(folder);
+        var uploadPath = Path.Combine(folder, fileName);
+
+        using (var stream = System.IO.File.Create(uploadPath))
+            await file.CopyToAsync(stream);
+
+        _db.FeatureScreenshots.Add(new FeatureScreenshot
+        {
+            ProjectFeatureId = featureId,
+            FileName = fileName,
+            OriginalFileName = Path.GetFileName(file.FileName)
+        });
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Feature screenshot uploaded.";
+        return RedirectFeatureLocal(returnUrl, featureId);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Developer,Agent")]
+    public async Task<IActionResult> DeleteFeatureScreenshot(int screenshotId, int featureId, string? returnUrl)
+    {
+        var screenshot = await _db.FeatureScreenshots
+            .Include(s => s.ProjectFeature)
+            .FirstOrDefaultAsync(s => s.Id == screenshotId);
+        if (screenshot == null) return NotFound();
+        if (screenshot.ProjectFeatureId != featureId)
+            return NotFound();
+        if (screenshot.ProjectFeature == null)
+            return NotFound();
+        if (!await CanViewProjectAsync(screenshot.ProjectFeature.ChangeRequestId))
+            return Forbid();
+
+        var userId = _userManager.GetUserId(User);
+        if (!CanManageFeatureEvidence(screenshot.ProjectFeature, userId))
+            return Forbid();
+
+        DeleteFeatureScreenshotFile(screenshot.FileName, env);
+        _db.FeatureScreenshots.Remove(screenshot);
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Feature screenshot deleted.";
+        return RedirectFeatureLocal(returnUrl, featureId);
+    }
+
+    private async Task<List<ChangeRequest>> GetVisibleProjectsAsync(IQueryable<ChangeRequest> query)
+    {
+        if (User.IsInRole("Admin"))
+            return await query.ToListAsync();
+
+        var userTeamId = await GetCurrentOrgTeamIdAsync();
+        return await ApplyOrgTeamVisibility(query, userTeamId).ToListAsync();
     }
 
     private async Task<bool> HasReachedFreeChangeRequestLimitAsync(string userId)
@@ -1042,6 +1365,26 @@ public class ChangeRequestController : Controller
     private static bool HasActiveProAccess(ApplicationUser user) =>
         user.SubscriptionPlan == SubscriptionPlan.Pro && user.IsProSubscriptionActive;
 
+    private static (string ModuleKey, bool RequiresModify)? ResolvePermissionCheck(string actionName)
+    {
+        if (string.IsNullOrWhiteSpace(actionName))
+            return null;
+
+        if (string.Equals(actionName, nameof(PickupFeature), StringComparison.OrdinalIgnoreCase))
+            return (AppModuleKeys.Features, false);
+
+        if (FeaturesViewActions.Contains(actionName))
+            return (AppModuleKeys.Features, false);
+
+        if (FeaturesModifyActions.Contains(actionName))
+            return (AppModuleKeys.Features, true);
+
+        if (AllProjectsViewActions.Contains(actionName))
+            return (AppModuleKeys.AllProjects, false);
+
+        return (AppModuleKeys.AllProjects, true);
+    }
+
     private void DeleteImageFile(string fileName, IWebHostEnvironment environment)
     {
         var path = Path.Combine(environment.WebRootPath, "uploads", "archspec", fileName);
@@ -1054,6 +1397,27 @@ public class ChangeRequestController : Controller
         var path = Path.Combine(environment.WebRootPath, "uploads", "docs", fileName);
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
+    }
+
+    private void DeleteFeatureScreenshotFile(string fileName, IWebHostEnvironment environment)
+    {
+        var path = Path.Combine(environment.WebRootPath, "uploads", "features", "screenshots", fileName);
+        if (System.IO.File.Exists(path))
+            System.IO.File.Delete(path);
+    }
+
+    private bool CanManageFeatureEvidence(ProjectFeature feature, string? userId)
+    {
+        if (User.IsInRole("Admin"))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        if (!(User.IsInRole("Developer") || User.IsInRole("Agent")))
+            return false;
+
+        return string.Equals(feature.AssignedDeveloperId, userId, StringComparison.Ordinal);
     }
 
     private async Task<List<SelectListItem>> GetEmployeeOptions()
@@ -1071,7 +1435,14 @@ public class ChangeRequestController : Controller
 
     private async Task<List<SelectListItem>> GetProjectOptionsAsync()
     {
-        return await _db.ChangeRequests
+        var query = _db.ChangeRequests.AsQueryable();
+        if (!User.IsInRole("Admin"))
+        {
+            var userTeamId = await GetCurrentOrgTeamIdAsync();
+            query = ApplyOrgTeamVisibility(query, userTeamId);
+        }
+
+        return await query
             .OrderByDescending(c => c.CreatedAt)
             .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
             .ToListAsync();
@@ -1085,9 +1456,9 @@ public class ChangeRequestController : Controller
         if (!User.IsInRole("Developer"))
             return [];
 
-        var userId = _userManager.GetUserId(User);
+        var userTeamId = await GetCurrentOrgTeamIdAsync();
         return await _db.ChangeRequests
-            .Where(c => c.Pics.Any(p => p.EmployeeId == userId))
+            .Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == userTeamId)
             .OrderByDescending(c => c.CreatedAt)
             .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
             .ToListAsync();
@@ -1101,18 +1472,160 @@ public class ChangeRequestController : Controller
         if (!User.IsInRole("Developer"))
             return false;
 
-        var userId = _userManager.GetUserId(User);
-        return await _db.ChangeRequestPics
-            .AnyAsync(p => p.ChangeRequestId == changeRequestId && p.EmployeeId == userId);
+        return await CanViewProjectAsync(changeRequestId);
+    }
+
+    private async Task<int?> GetCurrentOrgTeamIdAsync()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        return user?.OrgTeamId;
+    }
+
+    private static IQueryable<ChangeRequest> ApplyOrgTeamVisibility(IQueryable<ChangeRequest> query, int? userTeamId)
+    {
+        if (userTeamId.HasValue)
+            return query.Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == userTeamId.Value);
+
+        return query.Where(c => !c.OrgTeamId.HasValue);
+    }
+
+    private async Task<bool> CanViewProjectAsync(int changeRequestId)
+    {
+        if (User.IsInRole("Admin"))
+            return await _db.ChangeRequests.AnyAsync(c => c.Id == changeRequestId);
+
+        var userTeamId = await GetCurrentOrgTeamIdAsync();
+        var query = ApplyOrgTeamVisibility(_db.ChangeRequests.AsQueryable(), userTeamId);
+        return await query.AnyAsync(c => c.Id == changeRequestId);
     }
 
     private async Task<List<SelectListItem>> GetDeveloperOptionsAsync()
     {
         var developers = await _userManager.GetUsersInRoleAsync("Developer");
-        return developers
-            .OrderBy(d => d.FullName)
-            .Select(d => new SelectListItem(d.FullName, d.Id))
+        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+
+        var usersById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
+        var rolesByUser = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var user in developers)
+        {
+            usersById[user.Id] = user;
+            if (!rolesByUser.TryGetValue(user.Id, out var roles))
+            {
+                roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                rolesByUser[user.Id] = roles;
+            }
+            roles.Add("Developer");
+        }
+
+        foreach (var user in agents)
+        {
+            usersById[user.Id] = user;
+            if (!rolesByUser.TryGetValue(user.Id, out var roles))
+            {
+                roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                rolesByUser[user.Id] = roles;
+            }
+            roles.Add("Agent");
+        }
+
+        return usersById.Values
+            .Select(user =>
+            {
+                var name = string.IsNullOrWhiteSpace(user.FullName) ? (user.Email ?? user.UserName ?? user.Id) : user.FullName;
+                var roleLabel = rolesByUser.TryGetValue(user.Id, out var roles)
+                    ? string.Join("/", roles.OrderBy(r => r))
+                    : "Developer";
+                return new SelectListItem($"{name} ({roleLabel})", user.Id);
+            })
+            .OrderBy(item => item.Text)
             .ToList();
+    }
+
+    private async Task<List<SelectListItem>> GetAgentUserOptionsAsync()
+    {
+        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        return agents
+            .OrderBy(a => a.FullName)
+            .Select(a => new SelectListItem(a.FullName, a.Id))
+            .ToList();
+    }
+
+    private async Task<bool> IsFeatureAssigneeValidAsync(ApplicationUser assignedUser)
+    {
+        return await _userManager.IsInRoleAsync(assignedUser, "Developer")
+            || await _userManager.IsInRoleAsync(assignedUser, "Agent");
+    }
+
+    private async Task NotifyDeveloperFeatureAssignmentAsync(ProjectFeature feature, string? previousAssignedDeveloperId = null)
+    {
+        if (string.IsNullOrWhiteSpace(feature.AssignedDeveloperId))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(previousAssignedDeveloperId) &&
+            string.Equals(previousAssignedDeveloperId, feature.AssignedDeveloperId, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var assignedUser = await _userManager.FindByIdAsync(feature.AssignedDeveloperId);
+        if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+            return;
+
+        var title = string.IsNullOrWhiteSpace(previousAssignedDeveloperId)
+            ? $"New feature assigned: {feature.FeatureNumber}"
+            : $"Feature assignment updated: {feature.FeatureNumber}";
+        var message = $"You are assigned to feature {feature.FeatureNumber} - {feature.Name}.";
+        var linkUrl = $"/ChangeRequest/FeatureDetails?featureId={feature.Id}";
+
+        await _notificationService.CreateAsync(assignedUser.Id, title, message, linkUrl);
+    }
+
+    private async Task NotifyDeveloperProjectAssignmentsAsync(
+        ChangeRequest project,
+        IEnumerable<PicEntry> selectedPics,
+        ISet<string>? previousAssignedEmployeeIds = null)
+    {
+        var selectedMap = selectedPics
+            .Where(p => !string.IsNullOrWhiteSpace(p.EmployeeId))
+            .GroupBy(p => p.EmployeeId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.Role).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r)),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (employeeId, role) in selectedMap)
+        {
+            if (previousAssignedEmployeeIds is not null &&
+                previousAssignedEmployeeIds.Contains(employeeId))
+                continue;
+
+            var assignedUser = await _userManager.FindByIdAsync(employeeId);
+            if (assignedUser == null || !await _userManager.IsInRoleAsync(assignedUser, "Developer"))
+                continue;
+
+            var roleText = string.IsNullOrWhiteSpace(role) ? "PIC" : role.Trim();
+            var title = previousAssignedEmployeeIds is null
+                ? $"New project assignment: {project.CrNumber}"
+                : $"Project assignment updated: {project.CrNumber}";
+            var message = $"You are assigned to project {project.CrNumber} - {project.Title} as {roleText}.";
+            var linkUrl = $"/ChangeRequest/Details/{project.Id}";
+
+            await _notificationService.CreateAsync(assignedUser.Id, title, message, linkUrl);
+        }
+    }
+
+    private static void EnsureDefaultFeatureTimeline(CreateProjectFeatureViewModel model)
+    {
+        var startDate = model.TimelineStart?.Date ?? DateTime.Today;
+        model.TimelineStart ??= startDate;
+        model.TimelineEnd ??= startDate.AddDays(3);
+    }
+
+    private IActionResult RedirectFeatureLocal(string? returnUrl, int featureId)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
+
+        return RedirectToAction(nameof(FeatureDetails), new { featureId });
     }
 
     private async Task<string?> ResolveOpenClawAgentIdAsync()
@@ -1131,6 +1644,17 @@ public class ChangeRequestController : Controller
     private List<SelectListItem> GetOpenClawScanAgentOptions()
     {
         var configured = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        if (configured.Count == 0)
+            configured = ["main"];
+
+        return configured
+            .Select(id => new SelectListItem(id, id))
+            .ToList();
+    }
+
+    private List<SelectListItem> GetOpenClawFeatureAgentOptions()
+    {
+        var configured = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
         if (configured.Count == 0)
             configured = ["main"];
 

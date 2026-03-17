@@ -30,6 +30,16 @@ public enum CrStage
     DeploymentComplete
 }
 
+public enum FeatureAgentStatus
+{
+    None,
+    Queued,
+    InProgress,
+    Blocked,
+    PrRaised,
+    Failed
+}
+
 public class ChangeRequest
 {
     public int Id { get; set; }
@@ -47,7 +57,7 @@ public class ChangeRequest
 
     public CrPriority Priority { get; set; } = CrPriority.Medium;
 
-    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+    public CrStage Stage { get; set; } = CrStage.Development;
 
     [MaxLength(500)]
     [Display(Name = "Figma Link")]
@@ -95,6 +105,10 @@ public class ChangeRequest
     [ForeignKey(nameof(CreatedBy))]
     public string CreatedById { get; set; } = string.Empty;
     public ApplicationUser? CreatedBy { get; set; }
+
+    [ForeignKey(nameof(OrgTeam))]
+    public int? OrgTeamId { get; set; }
+    public OrgTeam? OrgTeam { get; set; }
 
     public ICollection<ChangeRequestPic> Pics { get; set; } = new List<ChangeRequestPic>();
     public ICollection<ArchSpecImage> ArchSpecImages { get; set; } = new List<ArchSpecImage>();
@@ -172,9 +186,21 @@ public class ProjectFeature
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    [MaxLength(200)]
+    [Display(Name = "Affected Module")]
+    public string? ModuleImpacted { get; set; }
+
+    [MaxLength(1000)]
+    [Display(Name = "Linked Bugs")]
+    public string? LinkedBugs { get; set; }
+
+    [MaxLength(500)]
+    [Display(Name = "PR Link")]
+    public string? PullRequestUrl { get; set; }
+
     public CrStatus Status { get; set; } = CrStatus.Draft;
     public CrPriority Priority { get; set; } = CrPriority.Medium;
-    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+    public CrStage Stage { get; set; } = CrStage.Development;
 
     [DataType(DataType.Date)]
     public DateTime? TimelineStart { get; set; }
@@ -186,10 +212,35 @@ public class ProjectFeature
     public string? AssignedDeveloperId { get; set; }
     public ApplicationUser? AssignedDeveloper { get; set; }
 
+    public FeatureAgentStatus AgentStatus { get; set; } = FeatureAgentStatus.None;
+
+    [MaxLength(4000)]
+    public string? AgentImplementationPlan { get; set; }
+
+    public DateTime? AgentLastRunAt { get; set; }
+
     public bool IsCompleted { get; set; }
     public bool IsAutoDetected { get; set; }
+    public ICollection<FeatureScreenshot> Screenshots { get; set; } = new List<FeatureScreenshot>();
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class FeatureScreenshot
+{
+    public int Id { get; set; }
+
+    [ForeignKey(nameof(ProjectFeature))]
+    public int ProjectFeatureId { get; set; }
+    public ProjectFeature? ProjectFeature { get; set; }
+
+    [Required, MaxLength(300)]
+    public string FileName { get; set; } = string.Empty;
+
+    [Required, MaxLength(300)]
+    public string OriginalFileName { get; set; } = string.Empty;
+
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class RepositoryFeature

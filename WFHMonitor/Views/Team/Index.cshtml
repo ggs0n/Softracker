@@ -1,5 +1,7 @@
 @model TeamDashboardViewModel
-@{ ViewData["Title"] = "Team"; }
+@{
+    ViewData["Title"] = "Team";
+}
 
 <style>
     .org-wrap {
@@ -10,7 +12,7 @@
         color: var(--text-on-dark);
     }
     .org-ceo {
-        max-width: 280px;
+        max-width: 320px;
         margin: 0 auto 18px;
         text-align: center;
         border: 1px solid rgba(14,165,233,0.35);
@@ -44,7 +46,7 @@
     }
     .org-teams {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 14px;
     }
     .org-team-card {
@@ -66,19 +68,27 @@
         text-transform: uppercase;
         font-weight: 700;
     }
-    .org-member {
+    .org-section-title {
+        padding: 10px 14px 6px;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #94a3b8;
+        font-weight: 700;
+    }
+    .org-member, .org-project {
         padding: 10px 14px;
         border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .org-member:last-child {
+    .org-member:last-child, .org-project:last-child {
         border-bottom: none;
     }
-    .org-member-name {
+    .org-member-name, .org-project-name {
         font-size: 0.85rem;
         font-weight: 600;
         color: #f8fafc;
     }
-    .org-member-meta {
+    .org-member-meta, .org-project-meta {
         display: flex;
         gap: 8px;
         align-items: center;
@@ -88,8 +98,7 @@
         flex-wrap: wrap;
     }
     .org-empty {
-        padding: 20px 12px;
-        text-align: center;
+        padding: 12px 14px;
         color: #64748b;
         font-size: 0.8rem;
     }
@@ -98,7 +107,7 @@
 <div class="mod-header mb-4">
     <div class="mod-header-left">
         <h1 class="mod-title"><i class="bi bi-diagram-3" style="color:#38bdf8"></i> Organization</h1>
-        <p class="mod-subtitle">CEO, Team 1 and Team 2 structure</p>
+        <p class="mod-subtitle">Manage CEO, teams, members, and project team ownership</p>
     </div>
 </div>
 
@@ -107,67 +116,133 @@
         <div class="org-wrap mb-4">
             <div class="org-ceo">
                 <div class="org-ceo-title">CEO</div>
-                <div class="org-ceo-name">@Model.CeoName <span style="font-size:0.8rem;color:#7dd3fc">(Me)</span></div>
+                <div class="org-ceo-name">@Model.CeoName</div>
                 <div class="org-ceo-mail">@Model.CeoEmail</div>
             </div>
             <div class="org-line"></div>
 
             <div class="org-teams">
-                <div class="org-team-card">
-                    <div class="org-team-head">
-                        <span class="org-team-title" style="color:#38bdf8">Team 1</span>
-                        <span class="dp-badge dp-badge-sky">@Model.Team1Members.Count</span>
-                    </div>
-                    @if (!Model.Team1Members.Any())
-                    {
-                        <div class="org-empty">No members assigned</div>
-                    }
-                    else
-                    {
-                        @foreach (var member in Model.Team1Members)
-                        {
-                            <div class="org-member">
-                                <div class="org-member-name">@member.FullName</div>
-                                <div class="org-member-meta">
-                                    <span>@member.Email</span>
-                                    <span class="dp-badge dp-badge-slate">@member.Role</span>
-                                </div>
-                            </div>
-                        }
-                    }
-                </div>
+                @foreach (var team in Model.Teams)
+                {
+                    <div class="org-team-card">
+                        <div class="org-team-head">
+                            <span class="org-team-title" style="color:#38bdf8">@team.TeamName</span>
+                            <span class="dp-badge dp-badge-sky">@team.Members.Count member(s)</span>
+                        </div>
 
-                <div class="org-team-card">
-                    <div class="org-team-head">
-                        <span class="org-team-title" style="color:#a78bfa">Team 2</span>
-                        <span class="dp-badge dp-badge-indigo">@Model.Team2Members.Count</span>
-                    </div>
-                    @if (!Model.Team2Members.Any())
-                    {
-                        <div class="org-empty">No members assigned</div>
-                    }
-                    else
-                    {
-                        @foreach (var member in Model.Team2Members)
+                        <div class="org-section-title">Members</div>
+                        @if (!team.Members.Any())
                         {
-                            <div class="org-member">
-                                <div class="org-member-name">@member.FullName</div>
-                                <div class="org-member-meta">
-                                    <span>@member.Email</span>
-                                    <span class="dp-badge dp-badge-slate">@member.Role</span>
-                                </div>
-                            </div>
+                            <div class="org-empty">No members assigned.</div>
                         }
-                    }
-                </div>
+                        else
+                        {
+                            @foreach (var member in team.Members)
+                            {
+                                <div class="org-member">
+                                    <div class="org-member-name">@member.FullName</div>
+                                    <div class="org-member-meta">
+                                        <span>@member.Email</span>
+                                        <span class="dp-badge dp-badge-slate">@member.Role</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <div class="org-section-title">Projects</div>
+                        @if (!team.Projects.Any())
+                        {
+                            <div class="org-empty">No projects assigned.</div>
+                        }
+                        else
+                        {
+                            @foreach (var project in team.Projects)
+                            {
+                                <div class="org-project">
+                                    <div class="org-project-name">@project.CrNumber</div>
+                                    <div class="org-project-meta">
+                                        <span>@project.Title</span>
+                                        <span class="dp-badge dp-badge-slate">@project.Stage</span>
+                                        <span class="dp-badge dp-badge-indigo">@project.Status</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
 
     <div class="col-xl-4">
-        <div class="dp-form-panel mb-4" style="position:sticky;top:80px">
-            <div class="dp-header" style="background:rgba(231,76,111,0.08);border-bottom:1px solid rgba(255,255,255,0.06)">
-                <div class="dp-header-icon" style="background:rgba(231,76,111,0.15);color:var(--accent)">
+        <div class="dp-form-panel mb-4">
+            <div class="dp-header" style="background:rgba(56,189,248,0.08);border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div class="dp-header-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8">
+                    <i class="bi bi-stars"></i>
+                </div>
+                <span class="dp-header-title">Organization Admin</span>
+            </div>
+            <div class="dp-form-body">
+                <form asp-action="UpdateCeo" method="post" class="mb-3">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="CeoForm.CeoUserId" class="dp-form-label">CEO Account</label>
+                    <select asp-for="CeoForm.CeoUserId"
+                            asp-items="Model.CeoForm.CeoOptions"
+                            class="form-select dp-form-select mb-2">
+                        <option value="">Select user</option>
+                    </select>
+                    <button type="submit" class="dp-btn-primary w-100 justify-content-center">
+                        <i class="bi bi-person-check"></i> Update CEO
+                    </button>
+                </form>
+
+                <hr />
+
+                <form asp-action="AddTeam" method="post" class="mb-3">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="TeamCreateForm.Name" class="dp-form-label">Add Team</label>
+                    <input asp-for="TeamCreateForm.Name" class="form-control dp-form-select mb-2" placeholder="e.g. Platform Team" />
+                    <button type="submit" class="dp-btn-primary w-100 justify-content-center">
+                        <i class="bi bi-plus-circle"></i> Create Team
+                    </button>
+                </form>
+
+                <hr />
+
+                <form asp-action="RenameTeam" method="post">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="TeamRenameForm.TeamId" class="dp-form-label">Rename Team</label>
+                    <select asp-for="TeamRenameForm.TeamId"
+                            asp-items="Model.TeamRenameForm.TeamOptions"
+                            class="form-select dp-form-select mb-2">
+                        <option value="">Select team</option>
+                    </select>
+                    <input asp-for="TeamRenameForm.Name" class="form-control dp-form-select mb-2" placeholder="New team name" />
+                    <button type="submit" class="dp-btn-primary w-100 justify-content-center">
+                        <i class="bi bi-pencil-square"></i> Save Team Name
+                    </button>
+                </form>
+
+                <hr />
+
+                <form asp-action="DeleteTeam" method="post" onsubmit="return confirm('Delete this team? Members and projects will move to Unassigned.');">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="TeamDeleteForm.TeamId" class="dp-form-label">Delete Team</label>
+                    <select asp-for="TeamDeleteForm.TeamId"
+                            asp-items="Model.TeamDeleteForm.TeamOptions"
+                            class="form-select dp-form-select mb-2">
+                        <option value="">Select team</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-danger w-100">
+                        <i class="bi bi-trash3"></i> Delete Team
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="dp-form-panel mb-4">
+            <div class="dp-header" style="background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div class="dp-header-icon" style="background:rgba(34,197,94,0.15);color:#22c55e">
                     <i class="bi bi-person-gear"></i>
                 </div>
                 <span class="dp-header-title">Assign Member To Team</span>
@@ -175,32 +250,57 @@
             <div class="dp-form-body">
                 <form asp-action="AssignMemberTeam" method="post">
                     @Html.AntiForgeryToken()
-                    <div asp-validation-summary="All" class="alert alert-danger small mb-3"></div>
+                    <label asp-for="AssignmentForm.MemberId" class="dp-form-label">Team Member</label>
+                    <select asp-for="AssignmentForm.MemberId"
+                            asp-items="Model.AssignmentForm.MemberOptions"
+                            class="form-select dp-form-select mb-2">
+                        <option value="">Select member</option>
+                    </select>
 
-                    <div class="mb-3">
-                        <label asp-for="AssignmentForm.MemberId" class="dp-form-label">Team Member</label>
-                        <select asp-for="AssignmentForm.MemberId"
-                                asp-items="Model.AssignmentForm.MemberOptions"
-                                class="form-select dp-form-select">
-                            <option value="">Select member</option>
-                        </select>
-                    </div>
-                    <div class="mb-4">
-                        <label asp-for="AssignmentForm.Team" class="dp-form-label">Assign To</label>
-                        <select asp-for="AssignmentForm.Team" class="form-select dp-form-select">
-                            <option value="@OrganizationTeam.Team1">Team 1</option>
-                            <option value="@OrganizationTeam.Team2">Team 2</option>
-                            <option value="@OrganizationTeam.Unassigned">Unassigned</option>
-                        </select>
-                    </div>
+                    <label asp-for="AssignmentForm.TeamId" class="dp-form-label">Assign To</label>
+                    <select asp-for="AssignmentForm.TeamId"
+                            asp-items="Model.AssignmentForm.TeamOptions"
+                            class="form-select dp-form-select mb-3"></select>
+
                     <button type="submit" class="dp-btn-primary w-100 justify-content-center">
-                        <i class="bi bi-check2-circle"></i> Save Team Assignment
+                        <i class="bi bi-check2-circle"></i> Save Member Assignment
                     </button>
                 </form>
             </div>
         </div>
 
-        <div class="dp" style="--dp-color:#64748b">
+        <div class="dp-form-panel mb-4">
+            <div class="dp-header" style="background:rgba(99,102,241,0.08);border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div class="dp-header-icon" style="background:rgba(99,102,241,0.15);color:#818cf8">
+                    <i class="bi bi-kanban"></i>
+                </div>
+                <span class="dp-header-title">Assign Project To Team</span>
+            </div>
+            <div class="dp-form-body">
+                <form asp-action="AssignProjectTeam" method="post">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="ProjectAssignmentForm.ProjectId" class="dp-form-label">Project</label>
+                    <select asp-for="ProjectAssignmentForm.ProjectId"
+                            asp-items="Model.ProjectAssignmentForm.ProjectOptions"
+                            class="form-select dp-form-select mb-2">
+                        <option value="">Select project</option>
+                    </select>
+
+                    <label asp-for="ProjectAssignmentForm.TeamId" class="dp-form-label">Assign To</label>
+                    <select asp-for="ProjectAssignmentForm.TeamId"
+                            asp-items="Model.ProjectAssignmentForm.TeamOptions"
+                            class="form-select dp-form-select mb-3"></select>
+
+                    <button type="submit" class="dp-btn-primary w-100 justify-content-center">
+                        <i class="bi bi-check2-circle"></i> Save Project Assignment
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div asp-validation-summary="All" class="alert alert-danger small mb-3"></div>
+
+        <div class="dp mb-4" style="--dp-color:#64748b">
             <div class="dp-header">
                 <div class="dp-header-icon" style="background:rgba(100,116,139,0.15);color:#94a3b8">
                     <i class="bi bi-person-dash"></i>
@@ -210,20 +310,14 @@
             </div>
             @if (!Model.UnassignedMembers.Any())
             {
-                <div class="dp-empty">
-                    <i class="bi bi-check-circle"></i>
-                    Everyone is assigned to Team 1 or Team 2
-                </div>
+                <div class="dp-empty">Everyone has a team assignment.</div>
             }
             else
             {
                 <div class="table-responsive">
                     <table class="dp-table">
                         <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Role</th>
-                            </tr>
+                            <tr><th>Name</th><th>Role</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var member in Model.UnassignedMembers)
@@ -234,6 +328,42 @@
                                         <div class="dp-cell-muted">@member.Email</div>
                                     </td>
                                     <td><span class="dp-badge dp-badge-slate">@member.Role</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="dp" style="--dp-color:#475569">
+            <div class="dp-header">
+                <div class="dp-header-icon" style="background:rgba(71,85,105,0.15);color:#94a3b8">
+                    <i class="bi bi-folder-x"></i>
+                </div>
+                <span class="dp-header-title">Unassigned Projects</span>
+                <span class="dp-header-count">@Model.UnassignedProjects.Count</span>
+            </div>
+            @if (!Model.UnassignedProjects.Any())
+            {
+                <div class="dp-empty">All projects have team assignment.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="dp-table">
+                        <thead>
+                            <tr><th>Project</th><th>Stage</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var project in Model.UnassignedProjects)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="dp-cell-title">@project.CrNumber</div>
+                                        <div class="dp-cell-muted">@project.Title</div>
+                                    </td>
+                                    <td><span class="dp-badge dp-badge-slate">@project.Stage</span></td>
                                 </tr>
                             }
                         </tbody>

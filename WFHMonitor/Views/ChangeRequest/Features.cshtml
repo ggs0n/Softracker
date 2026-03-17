@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Features";
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
     var projects = Model
         .SelectMany(p => p.Features.Select(f => new { Project = p, Feature = f }))
@@ -9,10 +10,39 @@
         .ToList();
 }
 
+<style>
+    .feature-agent-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.76rem;
+        margin-top: 4px;
+    }
+    .feature-agent-progress-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #3b82f6;
+        box-shadow: 0 0 0 0 rgba(59,130,246,0.7);
+    }
+    .feature-agent-progress-dot.is-pulsing {
+        animation: featurePulse 1.25s infinite;
+    }
+    .feature-agent-progress-dot.is-queued {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+    }
+    @@keyframes featurePulse {
+        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    }
+</style>
+
 <div class="mod-header mb-4">
     <div class="mod-header-left">
         <h1 class="mod-title"><i class="bi bi-list-check" style="color:#38bdf8"></i> Features</h1>
-        <p class="mod-subtitle">Admin manages project-tied features with project-like fields and developer assignment</p>
+        <p class="mod-subtitle">Admin manages project-tied features with project-like fields and developer/agent assignment</p>
     </div>
     @if (User.IsInRole("Admin"))
     {
@@ -50,7 +80,7 @@
                         <th>Status</th>
                         <th>Priority</th>
                         <th>Stage</th>
-                        <th>Developer</th>
+                        <th>Assignee</th>
                         <th>Timeline</th>
                         <th class="text-end">Action</th>
                     </tr>
@@ -108,6 +138,15 @@
                                 @if (!string.IsNullOrWhiteSpace(feature.AssignedDeveloper?.FullName))
                                 {
                                     <span class="dp-badge dp-badge-sky">@feature.AssignedDeveloper!.FullName</span>
+                                    @if (feature.AgentStatus != WFHMonitor.Models.FeatureAgentStatus.None)
+                                    {
+                                        var isQueued = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.Queued;
+                                        var isProcessing = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.InProgress;
+                                        <div class="feature-agent-progress">
+                                            <span class="feature-agent-progress-dot @(isProcessing ? "is-pulsing" : (isQueued ? "is-queued" : ""))"></span>
+                                            <span class="dp-cell-muted">@feature.AgentStatus</span>
+                                        </div>
+                                    }
                                 }
                                 else
                                 {
@@ -116,6 +155,28 @@
                             </td>
                             <td class="dp-cell-muted">@timelineText</td>
                             <td class="text-end">
+                                @if (User.IsInRole("Agent"))
+                                {
+                                    var canPickup = string.IsNullOrWhiteSpace(feature.AssignedDeveloperId) ||
+                                        string.Equals(feature.AssignedDeveloperId, currentUserId, StringComparison.Ordinal);
+                                    <form asp-action="PickupFeature" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="featureId" value="@feature.Id" />
+                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                        @if (canPickup)
+                                        {
+                                            <button type="submit" class="dp-btn" title="Pick up feature">
+                                                <i class="bi bi-hand-index-thumb"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="dp-btn" title="Assigned to another user" disabled>
+                                                <i class="bi bi-lock"></i>
+                                            </button>
+                                        }
+                                    </form>
+                                }
                                 <a asp-action="Details" asp-route-id="@project.Id" class="dp-btn" title="Open project">
                                     <i class="bi bi-box-arrow-up-right"></i>
                                 </a>

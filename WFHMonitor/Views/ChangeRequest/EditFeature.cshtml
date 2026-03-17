@@ -1,5 +1,14 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
 @model WFHMonitor.ViewModels.CreateProjectFeatureViewModel
-@{ ViewData["Title"] = "Edit Feature"; }
+@{
+    ViewData["Title"] = "Edit Feature";
+    var stageOptions = new List<SelectListItem>
+    {
+        new() { Value = WFHMonitor.Models.CrStage.Development.ToString(), Text = "Development" },
+        new() { Value = WFHMonitor.Models.CrStage.Testing.ToString(), Text = "Testing" },
+        new() { Value = WFHMonitor.Models.CrStage.Deploy.ToString(), Text = "Deploy" }
+    };
+}
 
 <div class="row">
     <div class="col-lg-9">
@@ -35,6 +44,25 @@
                     </div>
 
                     <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="ModuleImpacted" class="form-label fw-semibold">Affected Module</label>
+                            <input asp-for="ModuleImpacted" class="form-control" placeholder="e.g. Auth, Payment, Dashboard" />
+                            <span asp-validation-for="ModuleImpacted" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="LinkedBugs" class="form-label fw-semibold">Linked Bugs</label>
+                            <input asp-for="LinkedBugs" class="form-control" placeholder="e.g. BUG-2026-0012, BUG-2026-0019" />
+                            <span asp-validation-for="LinkedBugs" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="PullRequestUrl" class="form-label fw-semibold">PR Link</label>
+                        <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
+                        <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label asp-for="Status" class="form-label fw-semibold">Status</label>
                             <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="form-select"></select>
@@ -45,7 +73,7 @@
                         </div>
                         <div class="col-md-4">
                             <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
-                            <select asp-for="Stage" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStage>()" class="form-select"></select>
+                            <select asp-for="Stage" asp-items="stageOptions" class="form-select"></select>
                         </div>
                     </div>
 
@@ -61,9 +89,9 @@
                     </div>
 
                     <div class="mb-4">
-                        <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assigned Developer</label>
+                        <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assigned To (Developer / Agent)</label>
                         <select asp-for="AssignedDeveloperId" asp-items="Model.DeveloperOptions" class="form-select">
-                            <option value="">-- Select Developer --</option>
+                            <option value="">-- Select Developer or Agent --</option>
                         </select>
                         <span asp-validation-for="AssignedDeveloperId" class="text-danger small"></span>
                     </div>

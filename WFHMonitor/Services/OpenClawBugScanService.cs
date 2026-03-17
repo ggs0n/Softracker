@@ -16,10 +16,18 @@ public class OpenClawSettings
     public List<string> BugScanAgentIds { get; set; } = [];
     public string BugFixAgentId { get; set; } = string.Empty;
     public List<string> BugFixAgentIds { get; set; } = [];
+    public string FeatureImplementAgentId { get; set; } = string.Empty;
+    public List<string> FeatureImplementAgentIds { get; set; } = [];
     public string BugScanPromptAdditionalInstructions { get; set; } = string.Empty;
     public List<string> BugScanPromptAdditionalInstructionLines { get; set; } = [];
     public string BugFixPromptAdditionalInstructions { get; set; } = string.Empty;
     public List<string> BugFixPromptAdditionalInstructionLines { get; set; } = [];
+    public string FeatureImplementPromptAdditionalInstructions { get; set; } = string.Empty;
+    public List<string> FeatureImplementPromptAdditionalInstructionLines { get; set; } = [];
+    public string FeatureScreenshotImportDirectory { get; set; } = string.Empty;
+    public List<string> FeatureScreenshotImportDirectories { get; set; } = [];
+    public int FeatureScreenshotImportLookbackMinutes { get; set; } = 180;
+    public int FeatureScreenshotImportMaxFiles { get; set; } = 5;
     public int TimeoutSeconds { get; set; } = 120;
     public int MaxFindingsPerScan { get; set; } = 8;
 }
@@ -245,6 +253,94 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return new OpenClawBugFixResult(true, string.Empty, TrimTo(fixPlan, 3500));
     }
 
+    public async Task<OpenClawFeatureImplementResult> ImplementFeatureAsync(
+        ProjectFeature feature,
+        ChangeRequest? project = null,
+        string? featureAgentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+
+        var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
+            ? "openclaw"
+            : _settings.CliPath.Trim();
+        var agentId = ResolveRequestedFeatureAgentId(featureAgentId, _settings);
+        var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
+        var additionalInstructions = ResolveFeatureAdditionalInstructions(_settings);
+        var prompt = BuildFeaturePrompt(feature, project, additionalInstructions);
+
+        var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
+        if (string.IsNullOrWhiteSpace(resolvedCliPath))
+        {
+            var recommendedPath = GetRecommendedWindowsCliPath();
+            var hint = string.IsNullOrWhiteSpace(recommendedPath)
+                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
+                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
+            return FailedFeature($"OpenClaw feature run failed: OpenClaw CLI not found. {hint}");
+        }
+
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            if (!process.Start())
+                return FailedFeature("OpenClaw feature run failed: unable to start OpenClaw process.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start OpenClaw feature process from path {CliPath}", resolvedCliPath);
+            return FailedFeature($"OpenClaw feature run failed: cannot start '{resolvedCliPath}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds + 20));
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            return FailedFeature($"OpenClaw feature run timed out after {timeoutSeconds} seconds.");
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+
+        if (process.ExitCode != 0)
+        {
+            var errorDetails = !string.IsNullOrWhiteSpace(stderr)
+                ? TrimTo(stderr, 220)
+                : "OpenClaw command returned a non-zero exit code.";
+            return FailedFeature($"OpenClaw feature run failed: {errorDetails}");
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            return FailedFeature("OpenClaw feature run failed: command returned empty output.");
+
+        string implementationPlan;
+        if (TryParseOpenClawResponse(stdout, out var agentText, out _))
+        {
+            implementationPlan = agentText;
+        }
+        else
+        {
+            implementationPlan = StripAnsi(stdout).Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(implementationPlan) && !string.IsNullOrWhiteSpace(stderr))
+            implementationPlan = StripAnsi(stderr).Trim();
+
+        if (string.IsNullOrWhiteSpace(implementationPlan))
+            return FailedFeature("OpenClaw feature run failed: empty response.");
+
+        return new OpenClawFeatureImplementResult(true, string.Empty, TrimTo(implementationPlan, 3500));
+    }
+
     private static int NormalizeTimeout(int configuredTimeoutSeconds)
     {
         if (configuredTimeoutSeconds <= 0)
@@ -287,6 +383,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
+    private static string ResolveFeatureAdditionalInstructions(OpenClawSettings settings)
+    {
+        var instructions = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(settings.FeatureImplementPromptAdditionalInstructions))
+            instructions.Add(settings.FeatureImplementPromptAdditionalInstructions.Trim());
+
+        if (settings.FeatureImplementPromptAdditionalInstructionLines is not null)
+        {
+            instructions.AddRange(settings.FeatureImplementPromptAdditionalInstructionLines
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => line.Trim()));
+        }
+
+        return string.Join("\n", instructions);
+    }
+
     private static string ResolveRequestedAgentId(string? scanAgentId, OpenClawSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(scanAgentId))
@@ -305,6 +418,18 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return fixAgentId.Trim();
 
         var configured = GetConfiguredFixAgentIds(settings);
+        if (configured.Count > 0)
+            return configured[0];
+
+        return "main";
+    }
+
+    private static string ResolveRequestedFeatureAgentId(string? featureAgentId, OpenClawSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(featureAgentId))
+            return featureAgentId.Trim();
+
+        var configured = GetConfiguredFeatureAgentIds(settings);
         if (configured.Count > 0)
             return configured[0];
 
@@ -389,6 +514,57 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (result.Count == 0)
         {
             foreach (var id in GetConfiguredAgentIds(settings))
+            {
+                if (seen.Add(id))
+                    result.Add(id);
+            }
+        }
+
+        if (result.Count == 0)
+            result.Add("main");
+
+        return result;
+    }
+
+    public static IReadOnlyList<string> GetConfiguredFeatureAgentIds(OpenClawSettings settings)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        static IEnumerable<string> Expand(string value)
+        {
+            return value
+                .Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(v => !string.IsNullOrWhiteSpace(v));
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FeatureImplementAgentId))
+        {
+            foreach (var id in Expand(settings.FeatureImplementAgentId))
+            {
+                if (seen.Add(id))
+                    result.Add(id);
+            }
+        }
+
+        if (settings.FeatureImplementAgentIds is not null)
+        {
+            foreach (var raw in settings.FeatureImplementAgentIds)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                foreach (var id in Expand(raw))
+                {
+                    if (seen.Add(id))
+                        result.Add(id);
+                }
+            }
+        }
+
+        if (result.Count == 0)
+        {
+            foreach (var id in GetConfiguredFixAgentIds(settings))
             {
                 if (seen.Add(id))
                     result.Add(id);
@@ -820,6 +996,62 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return Regex.Replace(raw, @"\s+", " ").Trim();
     }
 
+    private static string BuildFeaturePrompt(ProjectFeature feature, ChangeRequest? project, string additionalInstructions)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("You are a senior software engineer implementing a feature ticket.");
+        sb.AppendLine("Return practical implementation guidance with these sections:");
+        sb.AppendLine("1) Implementation approach");
+        sb.AppendLine("2) Files/components likely to change");
+        sb.AppendLine("3) Validation checklist");
+        sb.AppendLine("4) Risks and rollback notes");
+        sb.AppendLine();
+        sb.AppendLine($"Feature Number: {feature.FeatureNumber}");
+        sb.AppendLine($"Feature Title: {TrimTo(feature.Name, 300)}");
+        sb.AppendLine($"Status: {feature.Status}");
+        sb.AppendLine($"Priority: {feature.Priority}");
+        sb.AppendLine($"Stage: {feature.Stage}");
+        if (!string.IsNullOrWhiteSpace(feature.Description))
+            sb.AppendLine($"Description: {TrimTo(feature.Description, 1400)}");
+        if (!string.IsNullOrWhiteSpace(feature.ModuleImpacted))
+            sb.AppendLine($"Affected Module: {TrimTo(feature.ModuleImpacted, 200)}");
+        if (!string.IsNullOrWhiteSpace(feature.LinkedBugs))
+            sb.AppendLine($"Linked Bugs: {TrimTo(feature.LinkedBugs, 600)}");
+        if (feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue)
+            sb.AppendLine($"Timeline: {feature.TimelineStart:yyyy-MM-dd} to {feature.TimelineEnd:yyyy-MM-dd}");
+
+        if (project is not null)
+        {
+            sb.AppendLine($"Project Number: {project.CrNumber}");
+            sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+            if (!string.IsNullOrWhiteSpace(project.Description))
+                sb.AppendLine($"Project Description: {TrimTo(project.Description, 1200)}");
+            if (!string.IsNullOrWhiteSpace(project.TechnologyStack))
+                sb.AppendLine($"Technology Stack: {TrimTo(project.TechnologyStack, 500)}");
+            if (!string.IsNullOrWhiteSpace(project.GitHubRepoUrl))
+                sb.AppendLine($"Repository URL: {TrimTo(project.GitHubRepoUrl, 500)}");
+            if (!string.IsNullOrWhiteSpace(project.GitHubBranch))
+                sb.AppendLine($"Repository Branch: {TrimTo(project.GitHubBranch, 100)}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Constraints:");
+        sb.AppendLine("- Prefer the smallest safe implementation first.");
+        sb.AppendLine("- Provide clear step-by-step tasks suitable for an assignee.");
+        sb.AppendLine("- Include explicit verification checks.");
+        sb.AppendLine("- If you captured UI screenshots, include absolute image file paths in the response.");
+        sb.AppendLine("- Add a line exactly like: SCREENSHOT_PATHS: path1.png | path2.png");
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            sb.AppendLine("- Follow additional project-specific instructions below.");
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(additionalInstructions);
+        }
+
+        var raw = TrimTo(sb.ToString(), 5000);
+        return Regex.Replace(raw, @"\s+", " ").Trim();
+    }
+
     private static string ReadString(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var propertyElement))
@@ -1022,5 +1254,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         new(false, error, []);
 
     private static OpenClawBugFixResult FailedFix(string error) =>
+        new(false, error, string.Empty);
+
+    private static OpenClawFeatureImplementResult FailedFeature(string error) =>
         new(false, error, string.Empty);
 }

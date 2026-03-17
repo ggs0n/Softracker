@@ -34,7 +34,26 @@ public class AdminController : Controller
 
         var today = DateTime.UtcNow.Date;
 
-        var employees = await _userManager.GetUsersInRoleAsync("Employee");
+        var teamRoles = new[] { "Employee", "Developer", "Tester", "Agent" };
+        var teamMemberIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var developerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var role in teamRoles)
+        {
+            var users = await _userManager.GetUsersInRoleAsync(role);
+            foreach (var user in users)
+            {
+                teamMemberIds.Add(user.Id);
+                if (string.Equals(role, "Agent", StringComparison.OrdinalIgnoreCase))
+                    agentIds.Add(user.Id);
+                if (string.Equals(role, "Developer", StringComparison.OrdinalIgnoreCase))
+                    developerIds.Add(user.Id);
+            }
+        }
+
+        var agentIdList = agentIds.ToList();
+        var developerIdList = developerIds.ToList();
 
         var tasksDoneToday = await _db.WorkTasks
             .Include(t => t.Assignee)
@@ -120,16 +139,51 @@ public class AdminController : Controller
         var totalBugs = await _db.BugReports.CountAsync();
         var completeBugs = await _db.BugReports.CountAsync(b => b.Status == BugStatus.Complete);
 
+        var agentFeaturesShipped = agentIdList.Count == 0
+            ? 0
+            : await _db.ProjectFeatures.CountAsync(f =>
+                f.AssignedDeveloperId != null &&
+                agentIdList.Contains(f.AssignedDeveloperId) &&
+                (f.AgentStatus == FeatureAgentStatus.PrRaised || f.Status == CrStatus.Done || f.IsCompleted));
+
+        var agentBugsFound = await _db.BugReports.CountAsync(b => b.AssigneeType == BugAssigneeType.Agent);
+
+        var agentBugsFixed = await _db.BugReports.CountAsync(b =>
+            b.AssigneeType == BugAssigneeType.Agent &&
+            (b.AgentStatus == BugAgentStatus.PrRaised || b.Status == BugStatus.Complete));
+
+        var developerBugsFixed = developerIdList.Count == 0
+            ? 0
+            : await _db.BugReports.CountAsync(b =>
+                b.AssigneeType == BugAssigneeType.Developer &&
+                b.AssignedDeveloperId != null &&
+                developerIdList.Contains(b.AssignedDeveloperId) &&
+                b.Status == BugStatus.Complete);
+
+        var developerFeaturesDelivered = developerIdList.Count == 0
+            ? 0
+            : await _db.ProjectFeatures.CountAsync(f =>
+                f.AssignedDeveloperId != null &&
+                developerIdList.Contains(f.AssignedDeveloperId) &&
+                (f.Status == CrStatus.Done || f.IsCompleted));
+
+        var tasksDoneTodayComposite = agentBugsFixed + agentBugsFound + agentFeaturesShipped + (developerBugsFixed + developerFeaturesDelivered);
+
         var vm = new AdminDashboardViewModel
         {
             Today = today,
             TasksDoneToday = tasksDoneToday,
             BlockedTasks = blockedTasks,
-            TotalEmployees = employees.Count,
+            TotalEmployees = teamMemberIds.Count,
+            TasksDoneTodayCount = tasksDoneTodayComposite,
             Projects = projectItems,
             TotalBugs = totalBugs,
             OpenBugs = totalBugs - completeBugs,
-            CompleteBugs = completeBugs
+            CompleteBugs = completeBugs,
+            AgentFeaturesShipped = agentFeaturesShipped,
+            AgentBugsFound = agentBugsFound,
+            AgentBugsFixed = agentBugsFixed,
+            DeveloperDeliveredItems = developerBugsFixed + developerFeaturesDelivered
         };
 
         return View(vm);

@@ -1,5 +1,14 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
 @model WFHMonitor.ViewModels.ChangeRequestFormViewModel
-@{ ViewData["Title"] = "New Project"; }
+@{
+    ViewData["Title"] = "New Project";
+    var stageOptions = new List<SelectListItem>
+    {
+        new() { Value = WFHMonitor.Models.CrStage.Development.ToString(), Text = "Development" },
+        new() { Value = WFHMonitor.Models.CrStage.Testing.ToString(), Text = "Testing" },
+        new() { Value = WFHMonitor.Models.CrStage.Deploy.ToString(), Text = "Deploy" }
+    };
+}
 
 <div class="row">
     <div class="col-lg-8">
@@ -84,7 +93,7 @@
                     </div>
                     <div class="mb-3">
                         <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
-                        <select asp-for="Stage" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStage>()" class="form-select"></select>
+                        <select asp-for="Stage" asp-items="stageOptions" class="form-select"></select>
                     </div>
 
                     <hr class="my-3" />

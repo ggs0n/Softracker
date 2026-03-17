@@ -41,7 +41,9 @@ public static class FeatureDetector
 
             if (matchingFiles.Count > 0)
             {
-                var description = $"Detected in: {string.Join(", ", matchingFiles.Select(f => f.Split('/').Last()))}";
+                var description = matchingFiles.Count == 1
+                    ? "Auto-detected from repository scan signals."
+                    : $"Auto-detected from {matchingFiles.Count} repository scan signals.";
                 detected.Add((name, description));
             }
         }

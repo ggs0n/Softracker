@@ -65,6 +65,8 @@ public class TaskBoardViewModel
     public List<WorkTask> InProgress { get; set; } = new();
     public List<WorkTask> Blocked { get; set; } = new();
     public List<WorkTask> Done { get; set; } = new();
+    public List<ProjectFeature> AssignedFeatures { get; set; } = new();
+    public List<BugReport> AssignedBugs { get; set; } = new();
 
     public IEnumerable<WorkTask> AssignedTasks =>
         ToDo.Concat(InProgress).Concat(Blocked).Concat(Done).OrderBy(t => t.TimelineEnd ?? t.DueDate ?? DateTime.MaxValue);

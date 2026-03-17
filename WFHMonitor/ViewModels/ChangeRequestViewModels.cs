@@ -15,7 +15,7 @@ public class ChangeRequestFormViewModel
 
     public CrStatus Status { get; set; } = CrStatus.Draft;
     public CrPriority Priority { get; set; } = CrPriority.Medium;
-    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+    public CrStage Stage { get; set; } = CrStage.Development;
 
     [MaxLength(500)]
     [Display(Name = "Figma Link")]
@@ -102,6 +102,19 @@ public class CreateProjectFeatureViewModel
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    [Display(Name = "Affected Module")]
+    [MaxLength(200)]
+    public string? ModuleImpacted { get; set; }
+
+    [Display(Name = "Linked Bugs")]
+    [MaxLength(1000)]
+    public string? LinkedBugs { get; set; }
+
+    [Display(Name = "PR Link")]
+    [MaxLength(500)]
+    [Url(ErrorMessage = "Please enter a valid PR URL.")]
+    public string? PullRequestUrl { get; set; }
+
     [Display(Name = "Status")]
     public CrStatus Status { get; set; } = CrStatus.Draft;
 
@@ -109,7 +122,7 @@ public class CreateProjectFeatureViewModel
     public CrPriority Priority { get; set; } = CrPriority.Medium;
 
     [Display(Name = "Stage")]
-    public CrStage Stage { get; set; } = CrStage.ProjectStart;
+    public CrStage Stage { get; set; } = CrStage.Development;
 
     [DataType(DataType.Date)]
     [Display(Name = "Start Date")]
@@ -119,7 +132,7 @@ public class CreateProjectFeatureViewModel
     [Display(Name = "End Date")]
     public DateTime? TimelineEnd { get; set; }
 
-    [Display(Name = "Assigned Developer")]
+    [Display(Name = "Assigned To (Developer / Agent)")]
     public string? AssignedDeveloperId { get; set; }
 
     public string? ReturnUrl { get; set; }

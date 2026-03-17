@@ -8,7 +8,11 @@ public class AdminDashboardViewModel
     public List<WorkTask> TasksDoneToday { get; set; } = new();
     public List<WorkTask> BlockedTasks { get; set; } = new();
     public int TotalEmployees { get; set; }
-    public int TasksDoneTodayCount => TasksDoneToday.Count;
+    public int TasksDoneTodayCount { get; set; }
+    public int AgentFeaturesShipped { get; set; }
+    public int AgentBugsFound { get; set; }
+    public int AgentBugsFixed { get; set; }
+    public int DeveloperDeliveredItems { get; set; }
 
     // Project overview
     public List<ProjectOverviewItem> Projects { get; set; } = new();

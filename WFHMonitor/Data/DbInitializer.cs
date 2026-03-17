@@ -90,7 +90,7 @@ public static class DbInitializer
             IF COL_LENGTH('ProjectFeatures', 'Priority') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [Priority] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_Priority] DEFAULT 'Medium';
             IF COL_LENGTH('ProjectFeatures', 'Stage') IS NULL
-                ALTER TABLE [ProjectFeatures] ADD [Stage] nvarchar(30) NOT NULL CONSTRAINT [DF_ProjectFeatures_Stage] DEFAULT 'ProjectStart';
+                ALTER TABLE [ProjectFeatures] ADD [Stage] nvarchar(30) NOT NULL CONSTRAINT [DF_ProjectFeatures_Stage] DEFAULT 'Development';
             IF COL_LENGTH('ProjectFeatures', 'TimelineStart') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [TimelineStart] datetime2 NULL;
             IF COL_LENGTH('ProjectFeatures', 'TimelineEnd') IS NULL
@@ -99,6 +99,18 @@ public static class DbInitializer
                 ALTER TABLE [ProjectFeatures] ADD [AssignedDeveloperId] nvarchar(450) NULL;
             IF COL_LENGTH('ProjectFeatures', 'FeatureNumber') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [FeatureNumber] nvarchar(20) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'ModuleImpacted') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [ModuleImpacted] nvarchar(200) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'LinkedBugs') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [LinkedBugs] nvarchar(1000) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'PullRequestUrl') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [PullRequestUrl] nvarchar(500) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'AgentStatus') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [AgentStatus] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_AgentStatus] DEFAULT 'None';
+            IF COL_LENGTH('ProjectFeatures', 'AgentImplementationPlan') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [AgentImplementationPlan] nvarchar(4000) NULL;
+            IF COL_LENGTH('ProjectFeatures', 'AgentLastRunAt') IS NULL
+                ALTER TABLE [ProjectFeatures] ADD [AgentLastRunAt] datetime2 NULL;
             IF COL_LENGTH('BugReports', 'PullRequestUrl') IS NULL
                 ALTER TABLE [BugReports] ADD [PullRequestUrl] nvarchar(500) NULL;
             """);
@@ -118,6 +130,51 @@ public static class DbInitializer
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH('ChangeRequests', 'Stage') IS NOT NULL
+            BEGIN
+                UPDATE [ChangeRequests]
+                SET [Stage] = 1
+                WHERE [Stage] = 0;
+
+                UPDATE [ChangeRequests]
+                SET [Stage] = 3
+                WHERE [Stage] = 4;
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'Stage') IS NOT NULL
+            BEGIN
+                UPDATE [ProjectFeatures]
+                SET [Stage] = 'Development'
+                WHERE [Stage] IS NULL
+                   OR LTRIM(RTRIM([Stage])) = ''
+                   OR [Stage] = 'ProjectStart';
+
+                UPDATE [ProjectFeatures]
+                SET [Stage] = 'Deploy'
+                WHERE [Stage] = 'DeploymentComplete';
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'ModuleImpacted') IS NOT NULL
+            BEGIN
+                UPDATE [ProjectFeatures]
+                SET [ModuleImpacted] = 'General'
+                WHERE [ModuleImpacted] IS NULL OR LTRIM(RTRIM([ModuleImpacted])) = '';
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'LinkedBugs') IS NOT NULL
+            BEGIN
+                UPDATE [ProjectFeatures]
+                SET [LinkedBugs] = '-'
+                WHERE [LinkedBugs] IS NULL OR LTRIM(RTRIM([LinkedBugs])) = '';
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'AgentStatus') IS NOT NULL
+            BEGIN
+                UPDATE [ProjectFeatures]
+                SET [AgentStatus] = 'None'
+                WHERE [AgentStatus] IS NULL OR LTRIM(RTRIM([AgentStatus])) = '';
+            END
+
             UPDATE c
             SET [CrNumber] = CONCAT('PRJ-', SUBSTRING(c.[CrNumber], 4, 100))
             FROM [ChangeRequests] c
@@ -164,6 +221,18 @@ public static class DbInitializer
                 CREATE UNIQUE INDEX [IX_ProjectFeatures_FeatureNumber]
                 ON [dbo].[ProjectFeatures]([FeatureNumber])
                 WHERE [FeatureNumber] IS NOT NULL;
+            END
+
+            IF COL_LENGTH('ProjectFeatures', 'AgentStatus') IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_ProjectFeatures_AgentStatus'
+                     AND object_id = OBJECT_ID(N'[dbo].[ProjectFeatures]')
+               )
+            BEGIN
+                CREATE INDEX [IX_ProjectFeatures_AgentStatus]
+                ON [dbo].[ProjectFeatures]([AgentStatus]);
             END
             """);
 
@@ -221,6 +290,36 @@ public static class DbInitializer
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[FeatureScreenshots]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[FeatureScreenshots]
+                (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [ProjectFeatureId] int NOT NULL,
+                    [FileName] nvarchar(300) NOT NULL,
+                    [OriginalFileName] nvarchar(300) NOT NULL,
+                    [UploadedAt] datetime2 NOT NULL CONSTRAINT [DF_FeatureScreenshots_UploadedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_FeatureScreenshots] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_FeatureScreenshots_ProjectFeatures_ProjectFeatureId]
+                        FOREIGN KEY ([ProjectFeatureId]) REFERENCES [dbo].[ProjectFeatures]([Id]) ON DELETE CASCADE
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[FeatureScreenshots]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_FeatureScreenshots_ProjectFeatureId'
+                     AND object_id = OBJECT_ID(N'[dbo].[FeatureScreenshots]')
+               )
+            BEGIN
+                CREATE INDEX [IX_FeatureScreenshots_ProjectFeatureId]
+                    ON [dbo].[FeatureScreenshots]([ProjectFeatureId]);
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
             IF COL_LENGTH('AspNetUsers', 'SubscriptionPlan') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [SubscriptionPlan] nvarchar(20) NOT NULL CONSTRAINT [DF_AspNetUsers_SubscriptionPlan] DEFAULT 'Free';
             IF COL_LENGTH('AspNetUsers', 'OrganizationTeam') IS NULL
@@ -248,6 +347,252 @@ public static class DbInitializer
             UPDATE [AspNetUsers]
             SET [OrganizationTeam] = 'Unassigned'
             WHERE [OrganizationTeam] IS NULL OR LTRIM(RTRIM([OrganizationTeam])) = '';
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[OrgTeams]
+                (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [Name] nvarchar(100) NOT NULL,
+                    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_OrgTeams_CreatedAt] DEFAULT SYSUTCDATETIME(),
+                    [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_OrgTeams_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_OrgTeams] PRIMARY KEY ([Id])
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_OrgTeams_Name'
+                     AND object_id = OBJECT_ID(N'[dbo].[OrgTeams]')
+               )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_OrgTeams_Name]
+                    ON [dbo].[OrgTeams]([Name]);
+            END
+
+            IF COL_LENGTH('AspNetUsers', 'OrgTeamId') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [OrgTeamId] int NULL;
+
+            IF COL_LENGTH('ChangeRequests', 'OrgTeamId') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [OrgTeamId] int NULL;
+
+            IF COL_LENGTH('AspNetUsers', 'OrgTeamId') IS NOT NULL
+               AND OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.foreign_keys
+                   WHERE name = 'FK_AspNetUsers_OrgTeams_OrgTeamId'
+               )
+            BEGIN
+                ALTER TABLE [AspNetUsers]
+                ADD CONSTRAINT [FK_AspNetUsers_OrgTeams_OrgTeamId]
+                    FOREIGN KEY ([OrgTeamId]) REFERENCES [dbo].[OrgTeams]([Id]) ON DELETE SET NULL;
+            END
+
+            IF COL_LENGTH('ChangeRequests', 'OrgTeamId') IS NOT NULL
+               AND OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.foreign_keys
+                   WHERE name = 'FK_ChangeRequests_OrgTeams_OrgTeamId'
+               )
+            BEGIN
+                ALTER TABLE [ChangeRequests]
+                ADD CONSTRAINT [FK_ChangeRequests_OrgTeams_OrgTeamId]
+                    FOREIGN KEY ([OrgTeamId]) REFERENCES [dbo].[OrgTeams]([Id]) ON DELETE SET NULL;
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrganizationProfiles]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[OrganizationProfiles]
+                (
+                    [Id] int NOT NULL,
+                    [CeoUserId] nvarchar(450) NULL,
+                    [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_OrganizationProfiles_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_OrganizationProfiles] PRIMARY KEY ([Id])
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrganizationProfiles]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.foreign_keys
+                   WHERE name = 'FK_OrganizationProfiles_AspNetUsers_CeoUserId'
+               )
+            BEGIN
+                ALTER TABLE [OrganizationProfiles]
+                ADD CONSTRAINT [FK_OrganizationProfiles_AspNetUsers_CeoUserId]
+                    FOREIGN KEY ([CeoUserId]) REFERENCES [dbo].[AspNetUsers]([Id]) ON DELETE SET NULL;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 1')
+                BEGIN
+                    INSERT INTO [dbo].[OrgTeams] ([Name], [CreatedAt], [UpdatedAt])
+                    VALUES ('Team 1', SYSUTCDATETIME(), SYSUTCDATETIME());
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 2')
+                BEGIN
+                    INSERT INTO [dbo].[OrgTeams] ([Name], [CreatedAt], [UpdatedAt])
+                    VALUES ('Team 2', SYSUTCDATETIME(), SYSUTCDATETIME());
+                END
+            END
+
+            DECLARE @Team1Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 1' ORDER BY [Id]);
+            DECLARE @Team2Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 2' ORDER BY [Id]);
+
+            IF COL_LENGTH('AspNetUsers', 'OrgTeamId') IS NOT NULL
+               AND COL_LENGTH('AspNetUsers', 'OrganizationTeam') IS NOT NULL
+            BEGIN
+                UPDATE [AspNetUsers]
+                SET [OrgTeamId] = @Team1Id
+                WHERE [OrgTeamId] IS NULL
+                  AND [OrganizationTeam] = 'Team1'
+                  AND @Team1Id IS NOT NULL;
+
+                UPDATE [AspNetUsers]
+                SET [OrgTeamId] = @Team2Id
+                WHERE [OrgTeamId] IS NULL
+                  AND [OrganizationTeam] = 'Team2'
+                  AND @Team2Id IS NOT NULL;
+            END
+
+            IF COL_LENGTH('ChangeRequests', 'OrgTeamId') IS NOT NULL
+               AND COL_LENGTH('AspNetUsers', 'OrgTeamId') IS NOT NULL
+            BEGIN
+                UPDATE cr
+                SET [OrgTeamId] = u.[OrgTeamId]
+                FROM [ChangeRequests] cr
+                INNER JOIN [AspNetUsers] u ON u.[Id] = cr.[CreatedById]
+                WHERE cr.[OrgTeamId] IS NULL
+                  AND u.[OrgTeamId] IS NOT NULL;
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrganizationProfiles]', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM [dbo].[OrganizationProfiles] WHERE [Id] = 1)
+            BEGIN
+                INSERT INTO [dbo].[OrganizationProfiles] ([Id], [CeoUserId], [UpdatedAt])
+                VALUES
+                (
+                    1,
+                    (SELECT TOP 1 [Id] FROM [dbo].[AspNetUsers] WHERE [Email] = 'admin@gmail.com' ORDER BY [Id]),
+                    SYSUTCDATETIME()
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrganizationProfiles]', N'U') IS NOT NULL
+            BEGIN
+                UPDATE [dbo].[OrganizationProfiles]
+                SET [CeoUserId] = (SELECT TOP 1 [Id] FROM [dbo].[AspNetUsers] WHERE [Email] = 'admin@gmail.com' ORDER BY [Id]),
+                    [UpdatedAt] = SYSUTCDATETIME()
+                WHERE [Id] = 1
+                  AND [CeoUserId] IS NULL;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[ModulePermissionSettings]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[ModulePermissionSettings]
+                (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [ModuleKey] nvarchar(50) NOT NULL,
+                    [ViewRolesCsv] nvarchar(400) NOT NULL,
+                    [ModifyRolesCsv] nvarchar(400) NOT NULL,
+                    [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_ModulePermissionSettings_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_ModulePermissionSettings] PRIMARY KEY ([Id])
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[ModulePermissionSettings]', N'U') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_ModulePermissionSettings_ModuleKey'
+                     AND object_id = OBJECT_ID(N'[dbo].[ModulePermissionSettings]')
+               )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_ModulePermissionSettings_ModuleKey]
+                    ON [dbo].[ModulePermissionSettings]([ModuleKey]);
+            END
+
+            IF OBJECT_ID(N'[dbo].[ModulePermissionSettings]', N'U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[ModulePermissionSettings] WHERE [ModuleKey] = 'AllProjects')
+                BEGIN
+                    INSERT INTO [dbo].[ModulePermissionSettings] ([ModuleKey], [ViewRolesCsv], [ModifyRolesCsv], [UpdatedAt])
+                    VALUES ('AllProjects', 'Admin,Tester,Developer,Agent,Employee', 'Admin', SYSUTCDATETIME());
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[ModulePermissionSettings] WHERE [ModuleKey] = 'Features')
+                BEGIN
+                    INSERT INTO [dbo].[ModulePermissionSettings] ([ModuleKey], [ViewRolesCsv], [ModifyRolesCsv], [UpdatedAt])
+                    VALUES ('Features', 'Admin,Tester,Developer,Agent,Employee', 'Admin,Developer', SYSUTCDATETIME());
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[ModulePermissionSettings] WHERE [ModuleKey] = 'Bugs')
+                BEGIN
+                    INSERT INTO [dbo].[ModulePermissionSettings] ([ModuleKey], [ViewRolesCsv], [ModifyRolesCsv], [UpdatedAt])
+                    VALUES ('Bugs', 'Admin,Tester,Developer,Agent', 'Admin,Tester,Developer,Agent', SYSUTCDATETIME());
+                END
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[SystemPreferences]
+                (
+                    [Id] int NOT NULL,
+                    [BellNotificationSoundEnabled] bit NOT NULL CONSTRAINT [DF_SystemPreferences_BellNotificationSoundEnabled] DEFAULT 1,
+                    [BellNotificationSoundOption] nvarchar(30) NOT NULL CONSTRAINT [DF_SystemPreferences_BellNotificationSoundOption] DEFAULT 'classic',
+                    [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_SystemPreferences_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_SystemPreferences] PRIMARY KEY ([Id])
+                );
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'BellNotificationSoundOption') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [BellNotificationSoundOption] nvarchar(30) NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_BellNotificationSoundOption] DEFAULT 'classic';
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM [dbo].[SystemPreferences] WHERE [Id] = 1)
+            BEGIN
+                INSERT INTO [dbo].[SystemPreferences] ([Id], [BellNotificationSoundEnabled], [UpdatedAt])
+                VALUES (1, 1, SYSUTCDATETIME());
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'BellNotificationSoundOption') IS NOT NULL
+            BEGIN
+                UPDATE [dbo].[SystemPreferences]
+                SET [BellNotificationSoundOption] = 'classic'
+                WHERE [BellNotificationSoundOption] IS NULL
+                   OR LTRIM(RTRIM([BellNotificationSoundOption])) = '';
             END
             """);
     }

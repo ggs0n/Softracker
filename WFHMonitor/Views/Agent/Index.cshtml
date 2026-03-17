@@ -1,1021 +1,492 @@
+@using System.Text.Json
 @model WFHMonitor.ViewModels.AgentDashboardViewModel
 @{
-    ViewData["Title"] = "Agent";
-    var avatarIcons = new[] { "bi-robot", "bi-cpu-fill", "bi-motherboard", "bi-hdd-rack", "bi-gear-wide-connected", "bi-lightning-charge-fill" };
-    var avatarColors = new[] { "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6" };
+    ViewData["Title"] = "Agent Office";
+    var scenePayload = new
+    {
+        ceo = new { name = Model.CeoName },
+        agents = Model.Agents.Select(a => new
+        {
+            id = a.UserId,
+            name = a.Name,
+            team = a.TeamName,
+            isWorking = a.IsWorking,
+            taskCount = a.ActiveTaskCount,
+            taskSummary = a.TaskSummary,
+            color = a.AccentColor,
+            idleLeftPct = a.IdleLeftPct,
+            idleTopPct = a.IdleTopPct,
+            workLeftPct = a.WorkLeftPct,
+            workTopPct = a.WorkTopPct,
+            workspace = a.WorkspaceName
+        }),
+        employees = Model.Employees.Select(e => new
+        {
+            id = e.UserId,
+            name = e.Name,
+            role = e.Role,
+            team = e.TeamName,
+            color = e.AccentColor,
+            leftPct = e.LeftPct,
+            topPct = e.TopPct
+        })
+    };
 }
 
 <style>
-    .agent-card {
-        border: 1px solid rgba(255,255,255,0.08);
-        background: linear-gradient(145deg, #1e1e2e, #16213e);
-        color: var(--text-on-dark);
-        border-radius: 16px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        cursor: pointer;
-        overflow: hidden;
-        position: relative;
-    }
-    .agent-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
-    }
-    .agent-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 3px;
-        background: var(--agent-color, var(--accent));
-    }
-    .agent-avatar-wrap {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.8rem;
-        flex-shrink: 0;
-        position: relative;
-        overflow: hidden;
-    }
-    .agent-avatar-wrap img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 50%;
-    }
-    .agent-avatar-ring {
-        position: absolute;
-        inset: -4px;
-        border-radius: 50%;
-        border: 2px solid transparent;
-        transition: border-color 0.3s ease;
-        pointer-events: none;
-    }
-    .agent-card.status-running .agent-avatar-ring {
-        border-color: #10b981;
-        animation: agent-ring-spin 3s linear infinite;
-        border-top-color: transparent;
-    }
-    /* Upload area */
-    .agent-avatar-outer {
-        position: relative;
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 6px;
-    }
-    .agent-avatar-wrap {
-        width: 80px !important;
-        height: 80px !important;
-        font-size: 2.1rem !important;
-    }
-    .agent-avatar-ring {
-        inset: -5px !important;
-    }
-    /* Hover-overlay on the circle (replace photo) */
-    .agent-avatar-circle-wrap {
-        position: relative;
-        width: 80px;
-        height: 80px;
-    }
-    .agent-avatar-upload-btn {
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        background: rgba(0,0,0,0.6);
-        color: #fff;
-        border: none;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.85rem;
-        gap: 2px;
-        opacity: 0;
-        transition: opacity 0.18s ease;
-        cursor: pointer;
-        z-index: 2;
-    }
-    .agent-avatar-upload-btn span {
-        font-size: 0.6rem;
-        letter-spacing: 0.03em;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    .agent-avatar-circle-wrap:hover .agent-avatar-upload-btn {
-        opacity: 1;
-    }
-    /* "Add photo" dashed button shown when no photo */
-    .agent-add-photo-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.68rem;
-        font-weight: 600;
-        color: #94a3b8;
-        background: rgba(255,255,255,0.04);
-        border: 1px dashed rgba(255,255,255,0.18);
-        border-radius: 6px;
-        padding: 3px 8px;
-        cursor: pointer;
-        transition: color 0.15s, border-color 0.15s, background 0.15s;
-        white-space: nowrap;
-    }
-    .agent-add-photo-btn:hover {
-        color: var(--text-on-dark);
-        border-color: rgba(255,255,255,0.4);
-        background: rgba(255,255,255,0.08);
-    }
-    /* "Replace" chip shown under photo */
-    .agent-replace-photo-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        font-size: 0.63rem;
-        font-weight: 600;
-        color: #64748b;
-        background: transparent;
-        border: none;
-        padding: 0;
-        cursor: pointer;
-        transition: color 0.15s;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
-    .agent-replace-photo-btn:hover {
-        color: #94a3b8;
-    }
-    @@keyframes agent-ring-spin {
-        to { transform: rotate(360deg); }
-    }
-    .agent-status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 5px;
-        flex-shrink: 0;
-    }
-    .agent-status-dot.running {
-        background: #10b981;
-        box-shadow: 0 0 6px #10b981;
-        animation: pulse-dot 1.4s ease-in-out infinite;
-    }
-    .agent-status-dot.idle {
-        background: #64748b;
-    }
-    @@keyframes pulse-dot {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.5; transform: scale(0.85); }
-    }
-    .agent-stat-pill {
-        background: rgba(255,255,255,0.06);
-        border-radius: 8px;
-        padding: 6px 12px;
-        flex: 1;
-        text-align: center;
-    }
-    .agent-stat-pill .stat-value {
-        font-size: 1.25rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-    .agent-stat-pill .stat-label {
-        font-size: 0.68rem;
-        opacity: 0.55;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin-top: 2px;
-    }
-    .agent-card-name {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #f1f5f9;
-        line-height: 1.2;
-    }
-    .agent-card-desc {
-        font-size: 0.75rem;
-        opacity: 0.5;
-        margin-top: 2px;
-    }
-    .agent-status-badge {
-        font-size: 0.7rem;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-    }
-    .agent-status-badge.running {
-        background: rgba(16,185,129,0.15);
-        color: #10b981;
-        border: 1px solid rgba(16,185,129,0.3);
-    }
-    .agent-status-badge.idle {
-        background: rgba(100,116,139,0.15);
-        color: #94a3b8;
-        border: 1px solid rgba(100,116,139,0.2);
-    }
-
-    /* ── Performance Rating ── */
-    .perf-section {
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.06);
-    }
-    .perf-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 6px;
-    }
-    .perf-label {
-        font-size: 0.65rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        color: #64748b;
-    }
-    .perf-grade-badge {
-        font-size: 0.72rem;
-        font-weight: 800;
-        padding: 1px 9px;
-        border-radius: 999px;
-        letter-spacing: 0.04em;
-        border: 1px solid;
-    }
-    .perf-bar-bg {
-        height: 5px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.07);
-        overflow: hidden;
-    }
-    .perf-bar-fill {
-        height: 100%;
-        border-radius: 999px;
-        transition: width 0.6s ease;
-    }
-    .perf-stats {
-        display: flex;
-        gap: 10px;
-        margin-top: 8px;
-        flex-wrap: wrap;
-    }
-    .perf-stat {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.65rem;
-        color: #64748b;
-    }
-    .perf-stat-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-    .perf-score-text {
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #94a3b8;
-    }
+    .office-shell{display:grid;grid-template-columns:minmax(0,1fr)320px;gap:16px}
+    .office-stage-wrap{background:linear-gradient(160deg,#120a06,#2b1c14);border:1px solid rgba(251,191,36,.2);border-radius:16px;overflow:hidden;box-shadow:0 20px 46px rgba(0,0,0,.45)}
+    .office-hud{padding:10px 14px;border-bottom:1px solid rgba(251,191,36,.2);display:flex;justify-content:space-between;gap:10px;color:#f9c993;font-size:.78rem;background:linear-gradient(180deg,rgba(59,32,20,.66),rgba(29,18,13,.66))}
+    .office-hud strong{color:#fde4c4;font-size:.9rem;letter-spacing:.08em;text-transform:uppercase}
+    .office-scene{position:relative;height:760px;background:radial-gradient(circle at 50% 0%,#28150c 0%,#130a07 62%,#090603 100%)}
+    #office3dCanvas{width:100%;height:100%;display:block}
+    .office-chip-strip{position:absolute;top:12px;left:14px;right:180px;display:flex;gap:8px;overflow-x:auto}
+    .office-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(12,10,9,.74);border:1px solid rgba(113,113,122,.45);border-radius:999px;padding:4px 10px;color:#f8fafc;font-size:.62rem}
+    .office-chip-dot{width:8px;height:8px;border-radius:50%}
+    .office-chip-dot.busy{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.8)}
+    .office-chip-dot.idle{background:#64748b}
+    .office-status-card{position:absolute;top:12px;right:14px;border-radius:14px;border:1px solid rgba(20,184,166,.35);background:linear-gradient(170deg,rgba(6,78,59,.75),rgba(6,95,70,.55));color:#ecfeff;padding:8px 10px;font-size:.66rem}
+    .office-side-rail{position:absolute;right:8px;top:180px;display:flex;flex-direction:column;gap:8px}
+    .office-side-tab{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:#e2e8f0;border:1px solid rgba(148,163,184,.35);border-radius:9px;padding:8px 5px;background:rgba(3,7,18,.66)}
+    .office-fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#fde4c4;font-size:.85rem;background:rgba(15,10,7,.9);text-align:center;padding:16px}
+    .office-fallback.show{display:flex}
+    .office-panel{background:linear-gradient(165deg,#130f0b,#1d1712);border:1px solid rgba(251,191,36,.2);border-radius:16px;padding:14px;color:#f3f4f6}
+    .office-panel-title{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:#fdba74;font-weight:700;margin-bottom:8px}
+    .office-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+    .office-stat{background:rgba(30,24,18,.7);border:1px solid rgba(251,191,36,.24);border-radius:10px;padding:8px}
+    .office-stat-value{font-size:1.08rem;line-height:1;font-weight:800;color:#fff7ed}
+    .office-stat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:#fdba74;margin-top:3px}
+    .agent-list{max-height:640px;overflow:auto;padding-right:4px}
+    .agent-list-item{border:1px solid rgba(251,191,36,.24);border-radius:10px;background:rgba(26,19,14,.7);padding:8px 9px;margin-bottom:8px}
+    .agent-list-name{font-size:.72rem;font-weight:700;color:#fff7ed;display:flex;justify-content:space-between}
+    .agent-list-team{font-size:.58rem;color:#fdba74;margin-top:2px}
+    .agent-list-task{margin-top:5px;font-size:.6rem;color:#fed7aa;line-height:1.35}
+    .agent-status{font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:999px}
+    .agent-status.working{color:#bbf7d0;background:rgba(22,101,52,.45);border:1px solid rgba(74,222,128,.5)}
+    .agent-status.idle{color:#cbd5e1;background:rgba(51,65,85,.5);border:1px solid rgba(100,116,139,.5)}
+    @@media (max-width:1400px){.office-shell{grid-template-columns:1fr}}
+    @@media (max-width:767px){.office-scene{height:620px}.agent-list{max-height:none}.office-side-rail,.office-status-card{display:none}.office-chip-strip{right:12px;top:54px}}
 </style>
 
-<div class="row g-3 mb-4">
-    @{ int agentIdx = 0; }
-    @foreach (var agent in Model.Agents)
-    {
-        var icon = avatarIcons[agentIdx % avatarIcons.Length];
-        var color = avatarColors[agentIdx % avatarColors.Length];
-        var isRunning = agent.Status == "Running";
-        var statusClass = isRunning ? "running" : "idle";
-        var formId = $"photo-form-{agentIdx}";
-        var fileInputId = $"photo-input-{agentIdx}";
-        agentIdx++;
-        <div class="col-md-6 col-lg-4">
-            <div class="agent-card h-100 @("status-" + statusClass)" style="--agent-color: @color">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-start gap-3 mb-3">
-
-                        @* Avatar with upload controls (Admin only) *@
-                        <div class="agent-avatar-outer">
-                            @if (User.IsInRole("Admin"))
-                            {
-                                <form id="@formId"
-                                      asp-controller="Agent" asp-action="UploadPhoto"
-                                      method="post" enctype="multipart/form-data"
-                                      style="display:none">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="profileFolder" value="@agent.ProfileFolder" />
-                                    <input type="file" id="@fileInputId" name="photo"
-                                           accept="image/jpeg,image/png,image/gif,image/webp"
-                                           onchange="document.getElementById('@formId').submit()" />
-                                </form>
-                            }
-
-                            @* The circle — hover shows camera overlay when Admin *@
-                            <div class="agent-avatar-circle-wrap">
-                                <div class="agent-avatar-wrap" style="background: @(color + "22")">
-                                    @if (!string.IsNullOrEmpty(agent.PhotoUrl))
-                                    {
-                                        <img src="@agent.PhotoUrl" alt="@agent.Name photo" />
-                                    }
-                                    else
-                                    {
-                                        <i class="bi @icon" style="color: @color"></i>
-                                    }
-                                    <div class="agent-avatar-ring"></div>
-                                </div>
-                                @if (User.IsInRole("Admin"))
-                                {
-                                    <button type="button"
-                                            class="agent-avatar-upload-btn"
-                                            title="@(string.IsNullOrEmpty(agent.PhotoUrl) ? "Upload photo" : "Replace photo")"
-                                            onclick="document.getElementById('@fileInputId').click()">
-                                        <i class="bi bi-camera-fill"></i>
-                                        <span>@(string.IsNullOrEmpty(agent.PhotoUrl) ? "Upload" : "Replace")</span>
-                                    </button>
-                                }
-                            </div>
-
-                            @* Below the circle: visible CTA when no photo; replace link when photo exists *@
-                            @if (User.IsInRole("Admin"))
-                            {
-                                if (string.IsNullOrEmpty(agent.PhotoUrl))
-                                {
-                                    <button type="button"
-                                            class="agent-add-photo-btn"
-                                            onclick="document.getElementById('@fileInputId').click()">
-                                        <i class="bi bi-camera-fill"></i> Add photo
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button"
-                                            class="agent-replace-photo-btn"
-                                            onclick="document.getElementById('@fileInputId').click()">
-                                        <i class="bi bi-arrow-repeat"></i> Replace
-                                    </button>
-                                }
-                            }
-                        </div>
-
-                        <div class="flex-grow-1 min-width-0">
-                            <div class="agent-card-name">@agent.Name</div>
-                            <div class="agent-card-desc">@agent.Description</div>
-                        </div>
-                        <span class="agent-status-badge @statusClass">
-                            <span class="agent-status-dot @statusClass"></span>@agent.Status
-                        </span>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <div class="agent-stat-pill">
-                            <div class="stat-value" style="color: @color">@agent.RunningWorkItems</div>
-                            <div class="stat-label">Running</div>
-                        </div>
-                        <div class="agent-stat-pill">
-                            <div class="stat-value">@agent.QueuedWorkItems</div>
-                            <div class="stat-label">Queued</div>
-                        </div>
-                    </div>
-
-                    @* Performance Rating *@
-                    <div class="perf-section">
-                        <div class="perf-header">
-                            <span class="perf-label">Performance Rating</span>
-                            @if (agent.PerformanceScore >= 0)
-                            {
-                                <span class="perf-grade-badge"
-                                      style="color:@agent.PerformanceGradeColor;border-color:@(agent.PerformanceGradeColor + "55");background:@(agent.PerformanceGradeColor + "18")">
-                                    @agent.PerformanceGrade
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="perf-grade-badge" style="color:var(--text-on-dark-muted);border-color:#33415533;background:rgba(51,65,85,0.12)">N/A</span>
-                            }
-                        </div>
-                        @if (agent.PerformanceScore >= 0)
-                        {
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <div class="perf-bar-bg flex-grow-1">
-                                    <div class="perf-bar-fill"
-                                         style="width:@(agent.PerformanceScore)%;background:@agent.PerformanceGradeColor"></div>
-                                </div>
-                                <span class="perf-score-text">@agent.PerformanceScore%</span>
-                            </div>
-                            <div class="perf-stats">
-                                <span class="perf-stat">
-                                    <span class="perf-stat-dot" style="background:#10b981"></span>
-                                    @agent.Completed done
-                                </span>
-                                <span class="perf-stat">
-                                    <span class="perf-stat-dot" style="background:#ef4444"></span>
-                                    @agent.Failed failed
-                                </span>
-                                <span class="perf-stat">
-                                    <span class="perf-stat-dot" style="background:#eab308"></span>
-                                    @agent.Blocked blocked
-                                </span>
-                                <span class="perf-stat" style="margin-left:auto">
-                                    @agent.TotalAssigned total
-                                </span>
-                            </div>
-                        }
-                        else
-                        {
-                            <div style="font-size:0.68rem;color:var(--text-on-dark-muted);margin-top:2px">No tasks assigned yet</div>
-                        }
-                    </div>
-                </div>
-            </div>
+<div class="office-shell">
+    <div class="office-stage-wrap">
+        <div class="office-hud">
+            <div><strong>@Model.CeoName HQ</strong><span class="ms-2">Isometric live office view for agents and team members.</span></div>
+            <div>Updated @Model.GeneratedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div>
         </div>
-    }
-</div>
-
-@* ── Queue Snapshot ───────────────────────────────────────────── *@
-<style>
-    /* ── Queue bar ── */
-    .qs-bar {
-        background: linear-gradient(135deg, #0f172a, #1e1b4b);
-        border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 14px;
-        padding: 18px 24px;
-        display: flex;
-        align-items: center;
-        gap: 0;
-        flex-wrap: wrap;
-        row-gap: 12px;
-        margin-bottom: 28px;
-    }
-    .qs-item {
-        flex: 1 1 100px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0 12px;
-        border-right: 1px solid rgba(255,255,255,0.06);
-    }
-    .qs-item:last-child { border-right: none; }
-    .qs-value {
-        font-size: 1.8rem;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.03em;
-    }
-    .qs-label {
-        font-size: 0.65rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        opacity: 0.45;
-        margin-top: 4px;
-        color: var(--text-on-dark);
-    }
-    .qs-divider {
-        width: 1px;
-        height: 36px;
-        background: rgba(255,255,255,0.06);
-        flex-shrink: 0;
-    }
-
-    /* ── AI panel shared ── */
-    .ai-panel {
-        background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
-        border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 16px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-    .ai-panel-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 14px 18px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        background: rgba(255,255,255,0.02);
-    }
-    .ai-panel-icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.85rem;
-        flex-shrink: 0;
-    }
-    .ai-panel-title {
-        font-size: 0.78rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        color: var(--text-on-dark);
-    }
-    .ai-panel-count {
-        margin-left: auto;
-        font-size: 0.65rem;
-        font-weight: 700;
-        background: rgba(255,255,255,0.07);
-        color: #94a3b8;
-        border-radius: 999px;
-        padding: 2px 9px;
-        letter-spacing: 0.04em;
-    }
-    .ai-panel-body {
-        flex: 1;
-        overflow-y: auto;
-        padding: 6px 0;
-        max-height: 340px;
-    }
-    .ai-panel-body::-webkit-scrollbar { width: 4px; }
-    .ai-panel-body::-webkit-scrollbar-track { background: transparent; }
-    .ai-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-    .ai-empty {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 40px 20px;
-        color: var(--text-on-dark-muted);
-        font-size: 0.78rem;
-        text-align: center;
-    }
-    .ai-empty i { font-size: 1.6rem; opacity: 0.3; }
-
-    /* ── Work item rows ── */
-    .wi-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 10px 18px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-        transition: background 0.15s;
-    }
-    .wi-row:last-child { border-bottom: none; }
-    .wi-row:hover { background: rgba(255,255,255,0.03); }
-    .wi-pulse {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #10b981;
-        box-shadow: 0 0 6px #10b981;
-        animation: pulse-dot 1.4s ease-in-out infinite;
-        flex-shrink: 0;
-        margin-top: 5px;
-    }
-    .wi-body { flex: 1; min-width: 0; }
-    .wi-title {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-on-dark);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .wi-title a { color: inherit; text-decoration: none; }
-    .wi-title a:hover { color: var(--accent); }
-    .wi-meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 3px;
-        flex-wrap: wrap;
-    }
-    .wi-bug-num {
-        font-size: 0.67rem;
-        font-weight: 700;
-        color: var(--accent);
-        font-family: monospace;
-        letter-spacing: 0.03em;
-    }
-    .wi-status-chip {
-        font-size: 0.62rem;
-        font-weight: 700;
-        padding: 1px 7px;
-        border-radius: 999px;
-        background: rgba(16,185,129,0.15);
-        color: #10b981;
-        border: 1px solid rgba(16,185,129,0.25);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .wi-time {
-        font-size: 0.63rem;
-        color: var(--text-on-dark-muted);
-        margin-left: auto;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    /* ── Cron job rows ── */
-    .cj-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 18px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-        transition: background 0.15s;
-    }
-    .cj-row:last-child { border-bottom: none; }
-    .cj-row:hover { background: rgba(255,255,255,0.03); }
-    .cj-icon-wrap {
-        width: 32px;
-        height: 32px;
-        border-radius: 9px;
-        background: rgba(234,179,8,0.12);
-        color: #eab308;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        flex-shrink: 0;
-    }
-    .cj-name {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-on-dark);
-    }
-    .cj-desc {
-        font-size: 0.68rem;
-        color: var(--text-on-dark-muted);
-        margin-top: 1px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .cj-cron {
-        font-family: monospace;
-        font-size: 0.7rem;
-        color: #eab308;
-        background: rgba(234,179,8,0.08);
-        border: 1px solid rgba(234,179,8,0.2);
-        border-radius: 6px;
-        padding: 2px 8px;
-        white-space: nowrap;
-        margin-left: auto;
-        flex-shrink: 0;
-    }
-    .cj-running-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #10b981;
-        box-shadow: 0 0 5px #10b981;
-        animation: pulse-dot 1.4s ease-in-out infinite;
-        flex-shrink: 0;
-    }
-
-    /* ── Activity feed ── */
-    .af-row {
-        display: flex;
-        gap: 14px;
-        padding: 10px 18px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-        transition: background 0.15s;
-    }
-    .af-row:last-child { border-bottom: none; }
-    .af-row:hover { background: rgba(255,255,255,0.03); }
-    .af-timeline {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        flex-shrink: 0;
-        width: 14px;
-        padding-top: 4px;
-    }
-    .af-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--accent);
-        flex-shrink: 0;
-        box-shadow: 0 0 6px rgba(99,102,241,0.5);
-    }
-    .af-line {
-        flex: 1;
-        width: 1px;
-        background: var(--accent-bg);
-        margin-top: 4px;
-        min-height: 16px;
-    }
-    .af-body { flex: 1; min-width: 0; }
-    .af-action {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-on-dark);
-        line-height: 1.3;
-    }
-    .af-meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 4px;
-        flex-wrap: wrap;
-    }
-    .af-bug {
-        font-size: 0.67rem;
-        font-weight: 700;
-        color: var(--accent);
-        font-family: monospace;
-        text-decoration: none;
-    }
-    .af-bug:hover { color: var(--accent); }
-    .af-title-text {
-        font-size: 0.68rem;
-        color: var(--text-on-dark-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 180px;
-    }
-    .af-transition {
-        font-size: 0.65rem;
-        font-family: monospace;
-        color: #94a3b8;
-        background: rgba(255,255,255,0.05);
-        border-radius: 5px;
-        padding: 1px 7px;
-        white-space: nowrap;
-    }
-    .af-time {
-        margin-left: auto;
-        font-size: 0.63rem;
-        color: var(--text-on-dark-muted);
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    /* ── All Cron Jobs table-card ── */
-    .cj-all-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 18px;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .cj-all-row:last-child { border-bottom: none; }
-    .cj-badge-enabled {
-        font-size: 0.6rem;
-        font-weight: 700;
-        padding: 1px 7px;
-        border-radius: 999px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        background: rgba(16,185,129,0.12);
-        color: #10b981;
-        border: 1px solid rgba(16,185,129,0.2);
-        flex-shrink: 0;
-    }
-    .cj-badge-disabled {
-        font-size: 0.6rem;
-        font-weight: 700;
-        padding: 1px 7px;
-        border-radius: 999px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        background: rgba(100,116,139,0.12);
-        color: #64748b;
-        border: 1px solid rgba(100,116,139,0.2);
-        flex-shrink: 0;
-    }
-    .cj-running-badge {
-        font-size: 0.6rem;
-        font-weight: 700;
-        padding: 1px 7px;
-        border-radius: 999px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        background: rgba(16,185,129,0.12);
-        color: #10b981;
-        border: 1px solid rgba(16,185,129,0.2);
-        flex-shrink: 0;
-    }
-</style>
-
-@* Queue Snapshot Bar *@
-<div class="qs-bar mb-4">
-    <div class="qs-item">
-        <div class="qs-value" style="color:var(--text-on-dark)">@Model.QueueSnapshot.Total</div>
-        <div class="qs-label">Total</div>
-    </div>
-    <div class="qs-item">
-        <div class="qs-value" style="color:#94a3b8">@Model.QueueSnapshot.Queued</div>
-        <div class="qs-label">Queued</div>
-    </div>
-    <div class="qs-item">
-        <div class="qs-value" style="color:var(--accent)">@Model.QueueSnapshot.InProgress</div>
-        <div class="qs-label">In Progress</div>
-    </div>
-    <div class="qs-item">
-        <div class="qs-value" style="color:#eab308">@Model.QueueSnapshot.Blocked</div>
-        <div class="qs-label">Blocked</div>
-    </div>
-    <div class="qs-item">
-        <div class="qs-value" style="color:#10b981">@Model.QueueSnapshot.PrRaised</div>
-        <div class="qs-label">PR Raised</div>
-    </div>
-    <div class="qs-item">
-        <div class="qs-value" style="color:#ef4444">@Model.QueueSnapshot.Failed</div>
-        <div class="qs-label">Failed</div>
-    </div>
-</div>
-
-@* Top row: Running Work Items + Running Cron Jobs *@
-<div class="row g-3 mb-3">
-    @* Running Agent Work Items *@
-    <div class="col-12 col-xl-6">
-        <div class="ai-panel">
-            <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:var(--accent-bg);color:var(--accent)">
-                    <i class="bi bi-lightning-charge-fill"></i>
-                </div>
-                <span class="ai-panel-title">Running Work Items</span>
-                <span class="ai-panel-count">@Model.RunningAgentWorkItems.Count active</span>
-            </div>
-            <div class="ai-panel-body">
-                @if (Model.RunningAgentWorkItems.Count == 0)
+        <div class="office-scene">
+            <canvas id="office3dCanvas"></canvas>
+            <div class="office-chip-strip">
+                @foreach (var agent in Model.Agents)
                 {
-                    <div class="ai-empty">
-                        <i class="bi bi-inbox"></i>
-                        No work items currently executing
-                    </div>
-                }
-                else
-                {
-                    @foreach (var item in Model.RunningAgentWorkItems)
-                    {
-                        <div class="wi-row">
-                            <div class="wi-pulse"></div>
-                            <div class="wi-body">
-                                <div class="wi-title">
-                                    <a asp-controller="Bug" asp-action="Details" asp-route-id="@item.Id">@item.Title</a>
-                                </div>
-                                <div class="wi-meta">
-                                    <span class="wi-bug-num">@item.BugNumber</span>
-                                    <span class="wi-status-chip">@item.AgentStatus</span>
-                                </div>
-                            </div>
-                            <span class="wi-time">@item.UpdatedAt.ToLocalTime().ToString("HH:mm")</span>
-                        </div>
-                    }
+                    <span class="office-chip"><span class="office-chip-dot @(agent.IsWorking ? "busy" : "idle")"></span><span>@agent.Name</span><span style="opacity:.7">(@agent.TeamName)</span></span>
                 }
             </div>
+            <div class="office-status-card">
+                <div style="text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#99f6e4;font-size:.55rem">Standup Board</div>
+                <div>Gathering in meeting room...</div>
+                <div style="color:#99f6e4">@Model.WorkingAgentCount / @Math.Max(Model.AgentCount, 1) active</div>
+            </div>
+            <div class="office-side-rail">
+                <span class="office-side-tab">Open Hub</span>
+                <span class="office-side-tab">Marketplace</span>
+                <span class="office-side-tab">Analytics</span>
+            </div>
+            <div id="officeFallback" class="office-fallback">3D engine failed to initialize in this browser. Please refresh and ensure Canvas is enabled.</div>
         </div>
     </div>
 
-    @* Running Cron Jobs *@
-    <div class="col-12 col-xl-6">
-        <div class="ai-panel">
-            <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:rgba(234,179,8,0.12);color:#eab308">
-                    <i class="bi bi-clock-fill"></i>
-                </div>
-                <span class="ai-panel-title">Running Cron Jobs</span>
-                <span class="ai-panel-count">@Model.RunningCronJobs.Count running</span>
-            </div>
-            <div class="ai-panel-body">
-                @if (Model.RunningCronJobs.Count == 0)
+    <div class="office-panel">
+        <div class="office-panel-title">Office Summary</div>
+        <div class="office-stats">
+            <div class="office-stat"><div class="office-stat-value">@Model.TeamCount</div><div class="office-stat-label">Teams</div></div>
+            <div class="office-stat"><div class="office-stat-value">@Model.AgentCount</div><div class="office-stat-label">Agents</div></div>
+            <div class="office-stat"><div class="office-stat-value">@Model.WorkingAgentCount</div><div class="office-stat-label">Working</div></div>
+            <div class="office-stat"><div class="office-stat-value">@Model.EmployeeCount</div><div class="office-stat-label">Employees</div></div>
+        </div>
+        <div class="office-panel-title">Agent Assignments</div>
+        <div class="agent-list">
+            @if (!Model.Agents.Any())
+            {
+                <div class="agent-list-item"><div class="agent-list-name">No agents found</div><div class="agent-list-task">Add users with Agent role to populate this office.</div></div>
+            }
+            else
+            {
+                @foreach (var agent in Model.Agents)
                 {
-                    <div class="ai-empty">
-                        <i class="bi bi-clock"></i>
-                        No scheduled jobs currently running
+                    <div class="agent-list-item">
+                        <div class="agent-list-name"><span>@agent.Name</span><span class="agent-status @(agent.IsWorking ? "working" : "idle")">@(agent.IsWorking ? "Working" : "Idle")</span></div>
+                        <div class="agent-list-team">@agent.TeamName - @agent.WorkspaceName</div>
+                        <div class="agent-list-task">@agent.TaskSummary</div>
                     </div>
                 }
-                else
-                {
-                    @foreach (var job in Model.RunningCronJobs)
-                    {
-                        <div class="cj-row">
-                            <div class="cj-running-dot"></div>
-                            <div class="cj-icon-wrap"><i class="bi bi-gear-fill"></i></div>
-                            <div class="flex-grow-1 min-width-0">
-                                <div class="cj-name">@job.Name</div>
-                                @if (!string.IsNullOrWhiteSpace(job.Description))
-                                {
-                                    <div class="cj-desc">@job.Description</div>
-                                }
-                            </div>
-                            <span class="cj-cron">@job.CronExpression</span>
-                        </div>
-                    }
-                }
-            </div>
+            }
         </div>
     </div>
 </div>
 
-@* Activity Feed — full width *@
-<div class="row g-3 mb-3">
-    <div class="col-12">
-        <div class="ai-panel">
-            <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:var(--accent-bg);color:var(--accent)">
-                    <i class="bi bi-activity"></i>
-                </div>
-                <span class="ai-panel-title">Recent Agent Activity</span>
-                <span class="ai-panel-count">last @Model.RecentActivities.Count events</span>
-            </div>
-            <div class="ai-panel-body" style="max-height:320px">
-                @if (Model.RecentActivities.Count == 0)
-                {
-                    <div class="ai-empty">
-                        <i class="bi bi-broadcast"></i>
-                        No activity recorded yet
-                    </div>
-                }
-                else
-                {
-                    @foreach (var activity in Model.RecentActivities)
-                    {
-                        <div class="af-row">
-                            <div class="af-timeline">
-                                <div class="af-dot"></div>
-                                <div class="af-line"></div>
-                            </div>
-                            <div class="af-body">
-                                <div class="af-action">@activity.Action</div>
-                                <div class="af-meta">
-                                    <a asp-controller="Bug" asp-action="Details" asp-route-id="@activity.BugId" class="af-bug">@activity.BugNumber</a>
-                                    <span class="af-title-text">@activity.Title</span>
-                                    @if (!string.IsNullOrWhiteSpace(activity.StatusTransition))
-                                    {
-                                        <span class="af-transition">@activity.StatusTransition</span>
-                                    }
-                                </div>
-                            </div>
-                            <span class="af-time">@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
-                        </div>
-                    }
-                }
-            </div>
-        </div>
-    </div>
-</div>
+<script id="officeSceneData" type="application/json">@Html.Raw(JsonSerializer.Serialize(scenePayload))</script>
+@section Scripts {
+<script>
+(() => {
+const canvas=document.getElementById('office3dCanvas'),fallback=document.getElementById('officeFallback'),dataNode=document.getElementById('officeSceneData');
+if(!canvas||!dataNode)return;const ctx=canvas.getContext('2d');if(!ctx){fallback?.classList.add('show');return;}
+const payload=JSON.parse(dataNode.textContent||'{}'),agents=Array.isArray(payload.agents)?payload.agents:[],employees=Array.isArray(payload.employees)?payload.employees:[];
+const keySeed=agents.map(a=>`${a.id}:${a.isWorking?1:0}:${a.taskCount}`).join('|');
+const stateKey='softracker.office3d.iso.state.v8';let saved=null;try{saved=JSON.parse(sessionStorage.getItem(stateKey)||'null')}catch(_){}
+const now=Date.now(),match=!!saved&&saved.keySeed===keySeed,epoch=match&&typeof saved.epochMs==='number'?saved.epochMs:now,skipIntro=match&&saved.introDone===true;
+const room={w:38,d:24,wallH:4.2},view={w:1200,h:760,ox:0,oy:0,tw:0,th:0,elev:0};
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v)),lerp=(a,b,t)=>a+(b-a)*t,ease=t=>1-Math.pow(1-t,3);
+const mapX=p=>2+clamp((p||0)/100,0,1)*(room.w-4),mapZ=p=>2+clamp((p||0)/100,0,1)*(room.d-4);
+const rgb=h=>{const c=String(h||'').replace('#','');if(c.length!==6)return{r:54,g:211,b:153};const n=parseInt(c,16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255}};
+const css=(c,a)=>`rgba(${c.r},${c.g},${c.b},${a})`,bright=(c,a)=>({r:clamp(Math.round(c.r+(255-c.r)*a),0,255),g:clamp(Math.round(c.g+(255-c.g)*a),0,255),b:clamp(Math.round(c.b+(255-c.b)*a),0,255)}),dark=(c,a)=>({r:clamp(Math.round(c.r*(1-a)),0,255),g:clamp(Math.round(c.g*(1-a)),0,255),b:clamp(Math.round(c.b*(1-a)),0,255)});
+const phase=s=>{let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return Math.abs(h%628)/100;};
+const textHash=s=>{let h=0;const t=String(s||'avatar');for(let i=0;i<t.length;i++){h=((h<<5)-h)+t.charCodeAt(i);h|=0;}return Math.abs(h);};
+const hslToRgb=(h,s,l)=>{const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r=0,g=0,b=0;if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}return{r:Math.round((r+m)*255),g:Math.round((g+m)*255),b:Math.round((b+m)*255)};};
+const shirtColorFor=a=>{const seed=textHash(`${a.id||a.n||'avatar'}:${a.team||''}:${a.t||''}`),h=seed%360,s=(66+(seed%18))/100,l=(42+((seed>>3)%12))/100;return hslToRgb(h,s,l);};
+const initials=n=>{if(!n)return'?';const p=String(n).trim().split(/\\s+/).slice(0,2);if(!p.length)return'?';if(p.length===1)return p[0][0].toUpperCase();return (p[0][0]+p[1][0]).toUpperCase();};
+const teamSection=(name)=>{const t=String(name||'').toLowerCase();if(t.includes('team 1')||t.includes('team1'))return'left';if(t.includes('team 2')||t.includes('team2'))return'right';return'left';};
+const randMs=(min,max)=>Math.floor(min+Math.random()*(max-min+1));
+const idleWanderMinMs=60000,idleWanderMaxMs=300000;
+const pantrySpots=[{x:29.8,z:18.0},{x:31.0,z:18.8},{x:32.2,z:18.1},{x:30.8,z:19.5}];
+const gamingSpots=[{x:29.2,z:21.2},{x:31.0,z:21.6},{x:33.0,z:21.1},{x:31.8,z:22.3}];
+const idleWalkSpots=[
+    ...pantrySpots,
+    ...gamingSpots,
+    {x:11.7,z:3.4},
+    {x:15.3,z:9.4},
+    {x:23.4,z:11.4},
+    {x:26.4,z:14.6},
+    {x:18.2,z:18.2}
+];
+const ceoSeat={x:30.9,z:4.35};
+const pickRandomSpot=spots=>spots[Math.floor(Math.random()*spots.length)];
+const pickNextIdleDestination=agent=>{
+    if(Math.random()<0.32)return{mode:'desk',x:agent.homeX,z:agent.homeZ};
+    const nextSpot=pickRandomSpot(idleWalkSpots);
+    return{mode:'wander',x:nextSpot.x,z:nextSpot.z};
+};
+function resize(){const dpr=Math.min(window.devicePixelRatio||1,2),w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);view.w=w;view.h=h;const mx=110,my=124,base=Math.min((w-mx*2)/(room.w+room.d),(h-my*2)/(room.w+room.d)*2);view.tw=Math.max(10,base*1.13);view.th=view.tw*.52;view.elev=view.th*1.75;view.ox=w/2;view.oy=120;}
+const iso=(x,y,z)=>({x:view.ox+(x-z)*view.tw,y:view.oy+(x+z)*view.th-y*view.elev});
+function poly(points,fill,stroke){if(!points.length)return;ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}}
+function prism(x,z,w,d,h,pal,stroke,y0=0){const y1=y0+h,a=iso(x,y1,z),b=iso(x+w,y1,z),c=iso(x+w,y1,z+d),dp=iso(x,y1,z+d),b0=iso(x+w,y0,z),c0=iso(x+w,y0,z+d),d0=iso(x,y0,z+d);poly([dp,c,c0,d0],pal.left,stroke);poly([b,c,c0,b0],pal.right,stroke);poly([a,b,c,dp],pal.top,stroke);}
+function roomDraw(){
+    ctx.fillStyle='#100905';
+    ctx.fillRect(0,0,view.w,view.h);
 
-@* All Cron Jobs *@
-<div class="row g-3">
-    <div class="col-12">
-        <div class="ai-panel">
-            <div class="ai-panel-header">
-                <div class="ai-panel-icon" style="background:rgba(234,179,8,0.12);color:#eab308">
-                    <i class="bi bi-calendar3"></i>
-                </div>
-                <span class="ai-panel-title">All Scheduled Jobs</span>
-                <span class="ai-panel-count">@Model.CronJobs.Count configured</span>
-            </div>
-            <div class="ai-panel-body" style="max-height:none">
-                @if (Model.CronJobs.Count == 0)
-                {
-                    <div class="ai-empty">
-                        <i class="bi bi-calendar-x"></i>
-                        No cron jobs configured
-                    </div>
-                }
-                else
-                {
-                    @foreach (var job in Model.CronJobs)
-                    {
-                        <div class="cj-all-row">
-                            @if (job.IsRunning)
-                            {
-                                <div class="cj-running-dot"></div>
-                            }
-                            else
-                            {
-                                <div style="width:7px;height:7px;border-radius:50%;background:rgba(100,116,139,0.3);flex-shrink:0"></div>
-                            }
-                            <div class="cj-icon-wrap"><i class="bi bi-gear-fill"></i></div>
-                            <div class="flex-grow-1 min-width-0">
-                                <div class="cj-name">@job.Name</div>
-                                @if (!string.IsNullOrWhiteSpace(job.Description))
-                                {
-                                    <div class="cj-desc">@job.Description</div>
-                                }
-                            </div>
-                            <span class="cj-cron">@job.CronExpression</span>
-                            @if (job.IsEnabled)
-                            {
-                                <span class="cj-badge-enabled">Enabled</span>
-                            }
-                            else
-                            {
-                                <span class="cj-badge-disabled">Disabled</span>
-                            }
-                            @if (job.IsRunning)
-                            {
-                                <span class="cj-running-badge">Running</span>
-                            }
-                        </div>
-                    }
-                }
-            </div>
-        </div>
-    </div>
-</div>
+    const A=iso(0,0,0),B=iso(room.w,0,0),C=iso(room.w,0,room.d),D=iso(0,0,room.d);
+    poly([A,B,C,D],'#e9e4d4','rgba(133,126,111,.6)');
+
+    // Zone overlays
+    const serverA=iso(1,.01,7),serverB=iso(6.7,.01,7),serverC=iso(6.7,.01,13.2),serverD=iso(1,.01,13.2);
+    poly([serverA,serverB,serverC,serverD],'rgba(30,58,138,.10)','rgba(59,130,246,.25)');
+    const ceoA=iso(28.4,.01,2.1),ceoB=iso(35.1,.01,2.1),ceoC=iso(35.1,.01,5.8),ceoD=iso(28.4,.01,5.8);
+    poly([ceoA,ceoB,ceoC,ceoD],'rgba(14,165,233,.10)','rgba(14,165,233,.28)');
+    const pantryA=iso(27.5,.01,16.8),pantryB=iso(34.3,.01,16.8),pantryC=iso(34.3,.01,20.2),pantryD=iso(27.5,.01,20.2);
+    poly([pantryA,pantryB,pantryC,pantryD],'rgba(245,158,11,.08)','rgba(245,158,11,.28)');
+    const gamingA=iso(27.5,.01,20.3),gamingB=iso(34.3,.01,20.3),gamingC=iso(34.3,.01,23.2),gamingD=iso(27.5,.01,23.2);
+    poly([gamingA,gamingB,gamingC,gamingD],'rgba(124,58,237,.08)','rgba(139,92,246,.28)');
+
+    // Floor grid
+    ctx.strokeStyle='rgba(193,186,168,.35)';
+    for(let i=1;i<20;i++){const t=(room.w/20)*i,p1=iso(t,.01,0),p2=iso(t,.01,room.d);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();}
+    for(let i=1;i<18;i++){const t=(room.d/18)*i,p1=iso(0,.01,t),p2=iso(room.w,.01,t);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();}
+
+    // Walls
+    const nw=iso(0,0,0),ne=iso(room.w,0,0),se=iso(room.w,0,room.d),sw=iso(0,0,room.d),nwt=iso(0,room.wallH,0),net=iso(room.w,room.wallH,0),set=iso(room.w,room.wallH,room.d),swt=iso(0,room.wallH,room.d);
+    poly([nw,ne,net,nwt],'#a7a8af','rgba(113,113,122,.65)');
+    poly([nw,sw,swt,nwt],'#8f9098','rgba(113,113,122,.6)');
+    poly([ne,se,set,net],'#9ea0a8','rgba(113,113,122,.6)');
+
+    // Section labels
+    ctx.font='700 10px Inter,sans-serif';
+    ctx.textAlign='center';
+    const serverLabel=iso(3.7,.03,10.4),meetingLabel=iso(11.5,.03,3),ceoLabel=iso(31.8,.03,3.2),opsLabel=iso(30,.03,7.5),pantryLabel=iso(31.2,.03,18.5),gamingLabel=iso(31.2,.03,21.8);
+    ctx.fillStyle='rgba(59,130,246,.9)';ctx.fillText('SERVER ROOM',serverLabel.x,serverLabel.y);
+    ctx.fillStyle='rgba(71,85,105,.9)';ctx.fillText('MEETING',meetingLabel.x,meetingLabel.y);
+    ctx.fillStyle='rgba(14,165,233,.95)';ctx.fillText('CEO SECTION',ceoLabel.x,ceoLabel.y);
+    ctx.fillStyle='rgba(16,185,129,.9)';ctx.fillText('OPS DESK',opsLabel.x,opsLabel.y);
+    ctx.fillStyle='rgba(234,179,8,.95)';ctx.fillText('PANTRY',pantryLabel.x,pantryLabel.y);
+    ctx.fillStyle='rgba(167,139,250,.95)';ctx.fillText('GAMING',gamingLabel.x,gamingLabel.y);
+}
+const furniture=[];const deskByAgent=new Map();const deskByEmployee=new Map();
+function layout(){
+    furniture.length=0;
+    deskByAgent.clear();
+    deskByEmployee.clear();
+
+    // Server room corner + partitions
+    furniture.push(
+        {k:'server',x:1.7,z:8.6,w:1.8,d:1.2,h:3.1,dep:11},
+        {k:'server',x:3.8,z:8.6,w:1.8,d:1.2,h:3.1,dep:13},
+        {k:'partition',x:1.0,z:7.4,w:5.5,d:.3,h:1.4,dep:10},
+        {k:'partition',x:6.2,z:7.4,w:.3,d:5.0,h:1.4,dep:14}
+    );
+
+    // Meeting and collaboration zone
+    furniture.push(
+        {k:'meetingTable',x:9.8,z:1.8,w:4.2,d:3.2,h:1.0,dep:17},
+        {k:'meetingChair',x:9.4,z:2.2,w:.78,d:.55,h:.65,dep:12},
+        {k:'meetingChair',x:13.6,z:2.4,w:.78,d:.55,h:.65,dep:16},
+        {k:'meetingChair',x:11.1,z:1.2,w:.78,d:.55,h:.65,dep:12},
+        {k:'meetingChair',x:11.7,z:5.0,w:.78,d:.55,h:.65,dep:17},
+        {k:'meetingChair',x:14.2,z:4.2,w:.78,d:.55,h:.65,dep:18}
+    );
+
+    // Reception + operations side
+    furniture.push(
+        {k:'ceoDesk',x:29.2,z:2.7,w:3.7,d:1.6,h:1.45,dep:36},
+        {k:'ceoChair',x:30.5,z:4.28,w:.95,d:.58,h:.72,dep:36},
+        {k:'partition',x:28.6,z:2.4,w:6.3,d:.3,h:1.4,dep:33},
+        {k:'partition',x:34.6,z:2.4,w:.3,d:3.3,h:1.4,dep:37},
+        {k:'receptionDesk',x:27.9,z:6.8,w:3.9,d:1.9,h:1.5,dep:37},
+        {k:'shelf',x:33.0,z:6.2,w:1.1,d:1.0,h:2.7,dep:41},
+        {k:'wallCounter',x:31.5,z:10.8,w:5.8,d:.65,h:.92,dep:44}
+    );
+    for(let i=0;i<5;i++)furniture.push({k:'bin',x:31.7+i*.95,z:11.6,w:.55,d:.45,h:.42,dep:44+i});
+
+    // Pantry + gaming + lounge
+    furniture.push(
+        {k:'pantryCounter',x:28.1,z:17.0,w:4.2,d:1.15,h:1.25,dep:45},
+        {k:'fridge',x:33.1,z:16.9,w:1.05,d:1.05,h:2.3,dep:49},
+        {k:'gamingDesk',x:28.1,z:20.4,w:3.1,d:1.0,h:1.0,dep:49},
+        {k:'arcade',x:31.8,z:20.2,w:1.0,d:.95,h:2.0,dep:52},
+        {k:'sofa',x:26.2,z:21.4,w:2.7,d:1.1,h:.98,dep:49},
+        {k:'sofa',x:29.2,z:21.4,w:2.7,d:1.1,h:.98,dep:52},
+        {k:'coffeeTable',x:28.5,z:22.0,w:1.15,d:.8,h:.6,dep:52},
+        {k:'ping',x:34.0,z:22.0,w:3.0,d:1.6,h:.96,dep:56},
+        {k:'plant',x:17.2,z:12.8,w:.35,d:.35,h:1.2,dep:30},
+        {k:'plant',x:35.8,z:8.8,w:.35,d:.35,h:1.2,dep:48},
+        {k:'plant',x:24.4,z:22.8,w:.35,d:.35,h:1.2,dep:47}
+    );
+
+    // Main scattered desks like reference
+    const deskSlots=[
+        {x:8.2,z:7.3},{x:12.4,z:8.0},{x:16.0,z:7.6},{x:20.0,z:9.1},
+        {x:9.6,z:11.5},{x:14.6,z:12.1},{x:19.0,z:12.0},{x:23.2,z:13.2},
+        {x:12.0,z:16.0},{x:17.0,z:16.8},{x:22.0,z:17.0},{x:6.7,z:13.6},
+        {x:24.6,z:15.8},{x:27.0,z:12.0},{x:7.0,z:5.3},{x:18.8,z:14.5}
+    ];
+
+    let slotIndex=0;
+    const resolveDeskSlot=()=>{
+        const overflow=slotIndex-deskSlots.length;
+        const s=deskSlots[slotIndex]??{x:8.5+(overflow%4)*3.6,z:18.4+Math.floor(overflow/4)*2.2};
+        slotIndex++;
+        return s;
+    };
+    const placeDesk=(id,label,colorIdx,mapRef)=>{
+        const s=resolveDeskSlot();
+        mapRef.set(id,{x:s.x,z:s.z,chairX:s.x-.28,chairZ:s.z+.84});
+        furniture.push(
+            {k:'desk',x:s.x-1.05,z:s.z-.7,w:2.1,d:1.3,h:1.08,dep:s.x+s.z,ci:colorIdx%4,l:label},
+            {k:'chair',x:s.x-.42,z:s.z+.72,w:.84,d:.56,h:.65,dep:s.x+s.z+.5}
+        );
+    };
+
+    agents.forEach((a,idx)=>placeDesk(a.id,a.workspace||`Desk A${idx+1}`,idx,deskByAgent));
+    employees.forEach((e,idx)=>placeDesk(e.id,`Desk E${idx+1}`,(idx+2),deskByEmployee));
+
+    // Keep a few open desks if slots remain
+    for(let i=0;i<3;i++){
+        const s=deskSlots[slotIndex+i];
+        if(!s)break;
+        furniture.push(
+            {k:'desk',x:s.x-1.05,z:s.z-.7,w:2.1,d:1.3,h:1.08,dep:s.x+s.z,ci:(i+1)%4,l:`Open ${i+1}`},
+            {k:'chair',x:s.x-.42,z:s.z+.72,w:.84,d:.56,h:.65,dep:s.x+s.z+.5}
+        );
+    }
+}
+function drawFurniture(it){
+    if(it.k==='ping'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#48bb92',left:'#2f9c78',right:'#2b8a6b'},'rgba(16,185,129,.45)');return;}
+    if(it.k==='server'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#1e293b',left:'#0f172a',right:'#111827'},'rgba(100,116,139,.55)');return;}
+    if(it.k==='partition'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#9ca3af',left:'#6b7280',right:'#7c8797'},'rgba(113,113,122,.45)');return;}
+    if(it.k==='meetingTable'){
+        prism(it.x,it.z,it.w,it.d,it.h,{top:'#c89d74',left:'#9e774f',right:'#b78961'},'rgba(146,93,67,.5)');
+        const c=iso(it.x+it.w/2,it.h+.02,it.z+it.d/2);
+        ctx.beginPath();
+        ctx.ellipse(c.x,c.y,view.tw*1.6,view.th*1.25,0,0,Math.PI*2);
+        ctx.fillStyle='rgba(205,165,126,.92)';
+        ctx.fill();
+        ctx.strokeStyle='rgba(146,93,67,.55)';
+        ctx.stroke();
+        return;
+    }
+    if(it.k==='meetingChair'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#7b85a8',left:'#5f6788',right:'#6d7597'},'rgba(100,116,139,.5)');return;}
+    if(it.k==='ceoDesk'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#7dd3fc',left:'#0284c7',right:'#0369a1'},'rgba(2,132,199,.55)');return;}
+    if(it.k==='ceoChair'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#93c5fd',left:'#3b82f6',right:'#2563eb'},'rgba(59,130,246,.52)');return;}
+    if(it.k==='receptionDesk'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#c79a7d',left:'#9f6f56',right:'#b58168'},'rgba(161,98,74,.5)');return;}
+    if(it.k==='shelf'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#9b6a4f',left:'#7c4d35',right:'#8f5d44'},'rgba(146,93,67,.6)');return;}
+    if(it.k==='pantryCounter'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#c79a7d',left:'#9f6f56',right:'#b58168'},'rgba(161,98,74,.5)');return;}
+    if(it.k==='fridge'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#dbeafe',left:'#93c5fd',right:'#60a5fa'},'rgba(59,130,246,.45)');return;}
+    if(it.k==='gamingDesk'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#7c3aed',left:'#5b21b6',right:'#6d28d9'},'rgba(139,92,246,.5)');prism(it.x+1.15,it.z+.15,.85,.26,.52,{top:'#a5b4fc',left:'#818cf8',right:'#6366f1'},'rgba(99,102,241,.45)',it.h);return;}
+    if(it.k==='arcade'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#312e81',left:'#1e1b4b',right:'#4338ca'},'rgba(99,102,241,.5)');prism(it.x+.2,it.z+.15,.6,.12,.35,{top:'#c4b5fd',left:'#a78bfa',right:'#8b5cf6'},'rgba(139,92,246,.4)',it.h*.58);return;}
+    if(it.k==='wallCounter'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#6b7280',left:'#4b5563',right:'#5b6473'},'rgba(107,114,128,.45)');return;}
+    if(it.k==='bin'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#d1d5db',left:'#9ca3af',right:'#b8c0c8'},'rgba(148,163,184,.45)');return;}
+    if(it.k==='coffeeTable'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#f59e0b',left:'#d97706',right:'#ea580c'},'rgba(245,158,11,.45)');return;}
+    if(it.k==='plant'){prism(it.x,it.z,it.w,it.d,.35,{top:'#a16207',left:'#854d0e',right:'#92400e'},'rgba(146,64,14,.4)');prism(it.x+.08,it.z+.08,it.w*.5,it.d*.5,it.h,{top:'#7dd3fc',left:'#14b8a6',right:'#0ea5a4'},'rgba(20,184,166,.45)',.35);return;}
+    if(it.k==='sofa'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#6b72a7',left:'#535a8a',right:'#5f6699'},'rgba(99,102,241,.5)');return;}
+    if(it.k==='cab'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#d4d4d8',left:'#a1a1aa',right:'#b4b4bc'},'rgba(113,113,122,.45)');return;}
+    if(it.k==='chair'){prism(it.x,it.z,it.w,it.d,it.h,{top:'#7583a8',left:'#596487',right:'#647096'},'rgba(100,116,139,.5)');return;}
+    const pal=[{top:'#b88c64',left:'#8f6a48',right:'#a77a55'},{top:'#c29468',left:'#976f4d',right:'#ac7f59'},{top:'#b98b5f',left:'#8e6846',right:'#a47952'},{top:'#bc9166',left:'#936d4b',right:'#a98059'}][it.ci||0];
+    prism(it.x,it.z,it.w,it.d,it.h,pal,'rgba(120,87,64,.55)');
+    prism(it.x+.78,it.z+.18,.5,.25,.56,{top:'#6db5df',left:'#4f8ab0',right:'#5a9bc4'},'rgba(56,189,248,.45)');
+    const p=iso(it.x+it.w/2,it.h+.45,it.z-.15);
+    ctx.fillStyle='#7dd3fc';
+    ctx.font='700 10px Inter,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(it.l,p.x,p.y);
+}
+const actors=[];function buildActors(){
+    actors.length=0;
+    agents.forEach((a,i)=>{
+        const ix=mapX(a.idleLeftPct),iz=mapZ(a.idleTopPct),desk=deskByAgent.get(a.id);
+        const homeX=desk?(desk.chairX??desk.x):mapX(a.workLeftPct);
+        const homeZ=desk?(desk.chairZ??desk.z):mapZ(a.workTopPct);
+        const targetX=homeX;
+        const targetZ=homeZ;
+        actors.push({
+            t:'agent',id:a.id,team:a.team,n:a.name,s:a.taskSummary,c:rgb(a.color||'#22d3ee'),
+            x:skipIntro?targetX:ix,z:skipIntro?targetZ:iz,ix,iz,tx:targetX,tz:targetZ,w:!!a.isWorking,
+            st:now+i*90,d:1400,p:phase(a.id||String(i)),
+            homeX,homeZ,
+            idleMode:'desk',
+            nextSwitchAt:now+randMs(idleWanderMinMs,idleWanderMaxMs),moving:false
+        });
+    });
+    employees.forEach((e,i)=>{
+        const desk=deskByEmployee.get(e.id);
+        const ex=desk?(desk.chairX??desk.x):mapX(e.leftPct);
+        const ez=desk?(desk.chairZ??desk.z):mapZ(e.topPct);
+        actors.push({t:'emp',id:e.id,n:e.name,s:e.role,team:e.team,c:rgb(e.color||'#60a5fa'),x:ex,z:ez,w:false,p:phase(e.id||`e-${i}`)});
+    });
+    actors.push({t:'ceo',id:'ceo',n:payload.ceo?.name||'CEO',s:'CEO',team:'Management',c:rgb('#f59e0b'),x:ceoSeat.x,z:ceoSeat.z,w:false,p:phase('ceo')});
+}
+function nameTag(x,y,t,b){const w=Math.max(38,Math.min(120,t.length*6.7+18)),h=16,tx=x-w/2,ty=y-6;ctx.fillStyle='rgba(3,7,18,.86)';ctx.strokeStyle='rgba(148,163,184,.45)';if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx,ty,w,h,6);ctx.fill();ctx.stroke();}else{ctx.fillRect(tx,ty,w,h);ctx.strokeRect(tx,ty,w,h);}ctx.fillStyle='#f8fafc';ctx.font='700 10px Inter,sans-serif';ctx.textAlign='left';ctx.fillText(t,tx+8,ty+11.5);ctx.beginPath();ctx.arc(tx+w-8,ty+8,3.4,0,Math.PI*2);ctx.fillStyle=b?'#4ade80':'#64748b';ctx.fill();}
+function drawActor(a,t){
+    let bob=.015;
+    if(a.t==='agent')bob+=Math.sin(t*(a.w?4.1:2.2)+a.p)*(a.w?.03:.01);
+    else if(a.t==='emp')bob+=Math.sin(t*2.0+a.p)*.01;
+    else bob+=Math.sin(t*1.6+a.p)*.02;
+
+    const sc=a.t==='emp'?1.55:a.t==='ceo'?1.85:1.7;
+    const isWalking=!!a.moving;
+    const gait=Math.sin(t*(isWalking?5.8:2.0)+a.p);
+    const stride=((isWalking?0.06:0.015)*sc*gait);
+    const armSwing=((isWalking?0.05:0.015)*sc*gait);
+    const lean=((isWalking?0.008:0.003)*sc*gait);
+
+    // Minecraft-like palette
+    const skinTop='#f7d7b3',skinMid='#eebf93',skinSide='#d8a377';
+    const hairTop='#5b3a28',hairMid='#3b2519',hairSide='#2a1b12';
+    const shirtC=shirtColorFor(a);
+    const shirtTop=css(bright(shirtC,.08),1),shirtMid=css(shirtC,1),shirtSide=css(dark(shirtC,.25),1);
+    const pantsTop='#1e3a8a',pantsMid='#1e40af',pantsSide='#1e3a8a';
+
+    // Proportions
+    const legW=.16*sc,legD=.16*sc,legGap=.03*sc,legH=.46*sc;
+    const torsoW=.34*sc,torsoD=.17*sc,torsoH=.62*sc;
+    const armW=.14*sc,armD=.14*sc,armH=.56*sc;
+    const headW=.34*sc,headD=.34*sc,headH=.34*sc;
+    const shoeH=.08*sc;
+    const yShoe=0+bob;
+    const yLeg=yShoe+shoeH;
+    const yTorso=yLeg+legH;
+    const yArm=yTorso+.02*sc;
+    const yHead=yTorso+torsoH+.03*sc;
+    const yHair=yHead+headH-.04*sc;
+
+    const teamGlow=(teamSection(a.team)==='right')?'rgba(16,185,129,.34)':'rgba(56,189,248,.34)';
+    const rp=iso(a.x,.03,a.z);
+    ctx.beginPath();ctx.arc(rp.x,rp.y,12+Math.abs(Math.sin(t*5+a.p))*3,0,Math.PI*2);ctx.strokeStyle=teamGlow;ctx.lineWidth=2.1;ctx.stroke();
+
+    // shoes
+    prism(a.x-legGap-legW-.01*sc,a.z-legD/2+stride-.01*sc,legW+.02*sc,legD+.03*sc,shoeH,{top:'#111827',left:'#0b1220',right:'#1f2937'},'rgba(30,41,59,.42)',yShoe);
+    prism(a.x+legGap-.01*sc,a.z-legD/2-stride-.01*sc,legW+.02*sc,legD+.03*sc,shoeH,{top:'#111827',left:'#0b1220',right:'#1f2937'},'rgba(30,41,59,.42)',yShoe);
+    // legs
+    prism(a.x-legGap-legW,a.z-legD/2+stride,legW,legD,legH,{top:pantsTop,left:pantsMid,right:pantsSide},'rgba(30,41,59,.42)',yLeg);
+    prism(a.x+legGap,a.z-legD/2-stride,legW,legD,legH,{top:pantsTop,left:pantsMid,right:pantsSide},'rgba(30,41,59,.42)',yLeg);
+
+    // torso + arms
+    prism(a.x-torsoW/2+lean,a.z-torsoD/2,torsoW,torsoD,torsoH,{top:shirtTop,left:shirtMid,right:shirtSide},'rgba(30,41,59,.42)',yTorso);
+    prism(a.x-torsoW/2-armW+lean,a.z-armD/2+armSwing,armW,armD,armH,{top:shirtTop,left:shirtMid,right:shirtSide},'rgba(30,41,59,.42)',yArm);
+    prism(a.x+torsoW/2+lean,a.z-armD/2-armSwing,armW,armD,armH,{top:shirtTop,left:shirtMid,right:shirtSide},'rgba(30,41,59,.42)',yArm);
+
+    // hands
+    prism(a.x-torsoW/2-armW+lean,a.z-armD/2+armSwing,armW*.9,armD*.9,.16*sc,{top:skinTop,left:skinMid,right:skinSide},'rgba(148,163,184,.32)',yArm-.14*sc);
+    prism(a.x+torsoW/2+lean,a.z-armD/2-armSwing,armW*.9,armD*.9,.16*sc,{top:skinTop,left:skinMid,right:skinSide},'rgba(148,163,184,.32)',yArm-.14*sc);
+
+    // cube head + hair cap
+    prism(a.x-headW/2+lean,a.z-headD/2,headW,headD,headH,{top:skinTop,left:skinMid,right:skinSide},'rgba(148,163,184,.36)',yHead);
+    prism(a.x-headW/2+lean,a.z-headD/2,headW,headD*.88,.08*sc,{top:hairTop,left:hairMid,right:hairSide},'rgba(30,41,59,.24)',yHair);
+
+    // simple pixel-eyes
+    const eyeL=iso(a.x-headW*.18+lean,yHead+headH*.55,a.z+headD*.22);
+    const eyeR=iso(a.x+headW*.18+lean,yHead+headH*.55,a.z+headD*.22);
+    ctx.fillStyle='rgba(15,23,42,.95)';
+    ctx.fillRect(eyeL.x-1.2,eyeL.y-1.2,2.2,2.2);
+    ctx.fillRect(eyeR.x-1.2,eyeR.y-1.2,2.2,2.2);
+
+    const np=iso(a.x+lean,yHead+headH+.18*sc,a.z);
+    nameTag(np.x,np.y,a.n,!!a.w);
+    const ip=iso(a.x+lean,yHead+headH*.42,a.z);
+    ctx.fillStyle=a.t==='ceo'?'#78350f':'#0f172a';
+    ctx.font=`700 ${Math.max(8,Math.floor(8.2*sc))}px Inter,sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText(initials(a.n),ip.x,ip.y+2.5);
+}
+resize();layout();buildActors();window.addEventListener('resize',resize);
+let raf=0,lastMs=Date.now();function frame(){
+    raf=requestAnimationFrame(frame);
+    const ms=Date.now(),dt=Math.max(0.001,Math.min(0.05,(ms-lastMs)/1000)),wt=(ms-epoch)/1000;
+    lastMs=ms;
+
+    roomDraw();
+    [...furniture].sort((a,b)=>(a.dep||0)-(b.dep||0)).forEach(drawFurniture);
+
+    actors.forEach(a=>{
+        if(a.t!=='agent')return;
+
+        if(!skipIntro&&ms>=a.st){
+            const p=Math.min((ms-a.st)/a.d,1),e=ease(p);
+            a.x=lerp(a.ix,a.tx,e);
+            a.z=lerp(a.iz,a.tz,e);
+            return;
+        }
+
+        // Assigned task: stay/return to own desk, never pantry.
+        if(a.w){
+            a.idleMode='desk';
+            a.tx=a.homeX;
+            a.tz=a.homeZ;
+        }
+
+        const dx=a.tx-a.x,dz=a.tz-a.z,dist=Math.hypot(dx,dz);
+        if(dist>0.04){
+            const step=Math.min(dist,1.02*dt);
+            a.x+=dx/dist*step;
+            a.z+=dz/dist*step;
+            a.moving=true;
+            return;
+        }
+
+        a.moving=false;
+        if(a.w)return;
+
+        if(ms>=a.nextSwitchAt){
+            const next=pickNextIdleDestination(a);
+            a.idleMode=next.mode;
+            a.tx=next.x;
+            a.tz=next.z;
+            a.nextSwitchAt=ms+randMs(idleWanderMinMs,idleWanderMaxMs);
+        }
+    });
+
+    [...actors].sort((a,b)=>(a.x+a.z)-(b.x+b.z)).forEach(a=>drawActor(a,wt));
+}
+frame();
+const save={keySeed,epochMs:epoch,introDone:true};try{sessionStorage.setItem(stateKey,JSON.stringify(save))}catch(_){}
+window.addEventListener('beforeunload',()=>{try{sessionStorage.setItem(stateKey,JSON.stringify(save))}catch(_){}cancelAnimationFrame(raf);});
+})();
+</script>
+}

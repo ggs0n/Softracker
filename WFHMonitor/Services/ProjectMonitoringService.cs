@@ -57,11 +57,22 @@ public class ProjectMonitoringService : IProjectMonitoringService
         _settings = settings.Value ?? new ProjectMonitoringSettings();
     }
 
-    public async Task<MonitorDashboardViewModel> BuildDashboardAsync(CancellationToken cancellationToken = default)
+    public async Task<MonitorDashboardViewModel> BuildDashboardAsync(bool isAdmin, int? orgTeamId, CancellationToken cancellationToken = default)
     {
-        var deployedProjects = await _db.ChangeRequests
+        var deployedProjectsQuery = _db.ChangeRequests
             .AsNoTracking()
-            .Where(c => c.Stage == CrStage.DeploymentComplete || c.Status == CrStatus.Done)
+            .Where(c => c.Stage == CrStage.Deploy || c.Status == CrStatus.Done)
+            .AsQueryable();
+
+        if (!isAdmin)
+        {
+            if (orgTeamId.HasValue)
+                deployedProjectsQuery = deployedProjectsQuery.Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == orgTeamId.Value);
+            else
+                deployedProjectsQuery = deployedProjectsQuery.Where(c => !c.OrgTeamId.HasValue);
+        }
+
+        var deployedProjects = await deployedProjectsQuery
             .OrderByDescending(c => c.UpdatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync(cancellationToken);

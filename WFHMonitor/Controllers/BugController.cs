@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using WFHMonitor.Data;
@@ -22,28 +23,54 @@ public class BugController : Controller
     private readonly IBugService _bugService;
     private readonly IBugFixQueueService _bugFixQueue;
     private readonly OpenClawSettings _openClawSettings;
+    private readonly ISystemSettingsService _systemSettingsService;
 
     public BugController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         IBugService bugService,
         IBugFixQueueService bugFixQueue,
+        ISystemSettingsService systemSettingsService,
         IOptions<OpenClawSettings> openClawSettings)
     {
         _db = db;
         _userManager = userManager;
         _bugService = bugService;
         _bugFixQueue = bugFixQueue;
+        _systemSettingsService = systemSettingsService;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+    }
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var actionName = context.ActionDescriptor.RouteValues.TryGetValue("action", out var action)
+            ? action ?? string.Empty
+            : string.Empty;
+
+        var requiresModify = !string.Equals(actionName, nameof(Index), StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(actionName, nameof(Details), StringComparison.OrdinalIgnoreCase);
+
+        var allowed = requiresModify
+            ? await _systemSettingsService.CanModifyModuleAsync(User, AppModuleKeys.Bugs)
+            : await _systemSettingsService.CanViewModuleAsync(User, AppModuleKeys.Bugs);
+
+        if (!allowed)
+        {
+            context.Result = Forbid();
+            return;
+        }
+
+        await next();
     }
 
     public async Task<IActionResult> Index()
     {
         try
         {
-            var userId = _userManager.GetUserId(User);
-            var restrictToAssigned = User.IsInRole("Developer") || User.IsInRole("Agent");
-            var bugs = await _bugService.GetIndexBugsAsync(restrictToAssigned, userId);
+            var currentUser = await _userManager.GetUserAsync(User);
+            var bugs = await _bugService.GetIndexBugsAsync(
+                User.IsInRole("Admin"),
+                currentUser?.OrgTeamId);
             return View(bugs);
         }
         catch (Exception ex)
@@ -60,16 +87,12 @@ public class BugController : Controller
             var bug = await _bugService.GetDetailsAsync(id);
             if (bug == null) return NotFound();
 
-            if (User.IsInRole("Developer") || User.IsInRole("Agent"))
-            {
-                var userId = _userManager.GetUserId(User);
-                if (bug.AssignedDeveloperId != userId)
-                    return Forbid();
-            }
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (!CanAccessBugByTeam(bug, currentUser))
+                return Forbid();
 
             ViewBag.OpenClawFixAgentOptions = GetOpenClawFixAgentOptions();
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
-            var currentUser = await _userManager.GetUserAsync(User);
             ViewBag.HasProAccess = currentUser is not null && HasActiveProAccess(currentUser);
 
             return View(bug);
@@ -92,7 +115,8 @@ public class BugController : Controller
         }
 
         var vm = new BugFormViewModel();
-        await _bugService.PopulateFormOptionsAsync(vm);
+        var currentUser = await _userManager.GetUserAsync(User);
+        await _bugService.PopulateFormOptionsAsync(vm, User.IsInRole("Admin"), currentUser?.OrgTeamId);
         return View(vm);
     }
 
@@ -116,31 +140,44 @@ public class BugController : Controller
         if (model.AssigneeType == BugAssigneeType.Agent && string.IsNullOrWhiteSpace(model.AssignedAgentId))
             ModelState.AddModelError(nameof(model.AssignedAgentId), "Please select an agent.");
 
+        var currentUser = await _userManager.GetUserAsync(User);
+        if (model.ChangeRequestId.HasValue &&
+            !await CanAccessProjectByTeamAsync(model.ChangeRequestId, currentUser))
+        {
+            ModelState.AddModelError(nameof(model.ChangeRequestId), "You cannot link this bug to a project outside your team.");
+        }
+
         if (!ModelState.IsValid)
-            return await ReturnBugFormWithOptions(model);
+            return await ReturnBugFormWithOptions(model, currentUser);
 
         try
         {
             var result = await _bugService.CreateAsync(model, userId);
             if (!result.Succeeded)
-                return await ReturnBugFormWithOptions(model, result.Error);
+                return await ReturnBugFormWithOptions(model, currentUser, result.Error);
 
             TempData["Success"] = "Bug created.";
             return RedirectToAction(nameof(Details), new { id = result.BugId });
         }
         catch (Exception ex)
         {
-            return await ReturnBugFormWithOptions(model, ex.Message);
+            return await ReturnBugFormWithOptions(model, currentUser, ex.Message);
         }
     }
 
     [Authorize(Roles = "Admin,Tester,Developer,Agent")]
     public async Task<IActionResult> Edit(int id)
     {
-        var vm = await _bugService.BuildEditViewModelAsync(id);
+        var currentUser = await _userManager.GetUserAsync(User);
+        var bug = await _bugService.GetDetailsAsync(id);
+        if (bug == null) return NotFound();
+        if (!CanAccessBugByTeam(bug, currentUser))
+            return Forbid();
+
+        var vm = await _bugService.BuildEditViewModelAsync(id, User.IsInRole("Admin"), currentUser?.OrgTeamId);
         if (vm == null) return NotFound();
 
-        var userId = _userManager.GetUserId(User);
+        var userId = currentUser?.Id;
         var isPrivilegedEditor = User.IsInRole("Admin") || User.IsInRole("Tester");
         if (!isPrivilegedEditor && vm.AssignedDeveloperId != userId && vm.AssignedAgentId != userId)
             return Forbid();
@@ -156,6 +193,10 @@ public class BugController : Controller
         var bug = await _bugService.GetByIdAsync(id);
         if (bug == null)
             return NotFound();
+
+        var currentUser = await _userManager.GetUserAsync(User);
+        if (bug.ChangeRequestId.HasValue && !await CanAccessProjectByTeamAsync(bug.ChangeRequestId, currentUser))
+            return Forbid();
 
         var userId = _userManager.GetUserId(User);
         var isPrivilegedEditor = User.IsInRole("Admin") || User.IsInRole("Tester");
@@ -189,21 +230,28 @@ public class BugController : Controller
         if (model.AssigneeType == BugAssigneeType.Agent && string.IsNullOrWhiteSpace(model.AssignedAgentId))
             ModelState.AddModelError(nameof(model.AssignedAgentId), "Please select an agent.");
 
+        var currentUser = await _userManager.GetUserAsync(User);
+        if (model.ChangeRequestId.HasValue &&
+            !await CanAccessProjectByTeamAsync(model.ChangeRequestId, currentUser))
+        {
+            ModelState.AddModelError(nameof(model.ChangeRequestId), "You cannot link this bug to a project outside your team.");
+        }
+
         if (!ModelState.IsValid)
-            return await ReturnBugFormWithOptions(model);
+            return await ReturnBugFormWithOptions(model, currentUser);
 
         try
         {
             var result = await _bugService.UpdateAsync(id, model);
             if (!result.Succeeded)
-                return await ReturnBugFormWithOptions(model, result.Error);
+                return await ReturnBugFormWithOptions(model, currentUser, result.Error);
 
             TempData["Success"] = "Bug updated.";
             return RedirectToAction(nameof(Details), new { id });
         }
         catch (Exception ex)
         {
-            return await ReturnBugFormWithOptions(model, ex.Message);
+            return await ReturnBugFormWithOptions(model, currentUser, ex.Message);
         }
     }
 
@@ -213,6 +261,10 @@ public class BugController : Controller
     {
         var bug = await _bugService.GetByIdAsync(id);
         if (bug == null) return NotFound();
+
+        var currentUser = await _userManager.GetUserAsync(User);
+        if (bug.ChangeRequestId.HasValue && !await CanAccessProjectByTeamAsync(bug.ChangeRequestId, currentUser))
+            return Forbid();
 
         var userId = _userManager.GetUserId(User);
         if (!CanUpdateStatus(bug, status, userId))
@@ -243,6 +295,8 @@ public class BugController : Controller
             .Include(b => b.AssignedDeveloper)
             .FirstOrDefaultAsync(b => b.Id == id);
         if (bug == null) return NotFound();
+        if (bug.ChangeRequestId.HasValue && !await CanAccessProjectByTeamAsync(bug.ChangeRequestId, currentUser))
+            return Forbid();
 
         if (User.IsInRole("Developer"))
         {
@@ -390,13 +444,52 @@ public class BugController : Controller
         return true;
     }
 
-    private async Task<IActionResult> ReturnBugFormWithOptions(BugFormViewModel model, string? error = null)
+    private async Task<IActionResult> ReturnBugFormWithOptions(BugFormViewModel model, ApplicationUser? currentUser, string? error = null)
     {
         if (!string.IsNullOrWhiteSpace(error))
             TempData["Error"] = error;
 
-        await _bugService.PopulateFormOptionsAsync(model);
+        await _bugService.PopulateFormOptionsAsync(model, User.IsInRole("Admin"), currentUser?.OrgTeamId);
         return View(model);
+    }
+
+    private bool CanAccessBugByTeam(BugReport bug, ApplicationUser? currentUser)
+    {
+        if (User.IsInRole("Admin"))
+            return true;
+
+        if (bug.ChangeRequestId.HasValue)
+        {
+            if (bug.ChangeRequest?.OrgTeamId is null)
+                return true;
+
+            return currentUser?.OrgTeamId.HasValue == true && currentUser.OrgTeamId == bug.ChangeRequest.OrgTeamId;
+        }
+
+        if (User.IsInRole("Developer") || User.IsInRole("Agent"))
+            return bug.AssignedDeveloperId == currentUser?.Id;
+
+        return true;
+    }
+
+    private async Task<bool> CanAccessProjectByTeamAsync(int? changeRequestId, ApplicationUser? currentUser)
+    {
+        if (!changeRequestId.HasValue)
+            return true;
+
+        var project = await _db.ChangeRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == changeRequestId.Value);
+        if (project == null)
+            return false;
+
+        if (User.IsInRole("Admin"))
+            return true;
+
+        if (!project.OrgTeamId.HasValue)
+            return true;
+
+        return currentUser?.OrgTeamId.HasValue == true && currentUser.OrgTeamId == project.OrgTeamId;
     }
 
     private async Task<IActionResult> HandleUploadResult(

@@ -8,6 +8,7 @@
     var openClawScanAgentOptions = ViewBag.OpenClawScanAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
+    var repositoryFeatures = Model.RepositoryFeatures.OrderBy(f => f.Name).ToList();
 
     var statusClass = new Dictionary<string, string> {
         {"Draft","detail-status-draft"}, {"InReview","detail-status-review"}, {"Approved","detail-status-approved"},
@@ -21,13 +22,16 @@
 
     var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
     {
-        (WFHMonitor.Models.CrStage.ProjectStart, "Project Start"),
         (WFHMonitor.Models.CrStage.Development, "Development"),
         (WFHMonitor.Models.CrStage.Testing, "Testing"),
-        (WFHMonitor.Models.CrStage.Deploy, "Deploy"),
-        (WFHMonitor.Models.CrStage.DeploymentComplete, "Deployment Complete")
+        (WFHMonitor.Models.CrStage.Deploy, "Deploy")
     };
-    var currentStageIndex = stageItems.FindIndex(s => s.Stage == Model.Stage);
+    var normalizedStage = Model.Stage == WFHMonitor.Models.CrStage.ProjectStart
+        ? WFHMonitor.Models.CrStage.Development
+        : Model.Stage == WFHMonitor.Models.CrStage.DeploymentComplete
+            ? WFHMonitor.Models.CrStage.Deploy
+            : Model.Stage;
+    var currentStageIndex = stageItems.FindIndex(s => s.Stage == normalizedStage);
 }
 
 <style>
@@ -342,7 +346,7 @@
                                     <th>Status</th>
                                     <th>Priority</th>
                                     <th>Stage</th>
-                                    <th>Developer</th>
+                                    <th>Assignee</th>
                                     <th>Timeline</th>
                                     @if (User.IsInRole("Admin"))
                                     {
@@ -407,95 +411,80 @@
             </div>
         </div>
 
-        @* Repository Scan Features *@
-        @{
-            var repositoryFeatures = Model.RepositoryFeatures.OrderBy(f => f.Name).ToList();
-        }
-        <div class="card mb-4" id="repositoryFeaturesCard">
+        @* Linked Bugs *@
+        <div class="card mb-4">
             <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
-                <span>
-                    <i class="bi bi-github me-2"></i>Repository Scan Features
-                    <span class="badge bg-secondary ms-1">@repositoryFeatures.Count</span>
-                </span>
+                <span><i class="bi bi-bug me-2"></i>Linked Bugs</span>
+                <div class="d-flex align-items-center gap-2">
+                    @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                    {
+                        <form asp-action="FindBugs" asp-route-id="@Model.Id" method="post" class="d-flex align-items-center gap-2">
+                            @Html.AntiForgeryToken()
+                            <select name="scanAgentId" class="form-select form-select-sm" style="min-width: 120px;">
+                                @foreach (var option in openClawScanAgentOptions)
+                                {
+                                    <option value="@option.Value">@option.Text</option>
+                                }
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-dark">
+                                <i class="bi bi-cpu me-1"></i>Find Bugs (OpenClaw)
+                            </button>
+                        </form>
+                    }
+                    else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
+                    {
+                        <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-stars me-1"></i>Upgrade to Pro for Find Bugs
+                        </a>
+                    }
+                    <span class="badge bg-secondary">@linkedBugs.Count</span>
+                </div>
             </div>
-            <div class="card-body">
-                @if (repositoryFeatures.Count > 0)
+            <div class="card-body p-0">
+                @if (!linkedBugs.Any())
+                {
+                    <p class="text-muted small p-3 mb-0">No bugs linked to this project.</p>
+                }
+                else
                 {
                     <div class="table-responsive">
                         <table class="table table-sm table-hover mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Description</th>
-                                    <th>Updated</th>
+                                    <th>Bug #</th>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Assigned</th>
+                                    <th>Created</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var feature in repositoryFeatures)
+                                @foreach (var bug in linkedBugs)
                                 {
                                     <tr>
-                                        <td class="fw-semibold">@feature.Name</td>
-                                        <td class="text-muted">@(string.IsNullOrWhiteSpace(feature.Description) ? "-" : feature.Description)</td>
-                                        <td class="text-muted small">@feature.UpdatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td class="text-muted">@bug.BugNumber</td>
+                                        <td>
+                                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@bug.Id" class="fw-semibold text-decoration-none">
+                                                @bug.Title
+                                            </a>
+                                        </td>
+                                        <td><span class="badge bg-secondary">@bug.Status</span></td>
+                                        <td>
+                                            @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
+                                            {
+                                                <span>Agent (@bug.AgentStatus)</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
+                                            }
+                                        </td>
+                                        <td class="text-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
-                }
-                else
-                {
-                    <p class="text-muted fst-italic mb-0">No repository scan features yet.</p>
-                }
-            </div>
-        </div>
-
-        @* GitHub Commits *@
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-github me-2"></i>GitHub Commits
-                @if (!string.IsNullOrEmpty(resolvedRepoBranch))
-                {
-                    <span class="badge bg-secondary ms-2 fw-normal" style="font-family:monospace;">@resolvedRepoBranch</span>
-                }
-            </div>
-            <div class="card-body p-0">
-                @if (string.IsNullOrEmpty(resolvedRepoOwner) || string.IsNullOrEmpty(resolvedRepoName) || string.IsNullOrEmpty(resolvedRepoBranch))
-                {
-                    <p class="text-muted fst-italic p-3 mb-0">No GitHub branch linked.</p>
-                }
-                else if (ViewBag.CommitError != null)
-                {
-                    <div class="p-3">
-                        <div class="alert alert-warning mb-0 small">
-                            <i class="bi bi-exclamation-triangle me-2"></i>@ViewBag.CommitError
-                        </div>
-                    </div>
-                }
-                else if (ViewBag.Commits == null || ((IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits).Count == 0)
-                {
-                    <p class="text-muted fst-italic p-3 mb-0">No commits found on this branch.</p>
-                }
-                else
-                {
-                    <ul class="list-group list-group-flush">
-                        @foreach (var commit in (IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits)
-                        {
-                            <li class="list-group-item px-3 py-2">
-                                <div class="d-flex align-items-start gap-2">
-                                    <a href="@commit.Url" target="_blank"
-                                       class="badge bg-dark text-white text-decoration-none"
-                                       style="font-family:monospace; font-size:0.75rem;">@commit.Sha</a>
-                                    <div class="flex-grow-1 overflow-hidden">
-                                        <div class="small fw-semibold text-truncate" title="@commit.Message">@commit.Message</div>
-                                        <div class="text-muted" style="font-size:0.72rem;">
-                                            @commit.AuthorName &middot; @commit.Date.ToString("MMM dd, yyyy HH:mm")
-                                        </div>
-                                    </div>
-                                </div>
-                            </li>
-                        }
-                    </ul>
                 }
             </div>
         </div>
@@ -602,6 +591,44 @@
             </div>
         }
 
+        @* Repository Scan Features *@
+        <div class="card mb-4" id="repositoryFeaturesCard">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-github me-2"></i>Repository Scan Features
+                    <span class="badge bg-secondary ms-1">@repositoryFeatures.Count</span>
+                </span>
+            </div>
+            <div class="card-body">
+                @if (repositoryFeatures.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var feature in repositoryFeatures)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@feature.Name</td>
+                                        <td class="text-muted small">@feature.UpdatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted fst-italic mb-0">No repository scan features yet.</p>
+                }
+            </div>
+        </div>
+
         @* PIC *@
         <div class="card">
             <div class="card-header bg-light fw-semibold">
@@ -633,80 +660,52 @@
             </div>
         </div>
 
-        @* Linked Bugs *@
+        @* GitHub Commits *@
         <div class="card mt-4">
-            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-bug me-2"></i>Linked Bugs</span>
-                <div class="d-flex align-items-center gap-2">
-                    @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
-                    {
-                        <form asp-action="FindBugs" asp-route-id="@Model.Id" method="post" class="d-flex align-items-center gap-2">
-                            @Html.AntiForgeryToken()
-                            <select name="scanAgentId" class="form-select form-select-sm" style="min-width: 120px;">
-                                @foreach (var option in openClawScanAgentOptions)
-                                {
-                                    <option value="@option.Value">@option.Text</option>
-                                }
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-dark">
-                                <i class="bi bi-cpu me-1"></i>Find Bugs (OpenClaw)
-                            </button>
-                        </form>
-                    }
-                    else if (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer"))
-                    {
-                        <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-stars me-1"></i>Upgrade to Pro for Find Bugs
-                        </a>
-                    }
-                    <span class="badge bg-secondary">@linkedBugs.Count</span>
-                </div>
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-github me-2"></i>GitHub Commits
+                @if (!string.IsNullOrEmpty(resolvedRepoBranch))
+                {
+                    <span class="badge bg-secondary ms-2 fw-normal" style="font-family:monospace;">@resolvedRepoBranch</span>
+                }
             </div>
             <div class="card-body p-0">
-                @if (!linkedBugs.Any())
+                @if (string.IsNullOrEmpty(resolvedRepoOwner) || string.IsNullOrEmpty(resolvedRepoName) || string.IsNullOrEmpty(resolvedRepoBranch))
                 {
-                    <p class="text-muted small p-3 mb-0">No bugs linked to this project.</p>
+                    <p class="text-muted fst-italic p-3 mb-0">No GitHub branch linked.</p>
+                }
+                else if (ViewBag.CommitError != null)
+                {
+                    <div class="p-3">
+                        <div class="alert alert-warning mb-0 small">
+                            <i class="bi bi-exclamation-triangle me-2"></i>@ViewBag.CommitError
+                        </div>
+                    </div>
+                }
+                else if (ViewBag.Commits == null || ((IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits).Count == 0)
+                {
+                    <p class="text-muted fst-italic p-3 mb-0">No commits found on this branch.</p>
                 }
                 else
                 {
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0 align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Bug #</th>
-                                    <th>Title</th>
-                                    <th>Status</th>
-                                    <th>Assigned</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var bug in linkedBugs)
-                                {
-                                    <tr>
-                                        <td class="text-muted">@bug.BugNumber</td>
-                                        <td>
-                                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@bug.Id" class="fw-semibold text-decoration-none">
-                                                @bug.Title
-                                            </a>
-                                        </td>
-                                        <td><span class="badge bg-secondary">@bug.Status</span></td>
-                                        <td>
-                                            @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
-                                            {
-                                                <span>Agent (@bug.AgentStatus)</span>
-                                            }
-                                            else
-                                            {
-                                                <span>@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
-                                            }
-                                        </td>
-                                        <td class="text-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var commit in (IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits)
+                        {
+                            <li class="list-group-item px-3 py-2">
+                                <div class="d-flex align-items-start gap-2">
+                                    <a href="@commit.Url" target="_blank"
+                                       class="badge bg-dark text-white text-decoration-none"
+                                       style="font-family:monospace; font-size:0.75rem;">@commit.Sha</a>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <div class="small fw-semibold text-truncate" title="@commit.Message">@commit.Message</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">
+                                            @commit.AuthorName &middot; @commit.Date.ToString("MMM dd, yyyy HH:mm")
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
                 }
             </div>
         </div>

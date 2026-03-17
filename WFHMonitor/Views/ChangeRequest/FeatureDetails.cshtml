@@ -2,68 +2,390 @@
 @{
     ViewData["Title"] = "Feature View";
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
+    var canAgentPickup = User.IsInRole("Agent") &&
+        (string.IsNullOrWhiteSpace(Model.AssignedDeveloperId) || string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal));
+    var canManageFeatureEvidence = User.IsInRole("Admin") ||
+        (!string.IsNullOrWhiteSpace(currentUserId) &&
+         (User.IsInRole("Developer") || User.IsInRole("Agent")) &&
+         string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal));
+    var openClawFeatureAgentOptions = ViewBag.OpenClawFeatureAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+        ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+    var agentOptions = ViewBag.AgentUserOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+        ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+    var isAgentQueued = Model.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.Queued;
+    var isAgentProcessing = Model.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.InProgress;
     var timeline = Model.TimelineStart.HasValue || Model.TimelineEnd.HasValue
         ? $"{Model.TimelineStart?.ToString("dd MMM yyyy") ?? "-"} to {Model.TimelineEnd?.ToString("dd MMM yyyy") ?? "-"}"
         : "-";
+    var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
+    {
+        (WFHMonitor.Models.CrStage.Development, "Development"),
+        (WFHMonitor.Models.CrStage.Testing, "Testing"),
+        (WFHMonitor.Models.CrStage.Deploy, "Deploy")
+    };
+    var normalizedStage = Model.Stage == WFHMonitor.Models.CrStage.ProjectStart
+        ? WFHMonitor.Models.CrStage.Development
+        : Model.Stage == WFHMonitor.Models.CrStage.DeploymentComplete
+            ? WFHMonitor.Models.CrStage.Deploy
+            : Model.Stage;
+    var currentStageIndex = stageItems.FindIndex(s => s.Stage == normalizedStage);
+    if (currentStageIndex < 0) currentStageIndex = 0;
+
+    var statusBadge = Model.Status switch
+    {
+        WFHMonitor.Models.CrStatus.Done => "bg-success",
+        WFHMonitor.Models.CrStatus.InProgress => "bg-primary",
+        WFHMonitor.Models.CrStatus.InReview or WFHMonitor.Models.CrStatus.Approved => "bg-info",
+        WFHMonitor.Models.CrStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    var priorityBadge = Model.Priority switch
+    {
+        WFHMonitor.Models.CrPriority.Critical => "bg-danger",
+        WFHMonitor.Models.CrPriority.High => "bg-warning text-dark",
+        WFHMonitor.Models.CrPriority.Medium => "bg-info text-dark",
+        _ => "bg-light text-dark border"
+    };
 }
 
-<div class="card mb-4">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <div>
-            <span class="badge bg-dark me-2">@Model.FeatureNumber</span>
-            <span class="fw-semibold">@Model.Name</span>
+<style>
+    .feature-agent-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+    }
+
+    .feature-agent-progress-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #3b82f6;
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    .feature-agent-progress-dot.is-pulsing {
+        animation: featurePulse 1.25s infinite;
+    }
+
+    .feature-agent-progress-dot.is-queued {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+    }
+
+    @@keyframes featurePulse {
+        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <div class="text-muted small">@Model.FeatureNumber</div>
+        <h2 class="mb-1">@Model.Name</h2>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <span class="badge @statusBadge">@Model.Status</span>
+            <span class="badge @priorityBadge">@Model.Priority</span>
+            <span class="text-muted small">Created @Model.CreatedAt.ToString("MMM dd, yyyy")</span>
         </div>
-        <div class="d-flex gap-2">
-            @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
+        <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-2 text-center">
+            @for (var i = 0; i < stageItems.Count; i++)
             {
-                <a asp-action="EditFeature"
-                   asp-route-featureId="@Model.Id"
-                   asp-route-returnUrl="@returnUrl"
-                   class="btn btn-sm btn-outline-warning">
-                    <i class="bi bi-pencil me-1"></i>Edit
-                </a>
+                var isComplete = i < currentStageIndex;
+                var isCurrent = i == currentStageIndex;
+                var badgeClass = isCurrent ? "bg-primary" : isComplete ? "bg-success" : "bg-light text-muted border";
+                <span class="badge @badgeClass fs-6 px-3 py-2">@stageItems[i].Label</span>
+                if (i < stageItems.Count - 1)
+                {
+                    <i class="bi bi-chevron-right text-muted"></i>
+                }
             }
-            <a asp-action="Features"
-               asp-route-projectId="@Model.ChangeRequestId"
-               class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-arrow-left me-1"></i>Back to Features
-            </a>
         </div>
     </div>
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-6">
-                <div class="small text-muted">Project</div>
-                <div class="fw-semibold">
-                    <a asp-action="Details" asp-route-id="@Model.ChangeRequestId" class="text-decoration-none">
-                        @Model.ChangeRequest?.CrNumber - @Model.ChangeRequest?.Title
-                    </a>
+    <div class="d-flex gap-2">
+        @if (User.IsInRole("Agent"))
+        {
+            <form asp-action="PickupFeature" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="featureId" value="@Model.Id" />
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <input type="hidden" name="featureAgentId" value="@(openClawFeatureAgentOptions.FirstOrDefault()?.Value ?? "main")" />
+                @if (canAgentPickup)
+                {
+                    <button type="submit" class="btn btn-outline-primary" @(hasProAccess ? null : "disabled")>
+                        <i class="bi bi-hand-index-thumb me-1"></i>Pick Up Feature
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled>
+                        <i class="bi bi-lock me-1"></i>Assigned to another user
+                    </button>
+                }
+            </form>
+        }
+        @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
+        {
+            <a asp-action="EditFeature"
+               asp-route-featureId="@Model.Id"
+               asp-route-returnUrl="@returnUrl"
+               class="btn btn-warning">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        }
+        <a asp-action="Features"
+           asp-route-projectId="@Model.ChangeRequestId"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Features
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-card-text me-2"></i>Description
+            </div>
+            <div class="card-body" style="white-space:pre-wrap;">
+                @(string.IsNullOrWhiteSpace(Model.Description) ? "Not provided." : Model.Description)
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-diagram-3 me-2"></i>Scope
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="small text-muted">Affected Module</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ModuleImpacted) ? "-" : Model.ModuleImpacted)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Linked Bugs</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LinkedBugs) ? "-" : Model.LinkedBugs)</div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="small text-muted">Timeline</div>
+                        <div class="fw-semibold">@timeline</div>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="small text-muted">Assigned Developer</div>
-                <div class="fw-semibold">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-images me-2"></i>Fix Screenshots</span>
+                @if (canManageFeatureEvidence)
+                {
+                    <button class="btn btn-sm btn-outline-primary" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#featureScreenshotUpload">
+                        <i class="bi bi-upload me-1"></i>Upload Screenshot
+                    </button>
+                }
             </div>
-            <div class="col-md-4">
-                <div class="small text-muted">Status</div>
-                <span class="badge bg-secondary">@Model.Status</span>
-            </div>
-            <div class="col-md-4">
-                <div class="small text-muted">Priority</div>
-                <span class="badge bg-info text-dark">@Model.Priority</span>
-            </div>
-            <div class="col-md-4">
-                <div class="small text-muted">Stage</div>
-                <span class="badge bg-light text-dark border">@Model.Stage</span>
-            </div>
-            <div class="col-md-12">
-                <div class="small text-muted">Timeline</div>
-                <div class="fw-semibold">@timeline</div>
-            </div>
-            <div class="col-md-12">
-                <div class="small text-muted">Description</div>
-                <div>@(string.IsNullOrWhiteSpace(Model.Description) ? "-" : Model.Description)</div>
+
+            @if (canManageFeatureEvidence)
+            {
+                <div class="collapse" id="featureScreenshotUpload">
+                    <div class="card-body border-bottom">
+                        <form asp-action="UploadFeatureScreenshot" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="featureId" value="@Model.Id" />
+                            <input type="hidden" name="returnUrl" value="@returnUrl" />
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-9">
+                                    <label class="form-label fw-semibold small">Screenshot File <span class="text-danger">*</span></label>
+                                    <input type="file" name="file" accept="image/*" class="form-control form-control-sm" required />
+                                    <div class="text-muted" style="font-size:0.72rem;">JPG, PNG, GIF, WEBP - max 10 MB</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                                        <i class="bi bi-upload me-1"></i>Upload
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
+
+            <div class="card-body @(!Model.Screenshots.Any() ? "" : "p-0")">
+                @if (!Model.Screenshots.Any())
+                {
+                    <p class="text-muted fst-italic mb-0">No fix screenshots uploaded yet.</p>
+                }
+                else
+                {
+                    <div class="row g-0">
+                        @foreach (var img in Model.Screenshots.OrderByDescending(s => s.UploadedAt))
+                        {
+                            <div class="col-md-6 col-lg-4 p-2">
+                                <div class="card h-100 border">
+                                    <a href="/uploads/features/screenshots/@img.FileName" target="_blank">
+                                        <img src="/uploads/features/screenshots/@img.FileName"
+                                             class="card-img-top img-fluid"
+                                             style="height:auto; object-fit:contain; cursor:zoom-in; background:#f8f9fa;"
+                                             alt="@img.OriginalFileName" />
+                                    </a>
+                                    <div class="card-body py-2 px-3">
+                                        <p class="card-text small mb-0">@img.OriginalFileName</p>
+                                    </div>
+                                    @if (canManageFeatureEvidence)
+                                    {
+                                        <div class="card-footer p-1 text-end bg-transparent border-top">
+                                            <form asp-action="DeleteFeatureScreenshot" method="post" class="d-inline"
+                                                  onsubmit="return confirm('Delete this screenshot?')">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="screenshotId" value="@img.Id" />
+                                                <input type="hidden" name="featureId" value="@Model.Id" />
+                                                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-person-badge me-2"></i>Assignment
+            </div>
+            <div class="card-body">
+                <div class="small text-muted">Assigned To</div>
+                <div class="fw-semibold">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
+
+                <div class="small text-muted mt-3">Agent Status</div>
+                <div class="feature-agent-progress">
+                    <span class="feature-agent-progress-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
+                    <span>@Model.AgentStatus</span>
+                </div>
+
+                <div class="small text-muted mt-3">Project</div>
+                <div class="fw-semibold">
+                    @if (Model.ChangeRequest != null)
+                    {
+                        <a asp-action="Details" asp-route-id="@Model.ChangeRequestId" class="text-decoration-none">
+                            @Model.ChangeRequest.CrNumber - @Model.ChangeRequest.Title
+                        </a>
+                    }
+                    else
+                    {
+                        <span>-</span>
+                    }
+                </div>
+
+                <div class="small text-muted mt-3">Current Stage</div>
+                <div class="fw-semibold">@normalizedStage</div>
+
+                <div class="small text-muted mt-3">PR Link</div>
+                <div class="fw-semibold">
+                    @if (string.IsNullOrWhiteSpace(Model.PullRequestUrl))
+                    {
+                        <span>-</span>
+                    }
+                    else
+                    {
+                        <a href="@Model.PullRequestUrl" target="_blank" rel="noopener noreferrer">
+                            @Model.PullRequestUrl
+                        </a>
+                    }
+                </div>
+
+                @if (User.IsInRole("Admin") && hasProAccess)
+                {
+                    <hr />
+                    <form asp-action="AssignFeatureToAgent" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="featureId" value="@Model.Id" />
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <div class="small text-muted mb-1">OpenClaw Feature Agent</div>
+                        <select name="featureAgentId" class="form-select form-select-sm mb-2">
+                            @foreach (var option in openClawFeatureAgentOptions)
+                            {
+                                <option value="@option.Value">@option.Text</option>
+                            }
+                        </select>
+                        <div class="small text-muted mb-1">Manual Assign To Agent</div>
+                        <select name="assignedAgentId" class="form-select form-select-sm mb-2">
+                            <option value="">Select agent</option>
+                            @foreach (var option in agentOptions)
+                            {
+                                <option value="@option.Value" selected="@(option.Value == Model.AssignedDeveloperId ? "selected" : null)">@option.Text</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-dark w-100">
+                            @if (isAgentProcessing)
+                            {
+                                <span><i class="bi bi-arrow-repeat me-1"></i>Agent Processing...</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-person-check me-1"></i>Assign + Run OpenClaw</span>
+                            }
+                        </button>
+                        <div class="small text-muted mt-2">Manual trigger. Assign agent and queue OpenClaw feature implementation.</div>
+                    </form>
+                }
+                else if (User.IsInRole("Admin"))
+                {
+                    <hr />
+                    <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning w-100">
+                        <i class="bi bi-stars me-1"></i>Upgrade to Pro for Feature Agent
+                    </a>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.AgentImplementationPlan))
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-light fw-semibold">
+                    <i class="bi bi-cpu me-2"></i>OpenClaw Feature Plan
+                </div>
+                <div class="card-body" style="white-space:pre-wrap;">@Model.AgentImplementationPlan</div>
+            </div>
+        }
+            
+        <div class="card">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-info-circle me-2"></i>Metadata
+            </div>
+            <div class="card-body">
+                <div class="small text-muted">Feature ID</div>
+                <div class="fw-semibold">@Model.Id</div>
+
+                <div class="small text-muted mt-3">Project ID</div>
+                <div class="fw-semibold">@Model.ChangeRequestId</div>
+
+                <div class="small text-muted mt-3">Created At</div>
+                <div class="fw-semibold">@Model.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                @if (Model.AgentLastRunAt.HasValue)
+                {
+                    <div class="small text-muted mt-3">Last Agent Run</div>
+                    <div class="fw-semibold">@Model.AgentLastRunAt.Value.ToString("MMM dd, yyyy HH:mm")</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a asp-action="Features" asp-route-projectId="@Model.ChangeRequestId" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-2"></i>Back to Feature List
+    </a>
 </div>
