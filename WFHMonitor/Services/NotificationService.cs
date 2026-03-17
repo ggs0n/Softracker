@@ -32,7 +32,7 @@ public class NotificationService : INotificationService
                 Id = n.Id,
                 Title = n.Title,
                 Message = n.Message,
-                LinkUrl = n.LinkUrl,
+                LinkUrl = IsSafeLocalUrl(n.LinkUrl) ? n.LinkUrl : null,
                 IsRead = n.IsRead,
                 CreatedAt = n.CreatedAt
             })
@@ -50,12 +50,14 @@ public class NotificationService : INotificationService
         if (string.IsNullOrWhiteSpace(recipientId))
             return;
 
+        var normalizedLinkUrl = string.IsNullOrWhiteSpace(linkUrl) ? null : linkUrl.Trim();
+
         var notification = new UserNotification
         {
             RecipientId = recipientId,
             Title = title.Trim(),
             Message = message.Trim(),
-            LinkUrl = string.IsNullOrWhiteSpace(linkUrl) ? null : linkUrl.Trim(),
+            LinkUrl = IsSafeLocalUrl(normalizedLinkUrl) ? normalizedLinkUrl : null,
             IsRead = false
         };
 
@@ -93,5 +95,19 @@ public class NotificationService : INotificationService
         }
 
         await _db.SaveChangesAsync();
+    }
+
+    private static bool IsSafeLocalUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        if (url[0] == '/')
+            return url.Length == 1 || (url[1] != '/' && url[1] != '\\');
+
+        if (url[0] == '~')
+            return url.Length > 1 && url[1] == '/';
+
+        return false;
     }
 }
