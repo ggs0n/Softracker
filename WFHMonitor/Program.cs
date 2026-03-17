@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Net.Http.Headers;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services;
@@ -64,6 +65,19 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+
+app.Use(async (context, next) =>
+{
+    await next();
+
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        context.Response.Headers[HeaderNames.CacheControl] = "no-store, no-cache, max-age=0, must-revalidate";
+        context.Response.Headers[HeaderNames.Pragma] = "no-cache";
+        context.Response.Headers[HeaderNames.Expires] = "0";
+    }
+});
+
 app.UseAuthorization();
 
 app.MapControllerRoute(

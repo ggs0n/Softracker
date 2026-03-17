@@ -104,6 +104,12 @@ public class AuthController : Controller
         await _signInManager.SignOutAsync();
         Response.Cookies.Delete("jwt_token");
         Response.Cookies.Delete("new_user_jwt_token");
+
+        // Prevent authenticated page fragments (e.g., notification menu) from being reused after account switch.
+        Response.Headers["Clear-Site-Data"] = "\"cache\", \"storage\"";
+        Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+
         return RedirectToAction("Login");
     }
 
