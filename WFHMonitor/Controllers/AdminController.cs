@@ -29,6 +29,9 @@ public class AdminController : Controller
 
     public async Task<IActionResult> Index()
     {
+        var accessDenied = EnsureAdminAccess();
+        if (accessDenied != null) return accessDenied;
+
         var today = DateTime.UtcNow.Date;
 
         var employees = await _userManager.GetUsersInRoleAsync("Employee");
@@ -134,13 +137,20 @@ public class AdminController : Controller
 
     public async Task<IActionResult> Employees()
     {
+        var accessDenied = EnsureAdminAccess();
+        if (accessDenied != null) return accessDenied;
+
         var vm = await BuildEmployeesViewModel();
         return View(vm);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddEmployee([Bind(Prefix = "NewEmployee")] RegisterViewModel model)
     {
+        var accessDenied = EnsureAdminAccess();
+        if (accessDenied != null) return accessDenied;
+
         var registration = await _userRegistrationService.RegisterAsync(model);
         if (registration.Succeeded)
         {
@@ -155,8 +165,12 @@ public class AdminController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteEmployee(string userId)
     {
+        var accessDenied = EnsureAdminAccess();
+        if (accessDenied != null) return accessDenied;
+
         if (string.IsNullOrWhiteSpace(userId))
         {
             TempData["Error"] = "Invalid employee id.";
@@ -214,6 +228,14 @@ public class AdminController : Controller
 
         TempData["Success"] = $"{user.FullName} deleted successfully.";
         return RedirectToAction(nameof(Employees));
+    }
+
+    private IActionResult? EnsureAdminAccess()
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Challenge();
+
+        return User.IsInRole("Admin") ? null : Forbid();
     }
 
     private async Task<AdminEmployeesViewModel> BuildEmployeesViewModel(RegisterViewModel? newEmployee = null)
