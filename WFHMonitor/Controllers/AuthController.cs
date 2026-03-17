@@ -99,12 +99,25 @@ public class AuthController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> Logout()
     {
         await _signInManager.SignOutAsync();
-        Response.Cookies.Delete("jwt_token");
-        Response.Cookies.Delete("new_user_jwt_token");
+        DeleteCookie("jwt_token");
+        DeleteCookie("new_user_jwt_token");
+        TempData["Info"] = "You have been signed out.";
         return RedirectToAction("Login");
+    }
+
+    private void DeleteCookie(string cookieName)
+    {
+        Response.Cookies.Delete(cookieName, new CookieOptions
+        {
+            Path = "/",
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            HttpOnly = true
+        });
     }
 
     public IActionResult AccessDenied() => View();
