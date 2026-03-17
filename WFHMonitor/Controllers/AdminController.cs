@@ -207,15 +207,17 @@ public class AdminController : Controller
         var projectPicAssignments = await _db.ChangeRequestPics.CountAsync(p => p.EmployeeId == userId);
         var bugActivityAssignments = await _db.BugActivities.CountAsync(a =>
             a.OldAssignedDeveloperId == userId || a.NewAssignedDeveloperId == userId);
+        var notificationsReceived = await _db.UserNotifications.CountAsync(n => n.RecipientId == userId);
 
         if (tasksCreated > 0 || projectsCreated > 0 || bugsCreated > 0 ||
-            calendarEventsCreated > 0 || projectPicAssignments > 0 || bugActivityAssignments > 0)
+            calendarEventsCreated > 0 || projectPicAssignments > 0 || bugActivityAssignments > 0 ||
+            notificationsReceived > 0)
         {
             TempData["Error"] =
                 $"Cannot delete {user.FullName}. This user is referenced by existing records. " +
                 $"Tasks created: {tasksCreated}, Projects created: {projectsCreated}, Bugs created: {bugsCreated}, " +
                 $"Calendar events: {calendarEventsCreated}, Project PIC assignments: {projectPicAssignments}, " +
-                $"Bug activity references: {bugActivityAssignments}.";
+                $"Bug activity references: {bugActivityAssignments}, Notifications received: {notificationsReceived}.";
             return RedirectToAction(nameof(Employees));
         }
 
