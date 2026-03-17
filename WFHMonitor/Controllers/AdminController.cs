@@ -27,6 +27,7 @@ public class AdminController : Controller
         _userRegistrationService = userRegistrationService;
     }
 
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Index()
     {
         var accessDenied = EnsureAdminAccess();
@@ -189,6 +190,7 @@ public class AdminController : Controller
         return View(vm);
     }
 
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Employees()
     {
         var accessDenied = EnsureAdminAccess();
