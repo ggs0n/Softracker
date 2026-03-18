@@ -31,6 +31,10 @@
 - Cache information from previous operations
 
 
+**Skills**
+- For UI design, refer SkillTree\DesignUI\SKILL.md
+
+
 **No Repetition Rule**
 - Do NOT restate these rules or explain compliance
 - Do NOT repeat my prompt in your answer
