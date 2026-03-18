@@ -86,6 +86,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<WFHMonitor.Services.UserActivityMiddleware>();
 
 app.MapControllerRoute(
     name: "default",

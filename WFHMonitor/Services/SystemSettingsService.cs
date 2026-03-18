@@ -125,6 +125,8 @@ public class SystemSettingsService : ISystemSettingsService
             CanModifyFeatures = IsAllowed(user, byKey.GetValueOrDefault(AppModuleKeys.Features), isModify: true),
             CanViewBugs = IsAllowed(user, byKey.GetValueOrDefault(AppModuleKeys.Bugs), isModify: false),
             CanModifyBugs = IsAllowed(user, byKey.GetValueOrDefault(AppModuleKeys.Bugs), isModify: true),
+            CanViewQaTesting = IsAllowed(user, byKey.GetValueOrDefault(AppModuleKeys.QaTesting), isModify: false),
+            CanModifyQaTesting = IsAllowed(user, byKey.GetValueOrDefault(AppModuleKeys.QaTesting), isModify: true),
             BellNotificationSoundEnabled = pref.BellNotificationSoundEnabled,
             BellNotificationSoundOption = NormalizeSoundOption(pref.BellNotificationSoundOption)
         };
@@ -283,6 +285,7 @@ public class SystemSettingsService : ISystemSettingsService
             AppModuleKeys.AllProjects => "All Projects",
             AppModuleKeys.Features => "Features",
             AppModuleKeys.Bugs => "Bugs",
+            AppModuleKeys.QaTesting => "QA Testing",
             _ => moduleKey
         };
     }
@@ -300,6 +303,9 @@ public class SystemSettingsService : ISystemSettingsService
             AppModuleKeys.Bugs => (
                 new HashSet<string>(["Admin", "Tester", "Developer", "Agent"], StringComparer.OrdinalIgnoreCase),
                 new HashSet<string>(["Admin", "Tester", "Developer", "Agent"], StringComparer.OrdinalIgnoreCase)),
+            AppModuleKeys.QaTesting => (
+                new HashSet<string>(["Admin", "Tester", "Developer"], StringComparer.OrdinalIgnoreCase),
+                new HashSet<string>(["Admin", "Tester"], StringComparer.OrdinalIgnoreCase)),
             _ => ([], [])
         };
     }

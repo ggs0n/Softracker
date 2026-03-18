@@ -23,6 +23,8 @@ public class AgentOfficeAvatarViewModel
     public string TeamName { get; set; } = "Unassigned";
     public string WorkspaceName { get; set; } = string.Empty;
     public bool IsWorking { get; set; }
+    public bool IsOnline { get; set; }
+    public DateTime? LastActivityAt { get; set; }
     public int ActiveTaskCount { get; set; }
     public string TaskSummary { get; set; } = "Idle";
     public string AccentColor { get; set; } = "#22d3ee";
@@ -38,6 +40,8 @@ public class OfficeEmployeeAvatarViewModel
     public string Name { get; set; } = string.Empty;
     public string Role { get; set; } = "Employee";
     public string TeamName { get; set; } = "Unassigned";
+    public bool IsOnline { get; set; }
+    public DateTime? LastActivityAt { get; set; }
     public string AccentColor { get; set; } = "#60a5fa";
     public int LeftPct { get; set; }
     public int TopPct { get; set; }

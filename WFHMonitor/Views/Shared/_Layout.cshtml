@@ -51,11 +51,11 @@
     var isGitHubOAuthConfigured = GitHubOAuthService.IsOAuthConfigured();
     var isGitHubConnected = canManageGitHubConnection && !string.IsNullOrWhiteSpace(userId)
         && await GitHubOAuthService.IsConnectedAsync(userId);
-    var isProjectsSectionActive = ctrl == "ChangeRequest" || ctrl == "Bug";
+    var isProjectsSectionActive = ctrl == "ChangeRequest" || ctrl == "Bug" || ctrl == "Qa";
     var isMonitorSectionActive = ctrl == "Monitor";
     var isPaymentSectionActive = ctrl == "Payment";
     var isTeamSectionActive = ctrl == "Team" || ctrl == "Agent" || (ctrl == "Admin" && act == "Employees");
-    var canShowProjectsGroup = runtimeAccess.CanViewAllProjects || runtimeAccess.CanViewFeatures || runtimeAccess.CanViewBugs;
+    var canShowProjectsGroup = runtimeAccess.CanViewAllProjects || runtimeAccess.CanViewFeatures || runtimeAccess.CanViewBugs || runtimeAccess.CanViewQaTesting;
 
     <aside class="sidebar">
         <a class="sidebar-brand" asp-controller="Home" asp-action="Index">
@@ -128,6 +128,15 @@
                                 <a asp-controller="Bug" asp-action="Index"
                                    class="@(ctrl == "Bug" ? "active" : "")">
                                     <i class="bi bi-bug"></i> Bugs
+                                </a>
+                            </li>
+                        }
+                        @if (runtimeAccess.CanViewQaTesting)
+                        {
+                            <li>
+                                <a asp-controller="Qa" asp-action="Index"
+                                   class="@(ctrl == "Qa" ? "active" : "")">
+                                    <i class="bi bi-shield-check"></i> QA Testing
                                 </a>
                             </li>
                         }
@@ -212,6 +221,10 @@
     <div class="main-wrapper">
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
+            <div class="st-clock" id="stClock">
+                <span class="st-clock-time" id="stClockTime"></span>
+                <span class="st-clock-date" id="stClockDate"></span>
+            </div>
             <div class="d-flex align-items-center gap-2">
                 @if (canManageGitHubConnection)
                 {
@@ -359,6 +372,31 @@ else
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
 <script src="~/js/onboarding.js" asp-append-version="true"></script>
+<script>
+    (function () {
+        var timeEl = document.getElementById('stClockTime');
+        var dateEl = document.getElementById('stClockDate');
+        if (!timeEl || !dateEl) return;
+
+        function tick() {
+            var now = new Date();
+            var h = String(now.getHours()).padStart(2, '0');
+            var m = String(now.getMinutes()).padStart(2, '0');
+            var s = String(now.getSeconds()).padStart(2, '0');
+            timeEl.textContent = h + ':' + m + ':' + s;
+
+            var day = now.toLocaleDateString('en-US', { weekday: 'short' });
+            var month = now.toLocaleDateString('en-US', { month: 'short' });
+            var date = now.getDate();
+            var year = now.getFullYear();
+            var tz = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+            dateEl.textContent = day + ', ' + month + ' ' + date + ' ' + year + ' · ' + tz;
+        }
+
+        tick();
+        setInterval(tick, 1000);
+    })();
+</script>
 <script>
     (function () {
         const bellButton = document.getElementById('notificationBellButton');

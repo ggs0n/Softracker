@@ -1,0 +1,633 @@
+@model WFHMonitor.ViewModels.QaIndexViewModel
+@{
+    ViewData["Title"] = "QA Testing";
+    var openBugs = Model.LinkedBugs.Where(b => b.Status != WFHMonitor.Models.BugStatus.Complete).ToList();
+}
+
+<style>
+    .qa-shell{max-width:1420px;margin:0 auto}
+
+    /* Hero */
+    .qa-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(59,130,246,.18);border-radius:16px;padding:28px 32px 24px;margin-bottom:24px;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .qa-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(59,130,246,.12) 0%,transparent 70%);pointer-events:none}
+    .qa-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60a5fa;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .qa-hero-title{font-size:1.6rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .qa-hero-sub{font-size:.76rem;color:#a1a1aa;margin-top:3px;font-weight:500}
+    .qa-hero-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;z-index:1}
+    .qa-total{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,.08);color:#a1a1aa;border:1px solid rgba(255,255,255,.1)}
+    .qa-btn{border:none;border-radius:10px;padding:9px 20px;font-size:.82rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none;letter-spacing:.01em}
+    .qa-btn-primary{background:#3b82f6;color:#fff}
+    .qa-btn-primary:hover{background:#2563eb;color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(59,130,246,.25)}
+    .qa-btn-scan{background:var(--accent);color:#fff}
+    .qa-btn-scan:hover{background:var(--accent-hover);color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.25)}
+    .qa-btn-run{background:#8b5cf6;color:#fff}
+    .qa-btn-run:hover{background:#7c3aed;color:#fff;transform:translateY(-1px)}
+
+    /* Stat cards */
+    .qa-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+    .qa-stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;transition:box-shadow .2s ease}
+    .qa-stat:hover{box-shadow:0 6px 20px rgba(0,0,0,.05)}
+    .qa-stat-value{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+    .qa-stat-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+    .qa-stat-bar{position:absolute;top:0;left:0;right:0;height:3px}
+    .qa-stat-green .qa-stat-value{color:#10b981}
+    .qa-stat-green .qa-stat-label{color:#6ee7b7}
+    .qa-stat-green .qa-stat-bar{background:#10b981}
+    .qa-stat-red .qa-stat-value{color:#ef4444}
+    .qa-stat-red .qa-stat-label{color:#fca5a5}
+    .qa-stat-red .qa-stat-bar{background:#ef4444}
+    .qa-stat-amber .qa-stat-value{color:#f59e0b}
+    .qa-stat-amber .qa-stat-label{color:#fde68a}
+    .qa-stat-amber .qa-stat-bar{background:#f59e0b}
+    .qa-stat-blue .qa-stat-value{color:#3b82f6}
+    .qa-stat-blue .qa-stat-label{color:#93c5fd}
+    .qa-stat-blue .qa-stat-bar{background:#3b82f6}
+
+    /* Pass rate card */
+    .qa-passrate{background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:12px;padding:18px 20px;color:#f4f5f7}
+    .qa-passrate-value{font-size:1.6rem;font-weight:800;color:#10b981;font-variant-numeric:tabular-nums}
+    .qa-passrate-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a1a1aa;margin-top:2px}
+
+    /* Main layout */
+    .qa-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
+
+    /* Section card */
+    .qa-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:box-shadow .2s ease}
+    .qa-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .qa-section-head{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .qa-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .qa-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .qa-section-label span{font-size:.68rem;font-weight:500;color:var(--text-muted);display:block;margin-top:1px}
+    .qa-badge-count{font-size:.66rem;font-weight:700;border-radius:999px;padding:2px 8px;background:#eef2f7;color:#71717a;margin-left:4px}
+
+    /* Tabs */
+    .qa-tabs{display:flex;gap:0;padding:0 20px;border-bottom:1px solid var(--border);background:#fafbfc}
+    .qa-tab{padding:10px 16px;font-size:.78rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;text-decoration:none;transition:all .15s ease}
+    .qa-tab:hover{color:var(--text-primary)}
+    .qa-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
+
+    /* Table */
+    .qa-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .qa-table th{font-size:.7rem;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;border-bottom:2px solid var(--border);background:#fafbfc}
+    .qa-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:middle}
+    .qa-table tr:last-child td{border-bottom:none}
+    .qa-table tr:hover td{background:#fafbfc}
+    .qa-tc-num{font-family:var(--font-mono);font-size:.74rem;font-weight:700;color:#3b82f6}
+    .qa-table-link{font-weight:600;text-decoration:none;color:var(--text-primary);transition:color .15s ease}
+    .qa-table-link:hover{color:#3b82f6}
+
+    /* Status pills */
+    .qa-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid transparent;display:inline-block}
+    .qa-st-pass{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+    .qa-st-fail{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .qa-st-pending{background:#fef3c7;color:#b45309;border-color:#fde68a}
+    .qa-st-skip{background:#e5e7eb;color:#4b5563;border-color:#d1d5db}
+
+    /* Category pills */
+    .qa-cat{font-size:.62rem;font-weight:700;border-radius:4px;padding:2px 6px;text-transform:uppercase;letter-spacing:.04em}
+    .qa-cat-all{background:#eff6ff;color:#3b82f6}
+    .qa-cat-smoke{background:#fef3c7;color:#d97706}
+    .qa-cat-regression{background:#fce7f3;color:#be185d}
+    .qa-cat-uat{background:#d1fae5;color:#047857}
+
+    /* Env pills */
+    .qa-env{font-size:.62rem;font-weight:600;border-radius:4px;padding:2px 6px;background:#f1f5f9;color:#64748b}
+
+    /* Coverage bars */
+    .qa-cov-row{display:flex;align-items:center;gap:10px;padding:8px 0}
+    .qa-cov-row + .qa-cov-row{border-top:1px solid var(--border)}
+    .qa-cov-module{font-size:.78rem;font-weight:600;color:var(--text-primary);width:120px;flex-shrink:0}
+    .qa-cov-bar{flex:1;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+    .qa-cov-fill{height:100%;border-radius:999px;transition:width .3s ease}
+    .qa-cov-pct{font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums;width:40px;text-align:right;flex-shrink:0}
+
+    /* Linked bugs */
+    .qa-bug-item{padding:10px 14px;border-bottom:1px solid var(--border);font-size:.8rem}
+    .qa-bug-item:last-child{border-bottom:none}
+    .qa-bug-title{font-weight:600;color:var(--text-primary)}
+    .qa-bug-meta{font-size:.68rem;color:var(--text-muted);margin-top:2px}
+    .qa-bug-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+
+    /* Filter bar inside hero */
+    .qa-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .qa-filter-select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#e4e4e7;padding:6px 12px;font-size:.76rem;font-family:inherit}
+    .qa-filter-select option{background:#18181b;color:#e4e4e7}
+
+    /* Action buttons in table */
+    .qa-action{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:1px solid #d1d5db;background:transparent;cursor:pointer;color:var(--text-muted);transition:all .15s ease;font-size:.8rem}
+    .qa-action:hover{border-color:var(--text-secondary);color:var(--text-primary);background:#f9fafb}
+    .qa-action-pass:hover{border-color:#10b981;color:#10b981;background:rgba(16,185,129,.06)}
+    .qa-action-fail:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.06)}
+    .qa-action-del:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.06)}
+    .qa-action-scan:hover{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,.06)}
+
+    /* Empty state */
+    .qa-empty{text-align:center;padding:48px 20px}
+    .qa-empty-icon{font-size:2.5rem;color:var(--text-muted);opacity:.25;margin-bottom:8px}
+    .qa-empty-text{font-size:.84rem;color:var(--text-muted);font-weight:500}
+
+    @@media(max-width:1024px){.qa-grid{grid-template-columns:1fr}.qa-stats{grid-template-columns:repeat(2,1fr)}}
+    @@media(max-width:640px){.qa-stats{grid-template-columns:1fr}.qa-hero{padding:20px 16px}}
+</style>
+
+<div class="qa-shell">
+
+    @* Hero *@
+    <section class="qa-hero">
+        <div>
+            <div class="qa-hero-badge"><i class="bi bi-shield-check"></i> QA Testing</div>
+            <div class="qa-hero-title">Quality Assurance</div>
+            <div class="qa-hero-sub">Scan bugs, generate test cases, and track coverage by module</div>
+
+            @* Filters *@
+            <form method="get" asp-action="Index" class="qa-filters mt-2">
+                <select name="category" class="qa-filter-select">
+                    <option value="">All Categories</option>
+                    @foreach (var cat in Enum.GetValues<WFHMonitor.Models.TestCaseCategory>())
+                    {
+                        <option value="@cat" selected="@(Model.FilterCategory == cat.ToString() ? "selected" : null)">@cat</option>
+                    }
+                </select>
+                <select name="status" class="qa-filter-select">
+                    <option value="">All Status</option>
+                    @foreach (var st in Enum.GetValues<WFHMonitor.Models.TestCaseStatus>())
+                    {
+                        <option value="@st" selected="@(Model.FilterStatus == st.ToString() ? "selected" : null)">@st</option>
+                    }
+                </select>
+                <select name="projectId" class="qa-filter-select">
+                    <option value="">All Projects</option>
+                    @foreach (var p in Model.Projects)
+                    {
+                        <option value="@p.Id" selected="@(Model.FilterProjectId == p.Id ? "selected" : null)">@p.CrNumber — @p.Title</option>
+                    }
+                </select>
+                <button type="submit" class="qa-btn qa-btn-primary" style="padding:6px 14px;font-size:.74rem"><i class="bi bi-funnel"></i> Filter</button>
+            </form>
+        </div>
+        <div class="qa-hero-actions">
+            <span class="qa-total">@Model.TotalCount total</span>
+            <button type="button" class="qa-btn qa-btn-primary" data-bs-toggle="modal" data-bs-target="#addTestCaseModal"><i class="bi bi-plus-lg"></i> Test case</button>
+            @if (Model.Projects.Any())
+            {
+                <button type="button" class="qa-btn qa-btn-scan" data-bs-toggle="modal" data-bs-target="#generateModal"><i class="bi bi-cpu"></i> Generate</button>
+            }
+        </div>
+    </section>
+
+    @* Stats row *@
+    <div class="qa-stats">
+        <div class="qa-stat qa-stat-green">
+            <div class="qa-stat-bar"></div>
+            <div class="qa-stat-value">@Model.PassedCount</div>
+            <div class="qa-stat-label">Passed</div>
+        </div>
+        <div class="qa-stat qa-stat-red">
+            <div class="qa-stat-bar"></div>
+            <div class="qa-stat-value">@Model.FailedCount</div>
+            <div class="qa-stat-label">Failed</div>
+        </div>
+        <div class="qa-stat qa-stat-amber">
+            <div class="qa-stat-bar"></div>
+            <div class="qa-stat-value">@Model.PendingCount</div>
+            <div class="qa-stat-label">Pending</div>
+        </div>
+        <div class="qa-passrate">
+            <div class="qa-passrate-value">@Model.PassRate%</div>
+            <div class="qa-passrate-label">Pass Rate</div>
+        </div>
+    </div>
+
+    @* Main grid *@
+    <div class="qa-grid">
+
+        @* Left column — test cases table *@
+        <div>
+            <div class="qa-section">
+                <div class="qa-section-head">
+                    <div class="qa-section-icon" style="background:#eff6ff;color:#3b82f6"><i class="bi bi-list-check"></i></div>
+                    <div class="qa-section-label">Test cases<span>All test cases across projects</span></div>
+                    <span class="qa-badge-count">@Model.TotalCount total</span>
+                </div>
+
+                @* Category tabs *@
+                <div class="qa-tabs">
+                    <a asp-action="Index" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                       class="qa-tab @(string.IsNullOrEmpty(Model.FilterCategory) ? "active" : "")">All</a>
+                    @foreach (var cat in new[] { "Smoke", "Regression", "UAT" })
+                    {
+                        <a asp-action="Index" asp-route-category="@cat" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                           class="qa-tab @(Model.FilterCategory == cat ? "active" : "")">@cat</a>
+                    }
+                </div>
+
+                @if (Model.TestCases.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="qa-table">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Name</th>
+                                    <th>Project</th>
+                                    <th>Env</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tc in Model.TestCases)
+                                {
+                                    var statusCls = tc.Status switch {
+                                        WFHMonitor.Models.TestCaseStatus.Pass => "qa-st-pass",
+                                        WFHMonitor.Models.TestCaseStatus.Fail => "qa-st-fail",
+                                        WFHMonitor.Models.TestCaseStatus.Skip => "qa-st-skip",
+                                        _ => "qa-st-pending"
+                                    };
+                                    var catCls = tc.Category switch {
+                                        WFHMonitor.Models.TestCaseCategory.Smoke => "qa-cat-smoke",
+                                        WFHMonitor.Models.TestCaseCategory.Regression => "qa-cat-regression",
+                                        WFHMonitor.Models.TestCaseCategory.UAT => "qa-cat-uat",
+                                        _ => "qa-cat-all"
+                                    };
+                                    <tr>
+                                        <td>
+                                            <span class="qa-tc-num">@tc.TestNumber</span>
+                                        </td>
+                                        <td>
+                                            <div class="qa-table-link">@tc.Name</div>
+                                            <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
+                                                <span class="qa-cat @catCls">@tc.Category</span>
+                                                @if (!string.IsNullOrEmpty(tc.Module))
+                                                {
+                                                    <span style="font-size:.68rem;color:var(--text-muted)">@tc.Module</span>
+                                                }
+                                                @if (tc.IsAutoGenerated)
+                                                {
+                                                    <span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,.1);color:#8b5cf6">AUTO</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (tc.ChangeRequest != null)
+                                            {
+                                                <a asp-controller="ChangeRequest" asp-action="Details" asp-route-id="@tc.ChangeRequestId"
+                                                   style="font-size:.68rem;font-family:var(--font-mono);color:var(--accent);text-decoration:none;font-weight:600">@tc.ChangeRequest.CrNumber</a>
+                                                <div style="font-size:.66rem;color:var(--text-muted);margin-top:1px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@tc.ChangeRequest.Title</div>
+                                            }
+                                            else
+                                            {
+                                                <span style="font-size:.7rem;color:var(--text-muted)">—</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="qa-env">@tc.Environment</span>
+                                        </td>
+                                        <td>
+                                            <span class="qa-pill @statusCls">@tc.Status</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex gap-1">
+                                                <form asp-action="UpdateStatus" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@tc.Id" />
+                                                    <input type="hidden" name="status" value="Pass" />
+                                                    <button type="submit" class="qa-action qa-action-pass" title="Mark Pass"><i class="bi bi-check-lg"></i></button>
+                                                </form>
+                                                <form asp-action="UpdateStatus" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@tc.Id" />
+                                                    <input type="hidden" name="status" value="Fail" />
+                                                    <button type="submit" class="qa-action qa-action-fail" title="Mark Fail"><i class="bi bi-x-lg"></i></button>
+                                                </form>
+                                                <button type="button" class="qa-action" title="Edit"
+                                                        onclick="openEditModal(@tc.Id, '@tc.Name.Replace("'","\\'").Replace("\"","&quot;")', '@(tc.Description?.Replace("'","\\'").Replace("\"","&quot;").Replace("\n","\\n").Replace("\r","") ?? "")', '@(tc.Module ?? "")', '@tc.Status', '@tc.Category', '@tc.Environment', '@(tc.ChangeRequestId?.ToString() ?? "")', '@(tc.LinkedBugId?.ToString() ?? "")')">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                @if (tc.ChangeRequestId.HasValue)
+                                                {
+                                                    var scanLabel = !string.IsNullOrWhiteSpace(tc.Module) ? $"Scan {tc.Module} module" : "Scan project for bugs";
+                                                    <form asp-action="ScanModule" method="post" class="d-inline" onsubmit="return confirm('@scanLabel using OpenClaw?')">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="id" value="@tc.Id" />
+                                                        <button type="submit" class="qa-action qa-action-scan" title="@scanLabel">
+                                                            <i class="bi bi-search"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Delete this test case?')">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@tc.Id" />
+                                                    <button type="submit" class="qa-action qa-action-del" title="Delete"><i class="bi bi-trash3"></i></button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="qa-empty">
+                        <div class="qa-empty-icon"><i class="bi bi-shield-check"></i></div>
+                        <div class="qa-empty-text">No test cases yet. Add one manually or generate from bugs.</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Right column — linked bugs + coverage *@
+        <div>
+            @* Linked bugs *@
+            <div class="qa-section" style="margin-bottom:20px">
+                <div class="qa-section-head">
+                    <div class="qa-section-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-bug-fill"></i></div>
+                    <div class="qa-section-label">Linked bugs<span>Bugs connected to test cases</span></div>
+                    @if (openBugs.Any())
+                    {
+                        <span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.1);color:#ef4444;margin-left:auto">@openBugs.Count open</span>
+                    }
+                </div>
+                @if (Model.LinkedBugs.Any())
+                {
+                    @foreach (var bug in Model.LinkedBugs.Take(10))
+                    {
+                        var dotColor = bug.Status == WFHMonitor.Models.BugStatus.Complete ? "#10b981"
+                            : bug.Status == WFHMonitor.Models.BugStatus.Testing ? "#f59e0b" : "#ef4444";
+                        <div class="qa-bug-item">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="qa-bug-dot" style="background:@dotColor"></span>
+                                <span class="qa-bug-title">@bug.Title</span>
+                            </div>
+                            <div class="qa-bug-meta">
+                                @bug.BugNumber · @bug.Status
+                                @if (!string.IsNullOrEmpty(bug.ModuleImpacted))
+                                {
+                                    <span> · @bug.ModuleImpacted</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="padding:20px;text-align:center;font-size:.78rem;color:var(--text-muted)">
+                        No linked bugs
+                    </div>
+                }
+            </div>
+
+            @* Coverage by module *@
+            <div class="qa-section">
+                <div class="qa-section-head">
+                    <div class="qa-section-icon" style="background:#fef3c7;color:#d97706"><i class="bi bi-bar-chart-fill"></i></div>
+                    <div class="qa-section-label">Coverage by module<span>Pass rate per module</span></div>
+                </div>
+                <div style="padding:14px 20px">
+                    @if (Model.ModuleCoverages.Any())
+                    {
+                        @foreach (var mod in Model.ModuleCoverages)
+                        {
+                            var barColor = mod.CoveragePercent >= 80 ? "#10b981" : mod.CoveragePercent >= 50 ? "#f59e0b" : "#ef4444";
+                            <div class="qa-cov-row">
+                                <div class="qa-cov-module">@mod.Module</div>
+                                <div class="qa-cov-bar">
+                                    <div class="qa-cov-fill" style="width:@(mod.CoveragePercent)%;background:@barColor"></div>
+                                </div>
+                                <div class="qa-cov-pct" style="color:@barColor">@(mod.CoveragePercent)%</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div style="text-align:center;font-size:.78rem;color:var(--text-muted);padding:12px 0">
+                            No module data yet
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Add Test Case Modal *@
+<div class="modal fade" id="addTestCaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:14px;border:1px solid var(--border)">
+            <form asp-action="CreateTestCase" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
+                    <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-plus-circle me-2" style="color:#3b82f6"></i>New Test Case</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding:20px">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Name *</label>
+                        <input name="Name" class="form-control" placeholder="e.g. User login with valid credentials" required style="font-size:.84rem" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Description</label>
+                        <textarea name="Description" class="form-control" rows="3" placeholder="Test steps and expected result..." style="font-size:.84rem"></textarea>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Module</label>
+                            <input name="Module" class="form-control" placeholder="e.g. Authentication" style="font-size:.84rem" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Category</label>
+                            <select name="Category" class="form-select" style="font-size:.84rem">
+                                @foreach (var cat in Enum.GetValues<WFHMonitor.Models.TestCaseCategory>())
+                                {
+                                    <option value="@cat">@cat</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Environment</label>
+                            <select name="Environment" class="form-select" style="font-size:.84rem">
+                                @foreach (var env in Enum.GetValues<WFHMonitor.Models.TestCaseEnvironment>())
+                                {
+                                    <option value="@env">@env</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Project</label>
+                            <select name="ChangeRequestId" class="form-select" style="font-size:.84rem">
+                                <option value="">-- None --</option>
+                                @foreach (var p in Model.Projects)
+                                {
+                                    <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid var(--border);padding:12px 20px">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm" style="background:#3b82f6;color:#fff;font-weight:600">Create Test Case</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@* Generate from Bugs / Scan Modal *@
+<div class="modal fade" id="generateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:14px;border:1px solid var(--border)">
+            <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
+                <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-cpu me-2" style="color:var(--accent)"></i>Generate Test Cases</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+                <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Select a project to generate test cases from its existing bugs, or run an OpenClaw scan to find new issues.</p>
+
+                @* Generate from existing bugs *@
+                <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
+                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px"><i class="bi bi-bug me-1" style="color:#ef4444"></i> Generate from existing bugs</div>
+                    <form asp-action="GenerateFromBugs" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
+                            <option value="">Select project...</option>
+                            @foreach (var p in Model.Projects)
+                            {
+                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm" style="background:#ef4444;color:#fff;font-weight:600;white-space:nowrap">Generate</button>
+                    </form>
+                </div>
+
+                @* Scan with OpenClaw *@
+                <div style="background:#f0fdf4;border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:16px;margin-bottom:14px">
+                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px"><i class="bi bi-cpu me-1" style="color:var(--accent)"></i> Scan with OpenClaw agent</div>
+                    <form asp-action="ScanAndGenerate" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
+                            <option value="">Select project...</option>
+                            @foreach (var p in Model.Projects)
+                            {
+                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm" style="background:var(--accent);color:#fff;font-weight:600;white-space:nowrap">Scan & Generate</button>
+                    </form>
+                </div>
+
+                @* Auto Generate module-level test cases *@
+                <div style="background:#eff6ff;border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:16px">
+                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:4px"><i class="bi bi-lightning-charge-fill me-1" style="color:#3b82f6"></i> Auto Generate Test Cases</div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px">OpenClaw analyses the project and generates module-level test cases covering all major areas.</div>
+                    <form asp-action="AutoGenerate" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
+                            <option value="">Select project...</option>
+                            @foreach (var p in Model.Projects)
+                            {
+                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm" style="background:#3b82f6;color:#fff;font-weight:600;white-space:nowrap"><i class="bi bi-lightning-charge-fill me-1"></i>Auto Generate</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Edit Test Case Modal *@
+<div class="modal fade" id="editTestCaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:14px;border:1px solid var(--border)">
+            <form asp-action="Edit" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="editId" />
+                <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
+                    <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-pencil-square me-2" style="color:#f59e0b"></i>Edit Test Case</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding:20px">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Name *</label>
+                        <input name="Name" id="editName" class="form-control" required style="font-size:.84rem" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Description</label>
+                        <textarea name="Description" id="editDescription" class="form-control" rows="3" style="font-size:.84rem"></textarea>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Module</label>
+                            <input name="Module" id="editModule" class="form-control" style="font-size:.84rem" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Category</label>
+                            <select name="Category" id="editCategory" class="form-select" style="font-size:.84rem">
+                                @foreach (var cat in Enum.GetValues<WFHMonitor.Models.TestCaseCategory>())
+                                {
+                                    <option value="@cat">@cat</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Status</label>
+                            <select name="Status" id="editStatus" class="form-select" style="font-size:.84rem">
+                                @foreach (var st in Enum.GetValues<WFHMonitor.Models.TestCaseStatus>())
+                                {
+                                    <option value="@st">@st</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Environment</label>
+                            <select name="Environment" id="editEnvironment" class="form-select" style="font-size:.84rem">
+                                @foreach (var env in Enum.GetValues<WFHMonitor.Models.TestCaseEnvironment>())
+                                {
+                                    <option value="@env">@env</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Project</label>
+                            <select name="ChangeRequestId" id="editProjectId" class="form-select" style="font-size:.84rem">
+                                <option value="">-- None --</option>
+                                @foreach (var p in Model.Projects)
+                                {
+                                    <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid var(--border);padding:12px 20px">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm" style="background:#f59e0b;color:#18181b;font-weight:600">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openEditModal(id, name, desc, module, status, category, env, projectId, bugId) {
+            document.getElementById('editId').value = id;
+            document.getElementById('editName').value = name;
+            document.getElementById('editDescription').value = desc.replace(/\\n/g, '\n');
+            document.getElementById('editModule').value = module;
+            document.getElementById('editStatus').value = status;
+            document.getElementById('editCategory').value = category;
+            document.getElementById('editEnvironment').value = env;
+            document.getElementById('editProjectId').value = projectId;
+            new bootstrap.Modal(document.getElementById('editTestCaseModal')).show();
+        }
+    </script>
+}

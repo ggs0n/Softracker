@@ -7,8 +7,9 @@ public static class AppModuleKeys
     public const string AllProjects = "AllProjects";
     public const string Features = "Features";
     public const string Bugs = "Bugs";
+    public const string QaTesting = "QaTesting";
 
-    public static readonly string[] All = [AllProjects, Features, Bugs];
+    public static readonly string[] All = [AllProjects, Features, Bugs, QaTesting];
 }
 
 public class ModulePermissionSetting

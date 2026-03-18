@@ -11,6 +11,7 @@
             name = a.Name,
             team = a.TeamName,
             isWorking = a.IsWorking,
+            isOnline = a.IsOnline,
             taskCount = a.ActiveTaskCount,
             taskSummary = a.TaskSummary,
             color = a.AccentColor,
@@ -26,11 +27,14 @@
             name = e.Name,
             role = e.Role,
             team = e.TeamName,
+            isOnline = e.IsOnline,
             color = e.AccentColor,
             leftPct = e.LeftPct,
             topPct = e.TopPct
         })
     };
+    var onlineAgentCount = Model.Agents.Count(a => a.IsOnline);
+    var onlineEmployeeCount = Model.Employees.Count(e => e.IsOnline);
 }
 
 <style>
@@ -73,6 +77,9 @@
     .agent-status{font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:999px}
     .agent-status.working{color:#bbf7d0;background:rgba(22,101,52,.45);border:1px solid rgba(74,222,128,.5)}
     .agent-status.idle{color:#cbd5e1;background:rgba(51,65,85,.5);border:1px solid rgba(100,116,139,.5)}
+    .agent-online-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
+    .agent-online-dot.on{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.5)}
+    .agent-online-dot.off{background:#475569}
     @@media (max-width:1400px){.office-shell{grid-template-columns:1fr}}
     @@media (max-width:767px){.office-scene{height:620px}.agent-list{max-height:none}.office-side-rail,.office-status-card{display:none}.office-chip-strip{right:12px;top:54px}}
 </style>
@@ -93,7 +100,7 @@
             <div class="office-chip-strip">
                 @foreach (var agent in Model.Agents)
                 {
-                    <span class="office-chip"><span class="office-chip-dot @(agent.IsWorking ? "busy" : "idle")"></span><span>@agent.Name</span><span style="opacity:.7">(@agent.TeamName)</span></span>
+                    <span class="office-chip"><span class="agent-online-dot @(agent.IsOnline ? "on" : "off")"></span><span class="office-chip-dot @(agent.IsWorking ? "busy" : "idle")"></span><span>@agent.Name</span><span style="opacity:.7">(@agent.TeamName)</span></span>
                 }
             </div>
             <div class="office-status-card">
@@ -116,6 +123,7 @@
             <div class="office-stat"><div class="office-stat-value">@Model.TeamCount</div><div class="office-stat-label">Teams</div></div>
             <div class="office-stat"><div class="office-stat-value">@Model.AgentCount</div><div class="office-stat-label">Agents</div></div>
             <div class="office-stat"><div class="office-stat-value">@Model.WorkingAgentCount</div><div class="office-stat-label">Working</div></div>
+            <div class="office-stat"><div class="office-stat-value" style="color:#22c55e">@onlineAgentCount</div><div class="office-stat-label">Online</div></div>
             <div class="office-stat"><div class="office-stat-value">@Model.EmployeeCount</div><div class="office-stat-label">Employees</div></div>
         </div>
         <div class="office-panel-title">Agent Assignments</div>
@@ -129,8 +137,8 @@
                 @foreach (var agent in Model.Agents)
                 {
                     <div class="agent-list-item">
-                        <div class="agent-list-name"><span>@agent.Name</span><span class="agent-status @(agent.IsWorking ? "working" : "idle")">@(agent.IsWorking ? "Working" : "Idle")</span></div>
-                        <div class="agent-list-team">@agent.TeamName - @agent.WorkspaceName</div>
+                        <div class="agent-list-name"><span class="agent-online-dot @(agent.IsOnline ? "on" : "off")"></span><span>@agent.Name</span><span class="agent-status @(agent.IsWorking ? "working" : "idle")">@(agent.IsWorking ? "Working" : "Idle")</span></div>
+                        <div class="agent-list-team">@agent.TeamName - @agent.WorkspaceName · <span style="font-size:.6rem;color:@(agent.IsOnline ? "#22c55e" : "#64748b")">@(agent.IsOnline ? "Online" : "Offline")</span></div>
                         <div class="agent-list-task">@agent.TaskSummary</div>
                     </div>
                 }

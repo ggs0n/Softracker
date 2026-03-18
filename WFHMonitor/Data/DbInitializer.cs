@@ -488,6 +488,9 @@ public static class DbInitializer
                     FOREIGN KEY ([OrgTeamId]) REFERENCES [dbo].[OrgTeams]([Id]) ON DELETE SET NULL;
             END
 
+            IF COL_LENGTH('AspNetUsers', 'LastActivityAt') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [LastActivityAt] datetime2 NULL;
+
             IF OBJECT_ID(N'[dbo].[OrganizationProfiles]', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[OrganizationProfiles]
@@ -644,6 +647,12 @@ public static class DbInitializer
                 BEGIN
                     INSERT INTO [dbo].[ModulePermissionSettings] ([ModuleKey], [ViewRolesCsv], [ModifyRolesCsv], [UpdatedAt])
                     VALUES ('Bugs', 'Admin,Tester,Developer,Agent', 'Admin,Tester,Developer,Agent', SYSUTCDATETIME());
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[ModulePermissionSettings] WHERE [ModuleKey] = 'QaTesting')
+                BEGIN
+                    INSERT INTO [dbo].[ModulePermissionSettings] ([ModuleKey], [ViewRolesCsv], [ModifyRolesCsv], [UpdatedAt])
+                    VALUES ('QaTesting', 'Admin,Tester,Developer', 'Admin,Tester', SYSUTCDATETIME());
                 END
             END
             """);

@@ -29,6 +29,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<UserOnboardingState> UserOnboardingStates => Set<UserOnboardingState>();
     public DbSet<OrgTeam> OrgTeams => Set<OrgTeam>();
     public DbSet<OrganizationProfile> OrganizationProfiles => Set<OrganizationProfile>();
+    public DbSet<TestCase> TestCases => Set<TestCase>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -416,6 +417,36 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             e.Property(t => t.CompanyName)
                 .HasMaxLength(200);
+        });
+
+        builder.Entity<TestCase>(e =>
+        {
+            e.HasIndex(t => t.TestNumber).IsUnique();
+            e.HasIndex(t => t.ChangeRequestId);
+            e.HasIndex(t => t.LinkedBugId);
+            e.HasIndex(t => t.Status);
+            e.HasIndex(t => t.Category);
+            e.HasIndex(t => t.Module);
+
+            e.Property(t => t.TestNumber).HasMaxLength(20);
+            e.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TestCaseStatus.Pending);
+            e.Property(t => t.Category).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TestCaseCategory.All);
+            e.Property(t => t.Environment).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TestCaseEnvironment.Dev);
+
+            e.HasOne(t => t.ChangeRequest)
+             .WithMany()
+             .HasForeignKey(t => t.ChangeRequestId)
+             .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(t => t.LinkedBug)
+             .WithMany()
+             .HasForeignKey(t => t.LinkedBugId)
+             .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(t => t.CreatedBy)
+             .WithMany()
+             .HasForeignKey(t => t.CreatedById)
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<OrganizationProfile>(e =>

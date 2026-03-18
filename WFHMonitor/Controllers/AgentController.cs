@@ -151,6 +151,7 @@ public class AgentController : Controller
                 g => g.OrderByDescending(x => x.UpdatedAt).ToList(),
                 StringComparer.OrdinalIgnoreCase);
 
+        var onlineThreshold = DateTime.UtcNow.AddMinutes(-5);
         var agents = agentUsers
             .Select((agent, index) =>
             {
@@ -173,6 +174,8 @@ public class AgentController : Controller
                     TeamName = ResolveTeamName(agent.OrgTeamId, orgTeams),
                     WorkspaceName = $"Desk {index + 1:00}",
                     IsWorking = activeCount > 0,
+                    IsOnline = agent.LastActivityAt.HasValue && agent.LastActivityAt.Value >= onlineThreshold,
+                    LastActivityAt = agent.LastActivityAt,
                     ActiveTaskCount = activeCount,
                     TaskSummary = latest == null
                         ? "Idle - waiting for assignment"
@@ -198,6 +201,8 @@ public class AgentController : Controller
                     Name = string.IsNullOrWhiteSpace(employee.FullName) ? (employee.UserName ?? "Employee") : employee.FullName,
                     Role = employeeRoleMap.TryGetValue(employee.Id, out var role) ? role : "Employee",
                     TeamName = ResolveTeamName(employee.OrgTeamId, orgTeams),
+                    IsOnline = employee.LastActivityAt.HasValue && employee.LastActivityAt.Value >= onlineThreshold,
+                    LastActivityAt = employee.LastActivityAt,
                     AccentColor = EmployeePalette[index % EmployeePalette.Length],
                     LeftPct = 8 + (col * 10),
                     TopPct = 84 + (row * 5)

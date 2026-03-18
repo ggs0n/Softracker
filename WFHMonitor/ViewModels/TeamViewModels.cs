@@ -34,6 +34,8 @@ public class TeamMemberNodeViewModel
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = "Employee";
     public int? TeamId { get; set; }
+    public bool IsOnline { get; set; }
+    public DateTime? LastActivityAt { get; set; }
 }
 
 public class ProjectTeamNodeViewModel

@@ -322,6 +322,7 @@ public class TeamController : Controller
             }
         }
 
+        var onlineThreshold = DateTime.UtcNow.AddMinutes(-5);
         var members = usersById.Values
             .Select(u => new TeamMemberNodeViewModel
             {
@@ -329,7 +330,9 @@ public class TeamController : Controller
                 FullName = u.FullName,
                 Email = u.Email ?? "-",
                 Role = userRoles.TryGetValue(u.Id, out var role) ? role : "Employee",
-                TeamId = u.OrgTeamId
+                TeamId = u.OrgTeamId,
+                IsOnline = u.LastActivityAt.HasValue && u.LastActivityAt.Value >= onlineThreshold,
+                LastActivityAt = u.LastActivityAt
             })
             .OrderBy(u => u.FullName)
             .ToList();

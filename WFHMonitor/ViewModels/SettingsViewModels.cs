@@ -38,6 +38,8 @@ public class RuntimeSystemAccessViewModel
     public bool CanModifyFeatures { get; set; }
     public bool CanViewBugs { get; set; }
     public bool CanModifyBugs { get; set; }
+    public bool CanViewQaTesting { get; set; }
+    public bool CanModifyQaTesting { get; set; }
     public bool BellNotificationSoundEnabled { get; set; }
     public string BellNotificationSoundOption { get; set; } = BellSoundOptions.Classic;
 }

@@ -207,6 +207,75 @@ public class AdminController : Controller
 
         var tasksDoneTodayComposite = agentBugsFixed + agentBugsFound + agentFeaturesShipped + (developerBugsFixed + developerFeaturesDelivered);
 
+        // Day-by-day report (last 7 days) — tasks, bugs, and features
+        var reportStartDate = today.AddDays(-6);
+
+        var tasksDoneByDay = await _db.WorkTasks
+            .Include(t => t.Assignee).Include(t => t.ChangeRequest)
+            .Where(t => t.Status == WorkTaskStatus.Done
+                && t.UpdatedAt.Date >= reportStartDate && t.UpdatedAt.Date <= today
+                && t.ChangeRequestId.HasValue && companyProjectIds.Contains(t.ChangeRequestId.Value))
+            .AsNoTracking().OrderByDescending(t => t.UpdatedAt).ToListAsync();
+
+        var bugsDoneByDay = await _db.BugReports
+            .Include(b => b.AssignedDeveloper).Include(b => b.ChangeRequest)
+            .Where(b => b.Status == BugStatus.Complete
+                && b.UpdatedAt.Date >= reportStartDate && b.UpdatedAt.Date <= today
+                && b.ChangeRequestId.HasValue && companyProjectIds.Contains(b.ChangeRequestId.Value))
+            .AsNoTracking().OrderByDescending(b => b.UpdatedAt).ToListAsync();
+
+        var featuresDoneByDay = await _db.ProjectFeatures
+            .Include(f => f.AssignedDeveloper).Include(f => f.ChangeRequest)
+            .Where(f => f.IsCompleted
+                && f.CreatedAt.Date >= reportStartDate && f.CreatedAt.Date <= today
+                && companyProjectIds.Contains(f.ChangeRequestId))
+            .AsNoTracking().OrderByDescending(f => f.CreatedAt).ToListAsync();
+
+        var dailyReports = Enumerable.Range(0, 7)
+            .Select(i => today.AddDays(-i))
+            .Select(date =>
+            {
+                var items = new List<DailyTaskItem>();
+
+                items.AddRange(tasksDoneByDay
+                    .Where(t => t.UpdatedAt.Date == date)
+                    .Select(t => new DailyTaskItem
+                    {
+                        Id = t.Id, Title = t.Title, ItemType = "Task",
+                        AssigneeName = t.Assignee?.FullName,
+                        ProjectTitle = t.ChangeRequest?.Title,
+                        ProjectCrNumber = t.ChangeRequest?.CrNumber,
+                        ChangeRequestId = t.ChangeRequestId
+                    }));
+
+                items.AddRange(bugsDoneByDay
+                    .Where(b => b.UpdatedAt.Date == date)
+                    .Select(b => new DailyTaskItem
+                    {
+                        Id = b.Id, Title = b.Title, ItemType = "Bug",
+                        ItemNumber = b.BugNumber,
+                        AssigneeName = b.AssignedDeveloper?.FullName,
+                        ProjectTitle = b.ChangeRequest?.Title,
+                        ProjectCrNumber = b.ChangeRequest?.CrNumber,
+                        ChangeRequestId = b.ChangeRequestId
+                    }));
+
+                items.AddRange(featuresDoneByDay
+                    .Where(f => f.CreatedAt.Date == date)
+                    .Select(f => new DailyTaskItem
+                    {
+                        Id = f.Id, Title = f.Name, ItemType = "Feature",
+                        ItemNumber = f.FeatureNumber,
+                        AssigneeName = f.AssignedDeveloper?.FullName,
+                        ProjectTitle = f.ChangeRequest?.Title,
+                        ProjectCrNumber = f.ChangeRequest?.CrNumber,
+                        ChangeRequestId = f.ChangeRequestId
+                    }));
+
+                return new DailyTaskReport { Date = date, Tasks = items };
+            })
+            .ToList();
+
         var vm = new AdminDashboardViewModel
         {
             Today = today,
@@ -221,10 +290,90 @@ public class AdminController : Controller
             AgentFeaturesShipped = agentFeaturesShipped,
             AgentBugsFound = agentBugsFound,
             AgentBugsFixed = agentBugsFixed,
-            DeveloperDeliveredItems = developerBugsFixed + developerFeaturesDelivered
+            DeveloperDeliveredItems = developerBugsFixed + developerFeaturesDelivered,
+            DailyTaskReports = dailyReports
         };
 
         return View(vm);
+    }
+
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ExportTasksPdf(int? days)
+    {
+        var accessDenied = EnsureAdminAccess();
+        if (accessDenied != null) return accessDenied;
+
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
+        var today = DateTime.UtcNow.Date;
+        var reportDays = days is > 0 and <= 30 ? days.Value : 7;
+        var reportStartDate = today.AddDays(-(reportDays - 1));
+
+        var companyProjectsQuery = _db.ChangeRequests.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(currentCompanyName))
+            companyProjectsQuery = companyProjectsQuery.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == currentCompanyName);
+        else if (!string.IsNullOrWhiteSpace(currentAdminId))
+            companyProjectsQuery = companyProjectsQuery.Where(c => c.CreatedById == currentAdminId);
+
+        var companyProjectIds = await companyProjectsQuery.Select(p => p.Id).ToListAsync();
+
+        var tasksDone = await _db.WorkTasks
+            .Include(t => t.Assignee).Include(t => t.ChangeRequest)
+            .Where(t => t.Status == WorkTaskStatus.Done
+                && t.UpdatedAt.Date >= reportStartDate && t.UpdatedAt.Date <= today
+                && t.ChangeRequestId.HasValue && companyProjectIds.Contains(t.ChangeRequestId.Value))
+            .AsNoTracking().OrderByDescending(t => t.UpdatedAt).ToListAsync();
+
+        var bugsDone = await _db.BugReports
+            .Include(b => b.AssignedDeveloper).Include(b => b.ChangeRequest)
+            .Where(b => b.Status == BugStatus.Complete
+                && b.UpdatedAt.Date >= reportStartDate && b.UpdatedAt.Date <= today
+                && b.ChangeRequestId.HasValue && companyProjectIds.Contains(b.ChangeRequestId.Value))
+            .AsNoTracking().OrderByDescending(b => b.UpdatedAt).ToListAsync();
+
+        var featuresDone = await _db.ProjectFeatures
+            .Include(f => f.AssignedDeveloper).Include(f => f.ChangeRequest)
+            .Where(f => f.IsCompleted
+                && f.CreatedAt.Date >= reportStartDate && f.CreatedAt.Date <= today
+                && companyProjectIds.Contains(f.ChangeRequestId))
+            .AsNoTracking().OrderByDescending(f => f.CreatedAt).ToListAsync();
+
+        var dailyReports = Enumerable.Range(0, reportDays)
+            .Select(i => today.AddDays(-i))
+            .Select(date =>
+            {
+                var items = new List<DailyTaskItem>();
+                items.AddRange(tasksDone.Where(t => t.UpdatedAt.Date == date).Select(t => new DailyTaskItem
+                {
+                    Id = t.Id, Title = t.Title, ItemType = "Task",
+                    AssigneeName = t.Assignee?.FullName, ProjectTitle = t.ChangeRequest?.Title,
+                    ProjectCrNumber = t.ChangeRequest?.CrNumber, ChangeRequestId = t.ChangeRequestId
+                }));
+                items.AddRange(bugsDone.Where(b => b.UpdatedAt.Date == date).Select(b => new DailyTaskItem
+                {
+                    Id = b.Id, Title = b.Title, ItemType = "Bug", ItemNumber = b.BugNumber,
+                    AssigneeName = b.AssignedDeveloper?.FullName, ProjectTitle = b.ChangeRequest?.Title,
+                    ProjectCrNumber = b.ChangeRequest?.CrNumber, ChangeRequestId = b.ChangeRequestId
+                }));
+                items.AddRange(featuresDone.Where(f => f.CreatedAt.Date == date).Select(f => new DailyTaskItem
+                {
+                    Id = f.Id, Title = f.Name, ItemType = "Feature", ItemNumber = f.FeatureNumber,
+                    AssigneeName = f.AssignedDeveloper?.FullName, ProjectTitle = f.ChangeRequest?.Title,
+                    ProjectCrNumber = f.ChangeRequest?.CrNumber, ChangeRequestId = f.ChangeRequestId
+                }));
+                return new DailyTaskReport { Date = date, Tasks = items };
+            })
+            .ToList();
+
+        var totalItems = tasksDone.Count + bugsDone.Count + featuresDone.Count;
+        ViewBag.CompanyName = currentCompanyName ?? "Softracker";
+        ViewBag.ReportDays = reportDays;
+        ViewBag.GeneratedAt = DateTime.UtcNow;
+        ViewBag.TotalTasksDone = totalItems;
+
+        return View(dailyReports);
     }
 
     [Authorize(Roles = "Admin")]

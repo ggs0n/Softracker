@@ -11,6 +11,12 @@ public interface IOpenClawBugScanService
         string? scanAgentId = null,
         CancellationToken cancellationToken = default);
 
+    Task<OpenClawBugScanResult> ScanModuleAsync(
+        ChangeRequest project,
+        string moduleName,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default);
+
     Task<OpenClawBugFixResult> FixBugAsync(
         BugReport bug,
         string? fixAgentId = null,
@@ -21,7 +27,25 @@ public interface IOpenClawBugScanService
         ChangeRequest? project = null,
         string? featureAgentId = null,
         CancellationToken cancellationToken = default);
+
+    Task<OpenClawTestCaseGenResult> GenerateTestCasesAsync(
+        ChangeRequest project,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default);
 }
+
+public sealed record OpenClawTestCaseGenResult(
+    bool Succeeded,
+    string Error,
+    IReadOnlyList<OpenClawGeneratedTestCase> TestCases,
+    string AgentResponseText);
+
+public sealed record OpenClawGeneratedTestCase(
+    string Name,
+    string Description,
+    string Module,
+    string Category,
+    string Environment);
 
 public sealed record OpenClawBugScanResult(
     bool Succeeded,

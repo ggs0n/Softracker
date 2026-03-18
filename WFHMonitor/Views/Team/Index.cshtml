@@ -102,6 +102,24 @@
         color: #64748b;
         font-size: 0.8rem;
     }
+    .org-status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .org-status-online {
+        background: #22c55e;
+        box-shadow: 0 0 6px rgba(34,197,94,.5);
+    }
+    .org-status-offline {
+        background: #64748b;
+    }
+    .org-status-label {
+        font-size: 0.66rem;
+        font-weight: 600;
+    }
 </style>
 
 <div class="mod-header mb-4">
@@ -140,10 +158,14 @@
                             @foreach (var member in team.Members)
                             {
                                 <div class="org-member">
-                                    <div class="org-member-name">@member.FullName</div>
-                                    <div class="org-member-meta">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="org-status-dot @(member.IsOnline ? "org-status-online" : "org-status-offline")" title="@(member.IsOnline ? "Online" : "Offline")"></span>
+                                        <span class="org-member-name">@member.FullName</span>
+                                    </div>
+                                    <div class="org-member-meta" style="margin-left:18px">
                                         <span>@member.Email</span>
                                         <span class="dp-badge dp-badge-slate">@member.Role</span>
+                                        <span class="org-status-label" style="color:@(member.IsOnline ? "#22c55e" : "#64748b")">@(member.IsOnline ? "Online" : "Offline")</span>
                                     </div>
                                 </div>
                             }
@@ -317,17 +339,23 @@
                 <div class="table-responsive">
                     <table class="dp-table">
                         <thead>
-                            <tr><th>Name</th><th>Role</th></tr>
+                            <tr><th>Name</th><th>Role</th><th>Status</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var member in Model.UnassignedMembers)
                             {
                                 <tr>
                                     <td>
-                                        <div class="dp-cell-title">@member.FullName</div>
-                                        <div class="dp-cell-muted">@member.Email</div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="org-status-dot @(member.IsOnline ? "org-status-online" : "org-status-offline")"></span>
+                                            <div>
+                                                <div class="dp-cell-title">@member.FullName</div>
+                                                <div class="dp-cell-muted">@member.Email</div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td><span class="dp-badge dp-badge-slate">@member.Role</span></td>
+                                    <td><span class="org-status-label" style="color:@(member.IsOnline ? "#22c55e" : "#64748b")">@(member.IsOnline ? "Online" : "Offline")</span></td>
                                 </tr>
                             }
                         </tbody>

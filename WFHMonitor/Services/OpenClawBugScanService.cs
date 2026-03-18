@@ -30,6 +30,84 @@ public class OpenClawSettings
     public int FeatureScreenshotImportMaxFiles { get; set; } = 5;
     public int TimeoutSeconds { get; set; } = 120;
     public int MaxFindingsPerScan { get; set; } = 8;
+
+    // Prompt templates — use {findingsLimit}, {projectNumber}, {projectTitle}, {projectStage},
+    // {projectStatus}, {description}, {techStack}, {features}, {repositoryFeatures} placeholders.
+    public string BugScanSystemRole { get; set; } = "You are a software QA bug triage assistant.";
+    public string BugScanOutputFormat { get; set; } = "Return only JSON, no markdown and no extra text.";
+    public string BugScanSchema { get; set; } = "{\"findings\":[{\"title\":\"...\",\"description\":\"...\",\"workflow\":\"...\",\"stepsToReproduce\":\"...\",\"moduleImpacted\":\"...\",\"screenshotPaths\":[\"C:\\\\path\\\\shot1.png\"]}]}";
+    public string BugScanInstruction { get; set; } = "Generate up to {findingsLimit} high-confidence bugs.";
+    public string BugScanFocus { get; set; } = "Focus on actionable software defects, not vague suggestions.";
+    public List<string> BugScanRules { get; set; } =
+    [
+        "Every finding must include all schema fields.",
+        "Keep title under 120 characters.",
+        "Keep moduleImpacted short and specific.",
+        "If screenshot evidence exists, include absolute local image file paths in screenshotPaths.",
+        "If no screenshot exists for a finding, set screenshotPaths to an empty array."
+    ];
+
+    // Module scan — uses same schema; additional placeholders: {moduleName}
+    public string ModuleScanInstruction { get; set; } = "Generate up to {findingsLimit} high-confidence bugs SPECIFICALLY for the module: {moduleName}";
+    public string ModuleScanFocus { get; set; } = "Focus ONLY on the \"{moduleName}\" module. Do not scan other modules.";
+    public List<string> ModuleScanRules { get; set; } =
+    [
+        "Every finding must include all schema fields.",
+        "Set moduleImpacted to \"{moduleName}\" for all findings.",
+        "Keep title under 120 characters.",
+        "If screenshot evidence exists, include absolute local image file paths in screenshotPaths.",
+        "If no screenshot exists for a finding, set screenshotPaths to an empty array."
+    ];
+
+    // Bug fix prompt — uses {bugNumber}, {bugTitle}, {bugDescription}, {bugWorkflow},
+    // {bugSteps}, {bugModule}, {bugProjectRef} placeholders.
+    public string BugFixSystemRole { get; set; } = "You are a senior software engineer fixing a bug ticket.";
+    public string BugFixOutputFormat { get; set; } = "Return practical fix guidance that a developer can implement immediately.";
+    public List<string> BugFixSections { get; set; } = ["1) Root cause", "2) Proposed code changes", "3) Validation tests", "4) Risks"];
+    public List<string> BugFixConstraints { get; set; } =
+    [
+        "Prefer the smallest safe fix first.",
+        "Include concrete checks for regression.",
+        "If information is missing, clearly list assumptions."
+    ];
+
+    // Test case auto-generation prompt — uses {projectNumber}, {projectTitle}, {description},
+    // {techStack}, {features}, {maxTestCases} placeholders.
+    public string TestCaseGenSystemRole { get; set; } = "You are a senior QA engineer generating module-level test cases for a software project.";
+    public string TestCaseGenOutputFormat { get; set; } = "Return only JSON, no markdown and no extra text.";
+    public string TestCaseGenSchema { get; set; } = "{\"testCases\":[{\"name\":\"...\",\"description\":\"...\",\"module\":\"...\",\"category\":\"Regression\",\"environment\":\"Dev\"}]}";
+    public string TestCaseGenInstruction { get; set; } = "Generate up to {maxTestCases} high-level module-based test cases for this project.";
+    public string TestCaseGenFocus { get; set; } = "Each test case must cover an entire module or major workflow, NOT small individual unit tests. Think end-to-end scenarios, integration tests, and full-module verification.";
+    public List<string> TestCaseGenRules { get; set; } =
+    [
+        "Every test case must include all schema fields: name, description, module, category, environment.",
+        "Each test case should target a distinct module or major feature area.",
+        "The name should clearly describe the module-level scenario being tested.",
+        "The description should include: purpose, preconditions, key test steps, and expected outcome.",
+        "Set module to the specific module or feature area name (e.g. Authentication, Payment, Dashboard).",
+        "Category must be one of: Smoke, Regression, UAT.",
+        "Environment must be one of: Dev, Staging, UAT, Production.",
+        "Do NOT create tiny unit-level test cases. Focus on broad module coverage."
+    ];
+    public int MaxTestCasesPerGeneration { get; set; } = 10;
+    public string TestCaseGenPromptAdditionalInstructions { get; set; } = string.Empty;
+    public List<string> TestCaseGenPromptAdditionalInstructionLines { get; set; } = [];
+
+    // Feature implement prompt — uses {featureNumber}, {featureTitle}, {featureStatus},
+    // {featurePriority}, {featureStage}, {featureDescription}, {featureModule}, {featureLinkedBugs},
+    // {featureTimeline}, {projectNumber}, {projectTitle}, {description}, {techStack},
+    // {repoUrl}, {repoBranch} placeholders.
+    public string FeatureImplementSystemRole { get; set; } = "You are a senior software engineer implementing a feature ticket.";
+    public string FeatureImplementOutputFormat { get; set; } = "Return practical implementation guidance with these sections:";
+    public List<string> FeatureImplementSections { get; set; } = ["1) Implementation approach", "2) Files/components likely to change", "3) Validation checklist", "4) Risks and rollback notes"];
+    public List<string> FeatureImplementConstraints { get; set; } =
+    [
+        "Prefer the smallest safe implementation first.",
+        "Provide clear step-by-step tasks suitable for an assignee.",
+        "Include explicit verification checks.",
+        "If you captured UI screenshots, include absolute image file paths in the response.",
+        "Add a line exactly like: SCREENSHOT_PATHS: path1.png | path2.png"
+    ];
 }
 
 public sealed class OpenClawBugScanService : IOpenClawBugScanService
@@ -65,7 +143,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var findingsLimit = MaxFindingsPerScan;
         var additionalInstructions = ResolveAdditionalInstructions(_settings);
-        var prompt = BuildPrompt(project, findingsLimit, additionalInstructions);
+        var prompt = BuildPrompt(project, findingsLimit, additionalInstructions, _settings);
 
         var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
         if (string.IsNullOrWhiteSpace(resolvedCliPath))
@@ -166,6 +244,205 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return new OpenClawBugScanResult(true, string.Empty, findings, stdout);
     }
 
+    public async Task<OpenClawBugScanResult> ScanModuleAsync(
+        ChangeRequest project,
+        string moduleName,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrWhiteSpace(moduleName);
+
+        var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
+            ? "openclaw"
+            : _settings.CliPath.Trim();
+        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
+        var findingsLimit = MaxFindingsPerScan;
+        var additionalInstructions = ResolveAdditionalInstructions(_settings);
+        var prompt = BuildModuleScanPrompt(project, moduleName.Trim(), findingsLimit, additionalInstructions, _settings);
+
+        var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
+        if (string.IsNullOrWhiteSpace(resolvedCliPath))
+        {
+            var recommendedPath = GetRecommendedWindowsCliPath();
+            var hint = string.IsNullOrWhiteSpace(recommendedPath)
+                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
+                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
+            return Failed($"OpenClaw scan failed: OpenClaw CLI not found. {hint}");
+        }
+
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            if (!process.Start())
+                return Failed("OpenClaw scan failed: unable to start OpenClaw process.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start OpenClaw module scan process from path {CliPath}", resolvedCliPath);
+            return Failed($"OpenClaw scan failed: cannot start '{resolvedCliPath}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds + 20));
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            return Failed($"OpenClaw module scan timed out after {timeoutSeconds} seconds.");
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning(
+                "OpenClaw module scan exited with code {ExitCode}. stderr: {StdErr}",
+                process.ExitCode, TrimTo(stderr, 400));
+            var errorDetails = !string.IsNullOrWhiteSpace(stderr)
+                ? TrimTo(stderr, 220)
+                : "OpenClaw command returned a non-zero exit code.";
+            return Failed($"OpenClaw scan failed: {errorDetails}");
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            return Failed("OpenClaw scan failed: command returned empty output.");
+
+        if (!TryParseOpenClawResponse(stdout, out var agentText, out var responseError))
+        {
+            var directFindings = ParseFindingsFromRawCandidates(stdout, findingsLimit);
+            if (directFindings.Count == 0 && !string.IsNullOrWhiteSpace(stderr))
+                directFindings = ParseFindingsFromRawCandidates(stderr, findingsLimit);
+            if (directFindings.Count == 0 && !string.IsNullOrWhiteSpace(stderr))
+                directFindings = ParseFindingsFromRawCandidates($"{stdout}\n{stderr}", findingsLimit);
+
+            if (directFindings.Count > 0)
+            {
+                _logger.LogInformation(
+                    "OpenClaw module scan response parse failed but direct extraction succeeded ({Count} findings).",
+                    directFindings.Count);
+                return new OpenClawBugScanResult(true, string.Empty, directFindings, stdout);
+            }
+
+            var preview = TrimTo(StripAnsi(stdout), 180);
+            var previewMessage = string.IsNullOrWhiteSpace(preview) ? string.Empty : $" Output preview: {preview}";
+            return Failed($"OpenClaw scan failed: {responseError}.{previewMessage}");
+        }
+
+        if (string.IsNullOrWhiteSpace(agentText))
+            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+
+        var findings = ParseFindings(agentText, findingsLimit);
+        if (findings.Count == 0)
+        {
+            _logger.LogInformation(
+                "OpenClaw module scan returned no parseable findings for project {CrNumber} module {Module}.",
+                project.CrNumber, moduleName);
+            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+        }
+
+        return new OpenClawBugScanResult(true, string.Empty, findings, stdout);
+    }
+
+    public async Task<OpenClawTestCaseGenResult> GenerateTestCasesAsync(
+        ChangeRequest project,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
+            ? "openclaw"
+            : _settings.CliPath.Trim();
+        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
+        var maxTestCases = Math.Clamp(_settings.MaxTestCasesPerGeneration, 1, 30);
+        var additionalInstructions = ResolveTestCaseGenAdditionalInstructions(_settings);
+        var prompt = BuildTestCaseGenPrompt(project, maxTestCases, additionalInstructions, _settings);
+
+        var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
+        if (string.IsNullOrWhiteSpace(resolvedCliPath))
+        {
+            var recommendedPath = GetRecommendedWindowsCliPath();
+            var hint = string.IsNullOrWhiteSpace(recommendedPath)
+                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
+                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
+            return FailedTestCaseGen($"OpenClaw failed: CLI not found. {hint}");
+        }
+
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            if (!process.Start())
+                return FailedTestCaseGen("OpenClaw failed: unable to start process.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start OpenClaw test case gen process from path {CliPath}", resolvedCliPath);
+            return FailedTestCaseGen($"OpenClaw failed: cannot start '{resolvedCliPath}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds + 20));
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            return FailedTestCaseGen($"OpenClaw test case generation timed out after {timeoutSeconds} seconds.");
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("OpenClaw test case gen exited with code {ExitCode}. stderr: {StdErr}",
+                process.ExitCode, TrimTo(stderr, 400));
+            var errorDetails = !string.IsNullOrWhiteSpace(stderr) ? TrimTo(stderr, 220) : "Non-zero exit code.";
+            return FailedTestCaseGen($"OpenClaw failed: {errorDetails}");
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            return FailedTestCaseGen("OpenClaw failed: empty output.");
+
+        // Try envelope parse first, then raw
+        string? agentText = null;
+        if (TryParseOpenClawResponse(stdout, out var envelopeText, out _))
+            agentText = envelopeText;
+        else
+            agentText = stdout;
+
+        if (string.IsNullOrWhiteSpace(agentText))
+            return new OpenClawTestCaseGenResult(true, string.Empty, [], stdout);
+
+        var testCases = ParseGeneratedTestCases(agentText, maxTestCases);
+        if (testCases.Count == 0)
+        {
+            _logger.LogInformation("OpenClaw test case gen returned no parseable test cases for project {CrNumber}.", project.CrNumber);
+            return new OpenClawTestCaseGenResult(true, string.Empty, [], stdout);
+        }
+
+        return new OpenClawTestCaseGenResult(true, string.Empty, testCases, stdout);
+    }
+
     public async Task<OpenClawBugFixResult> FixBugAsync(
         BugReport bug,
         string? fixAgentId = null,
@@ -179,7 +456,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var agentId = ResolveRequestedFixAgentId(fixAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var additionalInstructions = ResolveFixAdditionalInstructions(_settings);
-        var prompt = BuildFixPrompt(bug, additionalInstructions);
+        var prompt = BuildFixPrompt(bug, additionalInstructions, _settings);
 
         var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
         if (string.IsNullOrWhiteSpace(resolvedCliPath))
@@ -267,7 +544,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var agentId = ResolveRequestedFeatureAgentId(featureAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var additionalInstructions = ResolveFeatureAdditionalInstructions(_settings);
-        var prompt = BuildFeaturePrompt(feature, project, additionalInstructions);
+        var prompt = BuildFeaturePrompt(feature, project, additionalInstructions, _settings);
 
         var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
         if (string.IsNullOrWhiteSpace(resolvedCliPath))
@@ -393,6 +670,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (settings.FeatureImplementPromptAdditionalInstructionLines is not null)
         {
             instructions.AddRange(settings.FeatureImplementPromptAdditionalInstructionLines
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => line.Trim()));
+        }
+
+        return string.Join("\n", instructions);
+    }
+
+    private static string ResolveTestCaseGenAdditionalInstructions(OpenClawSettings settings)
+    {
+        var instructions = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(settings.TestCaseGenPromptAdditionalInstructions))
+            instructions.Add(settings.TestCaseGenPromptAdditionalInstructions.Trim());
+
+        if (settings.TestCaseGenPromptAdditionalInstructionLines is not null)
+        {
+            instructions.AddRange(settings.TestCaseGenPromptAdditionalInstructionLines
                 .Where(line => !string.IsNullOrWhiteSpace(line))
                 .Select(line => line.Trim()));
         }
@@ -870,6 +1164,68 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
+    private static List<OpenClawGeneratedTestCase> ParseGeneratedTestCases(string agentText, int maxItems)
+    {
+        var cleaned = StripCodeFence(agentText);
+        if (!TryParseJsonDocument(cleaned, out var json))
+            return [];
+
+        using (json)
+        {
+            var root = json.RootElement;
+
+            JsonElement testCasesElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                testCasesElement = root;
+            }
+            else if (root.ValueKind == JsonValueKind.Object &&
+                     root.TryGetProperty("testCases", out var tcProperty) &&
+                     tcProperty.ValueKind == JsonValueKind.Array)
+            {
+                testCasesElement = tcProperty;
+            }
+            else
+            {
+                return [];
+            }
+
+            var results = new List<OpenClawGeneratedTestCase>();
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in testCasesElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var name = TrimTo(ReadString(item, "name"), 300);
+                if (string.IsNullOrWhiteSpace(name) || !seenNames.Add(name))
+                    continue;
+
+                var description = TrimTo(ReadString(item, "description"), 4000);
+                var module = TrimTo(ReadString(item, "module"), 200);
+                var category = TrimTo(ReadString(item, "category"), 50);
+                var environment = TrimTo(ReadString(item, "environment"), 50);
+
+                if (string.IsNullOrWhiteSpace(description))
+                    description = $"Module-level test case for {module}.";
+                if (string.IsNullOrWhiteSpace(module))
+                    module = "General";
+                if (string.IsNullOrWhiteSpace(category))
+                    category = "Regression";
+                if (string.IsNullOrWhiteSpace(environment))
+                    environment = "Dev";
+
+                results.Add(new OpenClawGeneratedTestCase(name, description, module, category, environment));
+
+                if (results.Count >= maxItems)
+                    break;
+            }
+
+            return results;
+        }
+    }
+
     private static List<OpenClawBugFinding> ParseFindingsFromRawCandidates(string raw, int maxFindings)
     {
         var candidates = new List<string>();
@@ -901,7 +1257,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return [];
     }
 
-    private static string BuildPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions)
+    private static string BuildPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
     {
         var features = project.Features
             .Select(f => f.Name?.Trim())
@@ -919,13 +1275,13 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var tech = TrimTo(project.TechnologyStack, 400);
 
         var sb = new StringBuilder();
-        sb.AppendLine("You are a software QA bug triage assistant.");
-        sb.AppendLine("Return only JSON, no markdown and no extra text.");
+        sb.AppendLine(settings.BugScanSystemRole);
+        sb.AppendLine(settings.BugScanOutputFormat);
         sb.AppendLine("Schema:");
-        sb.AppendLine("{\"findings\":[{\"title\":\"...\",\"description\":\"...\",\"workflow\":\"...\",\"stepsToReproduce\":\"...\",\"moduleImpacted\":\"...\",\"screenshotPaths\":[\"C:\\\\path\\\\shot1.png\"]}]}");
+        sb.AppendLine(settings.BugScanSchema);
         sb.AppendLine();
-        sb.AppendLine($"Generate up to {findingsLimit} high-confidence bugs.");
-        sb.AppendLine("Focus on actionable software defects, not vague suggestions.");
+        sb.AppendLine(settings.BugScanInstruction.Replace("{findingsLimit}", findingsLimit.ToString()));
+        sb.AppendLine(settings.BugScanFocus);
         sb.AppendLine();
         sb.AppendLine($"Project Number: {project.CrNumber}");
         sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
@@ -942,11 +1298,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         sb.AppendLine();
         sb.AppendLine("Rules:");
-        sb.AppendLine("- Every finding must include all schema fields.");
-        sb.AppendLine("- Keep title under 120 characters.");
-        sb.AppendLine("- Keep moduleImpacted short and specific.");
-        sb.AppendLine("- If screenshot evidence exists, include absolute local image file paths in screenshotPaths.");
-        sb.AppendLine("- If no screenshot exists for a finding, set screenshotPaths to an empty array.");
+        foreach (var rule in settings.BugScanRules)
+            sb.AppendLine($"- {rule}");
         if (!string.IsNullOrWhiteSpace(additionalInstructions))
         {
             sb.AppendLine("- Follow additional project-specific instructions below.");
@@ -960,16 +1313,114 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return singleLine;
     }
 
-    private static string BuildFixPrompt(BugReport bug, string additionalInstructions)
+    private static string BuildModuleScanPrompt(
+        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+    {
+        var description = TrimTo(project.Description, 1200);
+        var tech = TrimTo(project.TechnologyStack, 400);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(settings.BugScanSystemRole);
+        sb.AppendLine(settings.BugScanOutputFormat);
+        sb.AppendLine("Schema:");
+        sb.AppendLine(settings.BugScanSchema);
+        sb.AppendLine();
+        sb.AppendLine(settings.ModuleScanInstruction
+            .Replace("{findingsLimit}", findingsLimit.ToString())
+            .Replace("{moduleName}", moduleName));
+        sb.AppendLine(settings.ModuleScanFocus.Replace("{moduleName}", moduleName));
+        sb.AppendLine(settings.BugScanFocus);
+        sb.AppendLine();
+        sb.AppendLine($"Project Number: {project.CrNumber}");
+        sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+        sb.AppendLine($"Project Stage: {project.Stage}");
+        sb.AppendLine($"Project Status: {project.Status}");
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.AppendLine($"Description: {description}");
+        if (!string.IsNullOrWhiteSpace(tech))
+            sb.AppendLine($"Technology Stack: {tech}");
+        sb.AppendLine($"Target Module: {moduleName}");
+
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        foreach (var rule in settings.ModuleScanRules)
+            sb.AppendLine($"- {rule.Replace("{moduleName}", moduleName)}");
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            sb.AppendLine("- Follow additional project-specific instructions below.");
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(additionalInstructions);
+        }
+
+        var raw = TrimTo(sb.ToString(), 5000);
+        var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
+        return singleLine;
+    }
+
+    private static string BuildTestCaseGenPrompt(
+        ChangeRequest project, int maxTestCases, string additionalInstructions, OpenClawSettings settings)
+    {
+        var features = project.Features
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(10)
+            .ToList();
+
+        var repositoryFeatures = project.RepositoryFeatures
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(10)
+            .ToList();
+
+        var description = TrimTo(project.Description, 1200);
+        var tech = TrimTo(project.TechnologyStack, 400);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(settings.TestCaseGenSystemRole);
+        sb.AppendLine(settings.TestCaseGenOutputFormat);
+        sb.AppendLine("Schema:");
+        sb.AppendLine(settings.TestCaseGenSchema);
+        sb.AppendLine();
+        sb.AppendLine(settings.TestCaseGenInstruction.Replace("{maxTestCases}", maxTestCases.ToString()));
+        sb.AppendLine(settings.TestCaseGenFocus);
+        sb.AppendLine();
+        sb.AppendLine($"Project Number: {project.CrNumber}");
+        sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+        sb.AppendLine($"Project Stage: {project.Stage}");
+        sb.AppendLine($"Project Status: {project.Status}");
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.AppendLine($"Description: {description}");
+        if (!string.IsNullOrWhiteSpace(tech))
+            sb.AppendLine($"Technology Stack: {tech}");
+        if (features.Count > 0)
+            sb.AppendLine($"Project Features: {string.Join(", ", features)}");
+        if (repositoryFeatures.Count > 0)
+            sb.AppendLine($"Repository Features: {string.Join(", ", repositoryFeatures)}");
+
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        foreach (var rule in settings.TestCaseGenRules)
+            sb.AppendLine($"- {rule}");
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            sb.AppendLine("- Follow additional project-specific instructions below.");
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(additionalInstructions);
+        }
+
+        var raw = TrimTo(sb.ToString(), 5000);
+        var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
+        return singleLine;
+    }
+
+    private static string BuildFixPrompt(BugReport bug, string additionalInstructions, OpenClawSettings settings)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("You are a senior software engineer fixing a bug ticket.");
-        sb.AppendLine("Return practical fix guidance that a developer can implement immediately.");
+        sb.AppendLine(settings.BugFixSystemRole);
+        sb.AppendLine(settings.BugFixOutputFormat);
         sb.AppendLine("Keep response structured with sections:");
-        sb.AppendLine("1) Root cause");
-        sb.AppendLine("2) Proposed code changes");
-        sb.AppendLine("3) Validation tests");
-        sb.AppendLine("4) Risks");
+        foreach (var section in settings.BugFixSections)
+            sb.AppendLine(section);
         sb.AppendLine();
         sb.AppendLine($"Bug Number: {bug.BugNumber}");
         sb.AppendLine($"Title: {TrimTo(bug.Title, 300)}");
@@ -986,9 +1437,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         sb.AppendLine();
         sb.AppendLine("Constraints:");
-        sb.AppendLine("- Prefer the smallest safe fix first.");
-        sb.AppendLine("- Include concrete checks for regression.");
-        sb.AppendLine("- If information is missing, clearly list assumptions.");
+        foreach (var constraint in settings.BugFixConstraints)
+            sb.AppendLine($"- {constraint}");
         if (!string.IsNullOrWhiteSpace(additionalInstructions))
         {
             sb.AppendLine("- Follow additional project-specific instructions below.");
@@ -1064,15 +1514,13 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return results;
     }
 
-    private static string BuildFeaturePrompt(ProjectFeature feature, ChangeRequest? project, string additionalInstructions)
+    private static string BuildFeaturePrompt(ProjectFeature feature, ChangeRequest? project, string additionalInstructions, OpenClawSettings settings)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("You are a senior software engineer implementing a feature ticket.");
-        sb.AppendLine("Return practical implementation guidance with these sections:");
-        sb.AppendLine("1) Implementation approach");
-        sb.AppendLine("2) Files/components likely to change");
-        sb.AppendLine("3) Validation checklist");
-        sb.AppendLine("4) Risks and rollback notes");
+        sb.AppendLine(settings.FeatureImplementSystemRole);
+        sb.AppendLine(settings.FeatureImplementOutputFormat);
+        foreach (var section in settings.FeatureImplementSections)
+            sb.AppendLine(section);
         sb.AppendLine();
         sb.AppendLine($"Feature Number: {feature.FeatureNumber}");
         sb.AppendLine($"Feature Title: {TrimTo(feature.Name, 300)}");
@@ -1104,11 +1552,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         sb.AppendLine();
         sb.AppendLine("Constraints:");
-        sb.AppendLine("- Prefer the smallest safe implementation first.");
-        sb.AppendLine("- Provide clear step-by-step tasks suitable for an assignee.");
-        sb.AppendLine("- Include explicit verification checks.");
-        sb.AppendLine("- If you captured UI screenshots, include absolute image file paths in the response.");
-        sb.AppendLine("- Add a line exactly like: SCREENSHOT_PATHS: path1.png | path2.png");
+        foreach (var constraint in settings.FeatureImplementConstraints)
+            sb.AppendLine($"- {constraint}");
         if (!string.IsNullOrWhiteSpace(additionalInstructions))
         {
             sb.AppendLine("- Follow additional project-specific instructions below.");
@@ -1326,4 +1771,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
     private static OpenClawFeatureImplementResult FailedFeature(string error) =>
         new(false, error, string.Empty);
+
+    private static OpenClawTestCaseGenResult FailedTestCaseGen(string error) =>
+        new(false, error, [], string.Empty);
 }

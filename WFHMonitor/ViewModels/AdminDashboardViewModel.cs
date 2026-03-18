@@ -21,6 +21,29 @@ public class AdminDashboardViewModel
     public int TotalBugs { get; set; }
     public int OpenBugs { get; set; }
     public int CompleteBugs { get; set; }
+
+    // Day-by-day task report (last N days)
+    public List<DailyTaskReport> DailyTaskReports { get; set; } = new();
+}
+
+public class DailyTaskReport
+{
+    public DateTime Date { get; set; }
+    public List<DailyTaskItem> Tasks { get; set; } = new();
+    public int TotalCount => Tasks.Count;
+}
+
+public class DailyTaskItem
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? AssigneeName { get; set; }
+    public string? ProjectTitle { get; set; }
+    public string? ProjectCrNumber { get; set; }
+    public int? ChangeRequestId { get; set; }
+    /// <summary>Task, Bug, or Feature</summary>
+    public string ItemType { get; set; } = "Task";
+    public string? ItemNumber { get; set; }
 }
 
 public class ProjectOverviewItem

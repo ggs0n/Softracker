@@ -34,6 +34,7 @@ public class ApplicationUser : IdentityUser
     public OrgTeam? OrgTeam { get; set; }
     public string? OutlookCalendarIcsUrl { get; set; }
     public DateTime? OutlookCalendarLastSyncAt { get; set; }
+    public DateTime? LastActivityAt { get; set; }
 
     public ICollection<WorkTask> AssignedTasks { get; set; } = new List<WorkTask>();
     public ICollection<EodReport> EodReports { get; set; } = new List<EodReport>();
