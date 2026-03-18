@@ -10,150 +10,209 @@
     };
 }
 
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>New Project</h5>
+<style>
+    .np-shell{max-width:1420px;margin:0 auto}
+    .np-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:16px;padding:32px 36px 28px;margin-bottom:26px;overflow:hidden}
+    .np-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(16,185,129,.12) 0%,transparent 70%);pointer-events:none}
+    .np-hero-title{font-size:1.65rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .np-hero-sub{font-size:.78rem;color:#a1a1aa;margin-top:4px;font-weight:500}
+    .np-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#34d399;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .np-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;transition:box-shadow .2s ease}
+    .np-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .np-section-head{display:flex;align-items:center;gap:10px;padding:15px 22px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .np-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .np-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .np-section-label span{font-size:.68rem;font-weight:500;color:var(--text-muted);display:block;margin-top:1px;letter-spacing:0}
+    .np-section-body{padding:22px 24px}
+    .np-label{font-size:.76rem;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+    .np-label .required{color:#ef4444;font-weight:700}
+    .np-input{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit}
+    .np-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+    .np-input::placeholder{color:#a1a1aa}
+    .np-input-group{display:flex;gap:0;align-items:stretch}
+    .np-input-group .np-input{border-top-right-radius:0;border-bottom-right-radius:0;flex:1}
+    .np-input-group .np-input-btn{border:1px solid #d1d5db;border-left:none;background:#fafbfc;border-radius:0 10px 10px 0;padding:0 14px;font-size:.76rem;font-weight:600;color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .2s ease;white-space:nowrap}
+    .np-input-group .np-input-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .np-input-group .np-input-btn:disabled{opacity:.55;cursor:not-allowed}
+    .np-hint{font-size:.68rem;color:var(--text-muted);margin-top:4px}
+    .np-select{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit;appearance:auto}
+    .np-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+    .np-textarea{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-size:.84rem;color:var(--text-primary);width:100%;resize:vertical;min-height:110px;font-family:inherit;transition:all .2s ease;line-height:1.55}
+    .np-textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+    .np-features-box{border:1px solid var(--border);border-radius:10px;background:#fafbfc;padding:10px 14px;min-height:44px;font-size:.78rem;color:var(--text-muted)}
+    .np-features-box .fw-semibold{color:var(--text-primary)}
+    .np-feature-row{display:flex;align-items:start;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .np-feature-row:last-child{border-bottom:none}
+    .np-pic-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .np-pic-row select,.np-pic-row input{border-radius:8px;font-size:.8rem;padding:7px 10px}
+    .np-divider{height:1px;background:var(--border);margin:8px 0}
+    .np-footer{display:flex;gap:10px;align-items:center;margin-top:8px}
+    .np-btn-create{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 30px;font-size:.86rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .2s ease;letter-spacing:.01em}
+    .np-btn-create:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.25)}
+    .np-btn-create:active{transform:translateY(0)}
+    .np-btn-cancel{background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:10px;padding:11px 24px;font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s ease;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+    .np-btn-cancel:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+    .np-btn-add{background:transparent;color:var(--accent);border:1px dashed rgba(16,185,129,.4);border-radius:8px;padding:6px 14px;font-size:.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .2s ease}
+    .np-btn-add:hover{background:var(--accent-bg);border-color:var(--accent)}
+    .np-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @@media(max-width:640px){.np-row{grid-template-columns:1fr}.np-hero{padding:22px 18px 20px}.np-section-body{padding:16px}}
+</style>
+
+<div class="np-shell">
+    <div class="np-hero">
+        <div class="np-hero-badge"><i class="bi bi-plus-circle-fill"></i> New project</div>
+        <div class="np-hero-title">Create a project</div>
+        <div class="np-hero-sub">Import from GitHub or start from scratch. All fields except Title are optional.</div>
+    </div>
+
+    <form asp-action="Create" method="post" id="crForm">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="alert alert-danger small mb-3" style="border-radius:10px;"></div>
+
+        @* GitHub Integration *@
+        <div class="np-section" data-onboarding-id="github-integration-section">
+            <div class="np-section-head">
+                <div class="np-section-icon" style="background:rgba(16,185,129,.1);color:var(--accent)"><i class="bi bi-github"></i></div>
+                <div class="np-section-label">GitHub Integration<span>Connect a repository to auto-fill project details</span></div>
             </div>
-            <div class="card-body p-4">
-                <form asp-action="Create" method="post" id="crForm">
-                    @Html.AntiForgeryToken()
-                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
-
-                    <h6 class="fw-bold mb-3" data-onboarding-id="github-integration-section"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-12">
-                            <label class="form-label fw-semibold">Connected GitHub Repositories</label>
-                            <div class="input-group">
-                                <select id="connectedGitHubRepo" class="form-select">
-                                    <option value="">Loading connected repositories...</option>
-                                </select>
-                                <button type="button" id="applyConnectedGitHubRepo" class="btn btn-outline-dark" disabled>
-                                    <i class="bi bi-check2-square me-1"></i>Use Repo
-                                </button>
-                            </div>
-                            <div id="connectedGitHubRepoStatus" class="form-text">Select a repository to auto-fill project details.</div>
-                        </div>
-                        <div class="col-12">
-                            <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
-                            <div class="input-group">
-                                <input asp-for="GitHubRepoUrl" class="form-control" placeholder="https://github.com/owner/repo" />
-                                <button type="button" id="importFromGitHub" class="btn btn-outline-primary">
-                                    <i class="bi bi-download me-1"></i>Import Repo
-                                </button>
-                            </div>
-                            <div class="form-text">Owner and repo fields are auto-filled from this URL.</div>
-                            <div id="importStatus" class="small mt-2 d-none"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="GitHubRepoOwner" class="form-label fw-semibold">Repo Owner</label>
-                            <input asp-for="GitHubRepoOwner" class="form-control" placeholder="e.g. myorg" />
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="GitHubRepoName" class="form-label fw-semibold">Repo Name</label>
-                            <input asp-for="GitHubRepoName" class="form-control" placeholder="e.g. myproject" />
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="GitHubBranch" class="form-label fw-semibold">Branch</label>
-                        <input asp-for="GitHubBranch" class="form-control" placeholder="e.g. feature/project-2026-0001" />
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="TechnologyStack" class="form-label fw-semibold">Technology / Languages</label>
-                        <input asp-for="TechnologyStack" class="form-control" placeholder="Auto-filled from GitHub import (e.g. C# (60%), TypeScript (40%))" />
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="form-label fw-semibold mb-0">
-                                <i class="bi bi-github me-1 text-primary"></i>Repository Scan Features
-                            </label>
-                            <span id="importedFeatureCount" class="badge bg-secondary">0</span>
-                        </div>
-                        <div id="importedFeaturesPreview" class="border rounded p-2 bg-light small text-muted">
-                            No repository scan features yet.
-                        </div>
-                        <div id="importedFeaturesInputs"></div>
-                    </div>
-
-                    <hr class="my-3" />
-
-                    <div class="mb-3">
-                        <label asp-for="Title" class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                        <input asp-for="Title" class="form-control" placeholder="Short description of the change..." />
-                        <span asp-validation-for="Title" class="text-danger small"></span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
-                        <textarea asp-for="Description" class="form-control" rows="4"
-                                  placeholder="Detail the project scope, goals, and impact..."></textarea>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
-                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="form-select"></select>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="Priority" class="form-label fw-semibold">Priority</label>
-                            <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="form-select"></select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
-                        <select asp-for="Stage" asp-items="stageOptions" class="form-select"></select>
-                    </div>
-
-                    <hr class="my-3" />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Links</h6>
-
-                    <div class="mb-3">
-                        <label asp-for="FigmaLink" class="form-label fw-semibold">
-                            <i class="bi bi-vector-pen me-1 text-muted"></i>Figma Link
-                        </label>
-                        <input asp-for="FigmaLink" class="form-control" placeholder="https://figma.com/file/..." />
-                    </div>
-
-
-                    <hr class="my-3" />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-calendar-range me-2 text-primary"></i>Timeline</h6>
-
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-6">
-                            <label asp-for="TimelineStart" class="form-label fw-semibold">Start Date</label>
-                            <input asp-for="TimelineStart" type="date" class="form-control" />
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="TimelineEnd" class="form-label fw-semibold">End Date</label>
-                            <input asp-for="TimelineEnd" type="date" class="form-control" />
-                        </div>
-                    </div>
-
-                    <hr class="my-3" />
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Person in Charge (PIC)</h6>
-                        <button type="button" id="addPic" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-plus-circle me-1"></i>Add PIC
+            <div class="np-section-body">
+                <div class="mb-3">
+                    <div class="np-label">Connected repositories</div>
+                    <div class="np-input-group">
+                        <select id="connectedGitHubRepo" class="np-input" style="border-top-right-radius:0;border-bottom-right-radius:0">
+                            <option value="">Loading connected repositories...</option>
+                        </select>
+                        <button type="button" id="applyConnectedGitHubRepo" class="np-input-btn" disabled>
+                            <i class="bi bi-check2-square"></i>Use Repo
                         </button>
                     </div>
-                    <div id="picContainer">
-                        @* rows rendered by JS *@
-                    </div>
-
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg me-2"></i>Create Project
+                    <div id="connectedGitHubRepoStatus" class="np-hint">Select a repository to auto-fill project details.</div>
+                </div>
+                <div class="mb-3">
+                    <div class="np-label">Repository URL</div>
+                    <div class="np-input-group">
+                        <input asp-for="GitHubRepoUrl" class="np-input" placeholder="https://github.com/owner/repo" />
+                        <button type="button" id="importFromGitHub" class="np-input-btn">
+                            <i class="bi bi-download"></i>Import
                         </button>
-                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
                     </div>
-                </form>
+                    <div class="np-hint">Owner, repo, branch and tech stack are auto-filled from this URL.</div>
+                    <div id="importStatus" class="small mt-2 d-none"></div>
+                </div>
+                <div class="np-row mb-3">
+                    <div>
+                        <div class="np-label">Repo owner</div>
+                        <input asp-for="GitHubRepoOwner" class="np-input" placeholder="e.g. myorg" />
+                    </div>
+                    <div>
+                        <div class="np-label">Repo name</div>
+                        <input asp-for="GitHubRepoName" class="np-input" placeholder="e.g. myproject" />
+                    </div>
+                </div>
+                <div class="np-row mb-3">
+                    <div>
+                        <div class="np-label">Branch</div>
+                        <input asp-for="GitHubBranch" class="np-input" placeholder="e.g. main" />
+                    </div>
+                    <div>
+                        <div class="np-label">Technology / languages</div>
+                        <input asp-for="TechnologyStack" class="np-input" placeholder="Auto-filled from import" />
+                    </div>
+                </div>
+                <div>
+                    <div class="np-label">
+                        Repository scan features
+                        <span id="importedFeatureCount" class="badge bg-secondary ms-1" style="font-size:.62rem;">0</span>
+                    </div>
+                    <div id="importedFeaturesPreview" class="np-features-box">
+                        No repository scan features yet.
+                    </div>
+                    <div id="importedFeaturesInputs"></div>
+                </div>
             </div>
         </div>
-    </div>
+
+        @* Project Details *@
+        <div class="np-section">
+            <div class="np-section-head">
+                <div class="np-section-icon" style="background:rgba(59,130,246,.08);color:#3b82f6"><i class="bi bi-file-earmark-text"></i></div>
+                <div class="np-section-label">Project details<span>Title, description, status and priority</span></div>
+            </div>
+            <div class="np-section-body">
+                <div class="mb-3">
+                    <div class="np-label">Title <span class="required">*</span></div>
+                    <input asp-for="Title" class="np-input" placeholder="Short description of the change..." />
+                    <span asp-validation-for="Title" class="text-danger" style="font-size:.72rem;"></span>
+                </div>
+                <div class="mb-3">
+                    <div class="np-label">Description</div>
+                    <textarea asp-for="Description" class="np-textarea" rows="4"
+                              placeholder="Detail the project scope, goals, and impact..."></textarea>
+                </div>
+                <div class="np-row mb-3">
+                    <div>
+                        <div class="np-label">Status</div>
+                        <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="np-select"></select>
+                    </div>
+                    <div>
+                        <div class="np-label">Priority</div>
+                        <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="np-select"></select>
+                    </div>
+                </div>
+                <div>
+                    <div class="np-label">Stage</div>
+                    <select asp-for="Stage" asp-items="stageOptions" class="np-select"></select>
+                </div>
+            </div>
+        </div>
+
+        @* Links & Timeline *@
+        <div class="np-section">
+            <div class="np-section-head">
+                <div class="np-section-icon" style="background:rgba(168,85,247,.08);color:#a855f7"><i class="bi bi-link-45deg"></i></div>
+                <div class="np-section-label">Links & timeline<span>Figma designs, project schedule</span></div>
+            </div>
+            <div class="np-section-body">
+                <div class="mb-3">
+                    <div class="np-label"><i class="bi bi-vector-pen" style="font-size:.72rem;color:#a855f7"></i> Figma link</div>
+                    <input asp-for="FigmaLink" class="np-input" placeholder="https://figma.com/file/..." />
+                </div>
+                <div class="np-divider"></div>
+                <div class="np-row mt-3">
+                    <div>
+                        <div class="np-label"><i class="bi bi-calendar-event" style="font-size:.7rem;color:#f59e0b"></i> Start date</div>
+                        <input asp-for="TimelineStart" type="date" class="np-input" />
+                    </div>
+                    <div>
+                        <div class="np-label"><i class="bi bi-calendar-check" style="font-size:.7rem;color:#f59e0b"></i> End date</div>
+                        <input asp-for="TimelineEnd" type="date" class="np-input" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Person in Charge *@
+        <div class="np-section">
+            <div class="np-section-head">
+                <div class="np-section-icon" style="background:rgba(245,158,11,.08);color:#f59e0b"><i class="bi bi-people"></i></div>
+                <div class="np-section-label">Person in charge<span>Assign team members and roles</span></div>
+            </div>
+            <div class="np-section-body">
+                <div id="picContainer"></div>
+                <button type="button" id="addPic" class="np-btn-add">
+                    <i class="bi bi-plus-circle"></i> Add team member
+                </button>
+            </div>
+        </div>
+
+        @* Submit *@
+        <div class="np-footer">
+            <button type="submit" class="np-btn-create">
+                <i class="bi bi-rocket-takeoff"></i> Create project
+            </button>
+            <a asp-action="Index" class="np-btn-cancel">Cancel</a>
+        </div>
+    </form>
 </div>
 
 @section Scripts {
@@ -175,15 +234,15 @@
                 `<option value="${o.value}" ${o.value === empId ? 'selected' : ''}>${o.text}</option>`
             ).join('');
 
-            var row = `<div class="pic-row d-flex gap-2 mb-2 align-items-center">
-                <select name="Pics[${picIndex}].EmployeeId" class="form-select form-select-sm" style="max-width:220px;">
-                    <option value="">-- Select Employee --</option>
+            var row = `<div class="np-pic-row">
+                <select name="Pics[${picIndex}].EmployeeId" class="np-select" style="max-width:240px;">
+                    <option value="">-- Select employee --</option>
                     ${opts}
                 </select>
                 <input type="text" name="Pics[${picIndex}].Role" value="${role || ''}"
-                       class="form-control form-control-sm" placeholder="Role (Developer, Tester...)"
+                       class="np-input" placeholder="Role (Developer, Tester...)"
                        style="max-width:200px;" />
-                <button type="button" class="btn btn-sm btn-outline-danger remove-pic">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-pic" style="border-radius:8px;">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>`;
@@ -194,11 +253,11 @@
         }
 
         function reindexPics() {
-            $('#picContainer .pic-row').each(function(i) {
+            $('#picContainer .np-pic-row').each(function(i) {
                 $(this).find('select').attr('name', `Pics[${i}].EmployeeId`);
                 $(this).find('input').attr('name', `Pics[${i}].Role`);
             });
-            picIndex = $('#picContainer .pic-row').length;
+            picIndex = $('#picContainer .np-pic-row').length;
         }
 
         function escapeHtml(value) {
@@ -212,7 +271,7 @@
 
             $('#importStatus')
                 .removeClass('d-none text-danger text-success text-muted')
-                .addClass(cssClass)
+                .addClass('np-hint ' + cssClass)
                 .text(message);
         }
 
@@ -223,7 +282,7 @@
 
             $('#connectedGitHubRepoStatus')
                 .removeClass('text-danger text-success text-muted')
-                .addClass(cssClass)
+                .addClass('np-hint ' + cssClass)
                 .text(message);
         }
 
@@ -351,12 +410,12 @@
                     ? `<div class="small text-muted">${escapeHtml(feature.description)}</div>`
                     : '';
 
-                return `<div class="d-flex justify-content-between align-items-start border-bottom py-2">
+                return `<div class="np-feature-row">
                     <div class="me-2">
                         <div class="fw-semibold">${escapeHtml(feature.name)}</div>
                         ${description}
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-imported-feature" data-index="${index}">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-imported-feature" style="border-radius:6px;flex-shrink:0" data-index="${index}">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>`;
@@ -432,14 +491,14 @@
                 setImportStatus(message, 'error');
                 return false;
             } finally {
-                $button.prop('disabled', false).html('<i class="bi bi-download me-1"></i>Import Repo');
+                $button.prop('disabled', false).html('<i class="bi bi-download"></i>Import');
             }
         }
 
         $('#addPic').click(function() { addPicRow('', ''); });
 
         $(document).on('click', '.remove-pic', function() {
-            $(this).closest('.pic-row').remove();
+            $(this).closest('.np-pic-row').remove();
             reindexPics();
         });
 

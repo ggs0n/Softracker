@@ -3,11 +3,11 @@
 
 @{
     var statusClass = new Dictionary<string, string> {
-        {"Draft","status-draft"}, {"InReview","status-review"}, {"Approved","status-approved"},
-        {"InProgress","status-progress"}, {"Done","status-done"}, {"Rejected","status-rejected"}
+        {"Draft","st-draft"}, {"InReview","st-review"}, {"Approved","st-approved"},
+        {"InProgress","st-progress"}, {"Done","st-done"}, {"Rejected","st-rejected"}
     };
     var priorityClass = new Dictionary<string, string> {
-        {"Low","priority-low"}, {"Medium","priority-medium"}, {"High","priority-high"}, {"Critical","priority-critical"}
+        {"Low","pr-low"}, {"Medium","pr-medium"}, {"High","pr-high"}, {"Critical","pr-critical"}
     };
     var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
     {
@@ -18,362 +18,91 @@
 }
 
 <style>
-    .projects-page {
-        background: radial-gradient(circle at top left, #dff7f3 0%, #f6f8ff 45%, #f4f6fb 100%);
-        border: 1px solid #e6ebf5;
-        border-radius: 18px;
-        padding: 20px;
-    }
+    .pl-shell{max-width:1420px;margin:0 auto}
 
-    .projects-hero {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 16px;
-        margin-bottom: 16px;
-        padding: 18px;
-        border-radius: 16px;
-        background: linear-gradient(120deg, rgba(228, 247, 241, 0.95), rgba(237, 240, 255, 0.95));
-        border: 1px solid #dde7f4;
-    }
+    /* Hero — dark header matching Create page */
+    .pl-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:16px;padding:28px 32px 24px;margin-bottom:24px;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .pl-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(16,185,129,.12) 0%,transparent 70%);pointer-events:none}
+    .pl-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#34d399;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .pl-hero-title{font-size:1.6rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .pl-hero-sub{font-size:.76rem;color:#a1a1aa;margin-top:3px;font-weight:500}
+    .pl-hero-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;z-index:1}
+    .pl-total{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,.08);color:#a1a1aa;border:1px solid rgba(255,255,255,.1)}
+    .pl-btn-new{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 20px;font-size:.82rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none;letter-spacing:.01em}
+    .pl-btn-new:hover{background:var(--accent-hover);color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.25)}
 
-    .projects-kicker {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #64748b;
-        font-weight: 700;
-    }
+    /* Project cards */
+    .pl-list{display:grid;gap:16px}
+    .pl-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:box-shadow .2s ease}
+    .pl-card:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .pl-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .pl-cr-num{font-family:Consolas,Monaco,monospace;font-size:.76rem;font-weight:700;color:var(--accent);letter-spacing:.02em}
+    .pl-card-actions{display:flex;gap:5px}
+    .pl-act{width:30px;height:30px;border-radius:8px;border:1px solid #d1d5db;color:#71717a;background:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;transition:all .15s ease;font-size:.8rem}
+    .pl-act:hover{background:#f8fafc;color:#111827;border-color:#a1a1aa}
+    .pl-act-del:hover{border-color:#fecaca;color:#dc2626;background:#fef2f2}
 
-    .projects-title {
-        margin: 2px 0 4px;
-        font-size: 1.7rem;
-        font-weight: 800;
-        color: #1f2937;
-    }
+    .pl-card-body{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:18px 20px}
+    .pl-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .pl-title-link{font-size:1.25rem;font-weight:800;color:var(--text-primary);text-decoration:none;letter-spacing:-.01em;transition:color .15s ease}
+    .pl-title-link:hover{color:var(--accent)}
+    .pl-badges{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:8px 0 4px}
+    .pl-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid transparent}
+    .st-draft{background:#eef2ff;color:#4f46e5;border-color:#c7d2fe}
+    .st-review{background:#e0f2fe;color:#0369a1;border-color:#bae6fd}
+    .st-approved{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+    .st-progress{background:#fef3c7;color:#b45309;border-color:#fde68a}
+    .st-done{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+    .st-rejected{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .pr-low{background:#e8faf0;color:#0f766e;border-color:#b7f0df}
+    .pr-medium{background:#e5edff;color:#1d4ed8;border-color:#bfdbfe}
+    .pr-high{background:#fff4de;color:#b45309;border-color:#fde68a}
+    .pr-critical{background:#ffe4e6;color:#be123c;border-color:#fecdd3}
 
-    .projects-subtitle {
-        margin: 0;
-        color: #64748b;
-        font-size: 0.9rem;
-    }
+    .pl-meta{font-size:.76rem;color:#71717a;margin-bottom:8px}
+    .pl-stage-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+    .pl-stage{font-size:.68rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid var(--border);background:#f8fafc;color:#71717a}
+    .pl-stage-done{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+    .pl-stage-now{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
+    .pl-stage-arrow{color:#94a3b8;font-size:.68rem}
+    .pl-desc{color:#71717a;font-size:.82rem;line-height:1.45;white-space:pre-wrap}
 
-    .projects-hero-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
+    /* Side panel */
+    .pl-side{border-left:1px solid var(--border);padding-left:16px;display:grid;gap:10px;align-content:start}
+    .pl-sblock{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fafbfc}
+    .pl-stitle{font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:#71717a;font-weight:700;margin-bottom:6px}
+    .pl-stext{font-size:.78rem;color:var(--text-secondary)}
+    .pl-smuted{font-size:.74rem;color:#a1a1aa}
+    .pl-slink{font-size:.74rem;text-decoration:none}
+    .pl-spics{display:flex;flex-wrap:wrap;gap:5px}
+    .pl-spic{font-size:.7rem;background:#eef2f7;color:#71717a;border-radius:999px;padding:3px 8px}
+    .pl-fprog-label{display:flex;justify-content:space-between;font-size:.72rem;color:#71717a;margin-bottom:4px}
+    .pl-fprog{height:6px;background:#edf2f7;border-radius:999px;overflow:hidden}
+    .pl-fprog-bar{height:100%;background:linear-gradient(90deg,#34d399,#3b82f6);border-radius:999px}
+    .pl-flist{margin-top:6px;display:grid;gap:3px}
+    .pl-fitem{font-size:.72rem;color:#71717a;display:flex;align-items:center;gap:5px}
+    .pl-fitem i{color:#94a3b8}
 
-    .projects-total {
-        font-size: 0.75rem;
-        font-weight: 700;
-        border-radius: 999px;
-        padding: 5px 10px;
-        background: #f1f5f9;
-        color: var(--text-on-dark-muted);
-        border: 1px solid #dbe3ef;
-    }
+    /* Empty */
+    .pl-empty{border:1px dashed #d1d5db;background:#fafbfc;color:#71717a;border-radius:14px;text-align:center;padding:48px 16px}
 
-    .projects-list {
-        display: grid;
-        gap: 14px;
-    }
-
-    .project-card {
-        background: #fff;
-        border: 1px solid #e5eaf3;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-    }
-
-    .project-card-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 12px 16px;
-        border-bottom: 1px solid #edf2f9;
-        background: #fbfdff;
-    }
-
-    .project-number {
-        font-family: Consolas, Monaco, monospace;
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: #2563eb;
-    }
-
-    .project-actions {
-        display: flex;
-        gap: 6px;
-    }
-
-    .project-action {
-        width: 30px;
-        height: 30px;
-        border-radius: 8px;
-        border: 1px solid #d7deea;
-        color: var(--text-on-dark-muted);
-        background: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        transition: all 0.15s ease;
-    }
-
-    .project-action:hover {
-        background: #f8fafc;
-        color: #111827;
-    }
-
-    .project-action-danger:hover {
-        border-color: #fecaca;
-        color: #dc2626;
-        background: #fef2f2;
-    }
-
-    .project-body {
-        display: grid;
-        grid-template-columns: 1fr 320px;
-        gap: 14px;
-        padding: 16px;
-    }
-
-    .project-title-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .project-title-link {
-        font-size: 1.35rem;
-        font-weight: 800;
-        color: #1f2937;
-        text-decoration: none;
-    }
-
-    .project-title-link:hover {
-        color: #1d4ed8;
-    }
-
-    .project-badges {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 8px 0 2px;
-    }
-
-    .project-pill {
-        font-size: 0.74rem;
-        font-weight: 700;
-        border-radius: 999px;
-        padding: 4px 10px;
-        border: 1px solid transparent;
-    }
-
-    .status-draft { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
-    .status-review { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
-    .status-approved { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-    .status-progress { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-    .status-done { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
-    .status-rejected { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
-
-    .priority-low { background: #e8faf0; color: #0f766e; border-color: #b7f0df; }
-    .priority-medium { background: #e5edff; color: #1d4ed8; border-color: #bfdbfe; }
-    .priority-high { background: #fff4de; color: #b45309; border-color: #fde68a; }
-    .priority-critical { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
-
-    .project-meta {
-        font-size: 0.8rem;
-        color: #64748b;
-        margin-bottom: 10px;
-    }
-
-    .project-stage-flow {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .stage-pill {
-        font-size: 0.7rem;
-        font-weight: 700;
-        border-radius: 999px;
-        padding: 4px 10px;
-        border: 1px solid #dbe3ef;
-        background: #f8fafc;
-        color: #64748b;
-    }
-
-    .stage-pill-complete {
-        background: #d1fae5;
-        color: #047857;
-        border-color: #a7f3d0;
-    }
-
-    .stage-pill-current {
-        background: #dbeafe;
-        color: #1d4ed8;
-        border-color: #bfdbfe;
-    }
-
-    .stage-arrow {
-        color: #94a3b8;
-        font-size: 0.7rem;
-    }
-
-    .project-summary {
-        color: var(--text-on-dark-muted);
-        font-size: 0.88rem;
-        line-height: 1.45;
-        margin: 0;
-        white-space: pre-wrap;
-    }
-
-    .project-side {
-        border-left: 1px solid #edf2f7;
-        padding-left: 14px;
-        display: grid;
-        gap: 10px;
-        align-content: start;
-    }
-
-    .side-block {
-        border: 1px solid #edf2f7;
-        border-radius: 12px;
-        padding: 10px 11px;
-        background: #fafcff;
-    }
-
-    .side-title {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #64748b;
-        font-weight: 700;
-        margin-bottom: 7px;
-    }
-
-    .side-text {
-        font-size: 0.82rem;
-        color: var(--text-on-dark-muted);
-    }
-
-    .side-muted {
-        font-size: 0.78rem;
-        color: #94a3b8;
-    }
-
-    .side-link {
-        font-size: 0.78rem;
-        text-decoration: none;
-    }
-
-    .side-pics {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-    .pic-pill {
-        font-size: 0.72rem;
-        background: #eef2f7;
-        color: var(--text-on-dark-muted);
-        border-radius: 999px;
-        padding: 3px 8px;
-    }
-
-    .feature-progress-label {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.75rem;
-        color: var(--text-on-dark-muted);
-        margin-bottom: 5px;
-    }
-
-    .feature-progress {
-        height: 7px;
-        background: #edf2f7;
-        border-radius: 999px;
-        overflow: hidden;
-    }
-
-    .feature-progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #34d399, #3b82f6);
-    }
-
-    .feature-preview-list {
-        margin-top: 8px;
-        display: grid;
-        gap: 4px;
-    }
-
-    .feature-preview-item {
-        font-size: 0.76rem;
-        color: var(--text-on-dark-muted);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .feature-preview-item i {
-        color: #94a3b8;
-    }
-
-    .projects-empty {
-        border: 1px dashed var(--text-on-dark);
-        background: #f8fafc;
-        color: #64748b;
-        border-radius: 14px;
-        text-align: center;
-        padding: 42px 16px;
-    }
-
-    @@media (max-width: 1199px) {
-        .project-body {
-            grid-template-columns: 1fr;
-        }
-
-        .project-side {
-            border-left: none;
-            border-top: 1px solid #edf2f7;
-            padding-left: 0;
-            padding-top: 12px;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @@media (max-width: 767px) {
-        .projects-page { padding: 14px; }
-        .projects-hero { padding: 14px; }
-        .projects-title { font-size: 1.35rem; }
-        .project-title-link { font-size: 1.1rem; }
-        .project-side { grid-template-columns: 1fr; }
-    }
+    @@media(max-width:1199px){.pl-card-body{grid-template-columns:1fr}.pl-side{border-left:none;border-top:1px solid var(--border);padding-left:0;padding-top:12px;grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:767px){.pl-hero{padding:20px 18px}.pl-hero-title{font-size:1.3rem}.pl-title-link{font-size:1.05rem}.pl-side{grid-template-columns:1fr}.pl-card-body{padding:14px}}
 </style>
 
-<div class="projects-page">
-    <div class="projects-hero">
+<div class="pl-shell">
+    <div class="pl-hero">
         <div>
-            <div class="projects-kicker"><i class="bi bi-grid-1x2-fill me-1"></i>Project Workspace</div>
-            <h1 class="projects-title">Projects</h1>
-            <p class="projects-subtitle">Track stage, ownership, and checklist progress in one view.</p>
+            <div class="pl-hero-badge"><i class="bi bi-grid-1x2-fill"></i> Workspace</div>
+            <div class="pl-hero-title">Projects</div>
+            <div class="pl-hero-sub">Track stage, ownership, and checklist progress in one view.</div>
         </div>
-        <div class="projects-hero-actions">
-            <span class="projects-total">@Model.Count total</span>
+        <div class="pl-hero-actions">
+            <span class="pl-total">@Model.Count total</span>
             @if (User.IsInRole("Admin"))
             {
-                <a asp-action="Create" class="dp-btn-primary" data-onboarding-id="project-create-entry">
-                    <i class="bi bi-plus-circle"></i> New Project
+                <a asp-action="Create" class="pl-btn-new" data-onboarding-id="project-create-entry">
+                    <i class="bi bi-plus-circle"></i> New project
                 </a>
             }
         </div>
@@ -381,24 +110,25 @@
 
     @if (!Model.Any())
     {
-        <div class="projects-empty">
-            <div class="mb-2"><i class="bi bi-inboxes fs-2"></i></div>
-            <div class="fw-semibold">No projects yet.</div>
+        <div class="pl-empty">
+            <div class="mb-2"><i class="bi bi-inboxes" style="font-size:1.6rem;color:#a1a1aa"></i></div>
+            <div class="fw-semibold mb-1">No projects yet</div>
+            <div class="small text-muted mb-3">Create your first project to get started.</div>
             @if (User.IsInRole("Admin"))
             {
-                <a asp-action="Create" class="dp-btn-primary mt-3" data-onboarding-id="project-create-entry">
-                    <i class="bi bi-plus-circle"></i> Create First Project
+                <a asp-action="Create" class="pl-btn-new" data-onboarding-id="project-create-entry">
+                    <i class="bi bi-plus-circle"></i> Create first project
                 </a>
             }
         </div>
     }
     else
     {
-        <div class="projects-list">
+        <div class="pl-list">
             @foreach (var cr in Model)
             {
-                var sc = statusClass.GetValueOrDefault(cr.Status.ToString(), "status-draft");
-                var pc = priorityClass.GetValueOrDefault(cr.Priority.ToString(), "priority-medium");
+                var sc = statusClass.GetValueOrDefault(cr.Status.ToString(), "st-draft");
+                var pc = priorityClass.GetValueOrDefault(cr.Priority.ToString(), "pr-medium");
                 var totalFeatures = cr.Features.Count;
                 var completedFeatures = cr.Features.Count(f => f.IsCompleted);
                 var featurePercent = totalFeatures == 0 ? 0 : (int)Math.Round(completedFeatures * 100.0 / totalFeatures);
@@ -414,22 +144,22 @@
                     ? null
                     : (cr.Description!.Length > 220 ? $"{cr.Description[..220]}..." : cr.Description);
 
-                <article class="project-card">
-                    <div class="project-card-head">
-                        <span class="project-number">@cr.CrNumber</span>
-                        <div class="project-actions">
-                            <a asp-action="Details" asp-route-id="@cr.Id" class="project-action" title="View">
+                <article class="pl-card">
+                    <div class="pl-card-head">
+                        <span class="pl-cr-num">@cr.CrNumber</span>
+                        <div class="pl-card-actions">
+                            <a asp-action="Details" asp-route-id="@cr.Id" class="pl-act" title="View">
                                 <i class="bi bi-eye"></i>
                             </a>
                             @if (User.IsInRole("Admin"))
                             {
-                                <a asp-action="Edit" asp-route-id="@cr.Id" class="project-action" title="Edit">
+                                <a asp-action="Edit" asp-route-id="@cr.Id" class="pl-act" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                                 <form asp-action="Delete" asp-route-id="@cr.Id" method="post" class="d-inline"
                                       onsubmit="return confirm('Delete @cr.CrNumber?')">
                                     @Html.AntiForgeryToken()
-                                    <button class="project-action project-action-danger" title="Delete" type="submit">
+                                    <button class="pl-act pl-act-del" title="Delete" type="submit">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
@@ -437,51 +167,51 @@
                         </div>
                     </div>
 
-                    <div class="project-body">
+                    <div class="pl-card-body">
                         <div>
-                            <div class="project-title-row">
-                                <a asp-action="Details" asp-route-id="@cr.Id" class="project-title-link">@cr.Title</a>
+                            <div class="pl-title-row">
+                                <a asp-action="Details" asp-route-id="@cr.Id" class="pl-title-link">@cr.Title</a>
                                 @if (!string.IsNullOrWhiteSpace(cr.FigmaLink))
                                 {
-                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="project-action" title="Open Figma">
+                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="pl-act" title="Open Figma" style="width:26px;height:26px;font-size:.72rem">
                                         <i class="bi bi-box-arrow-up-right"></i>
                                     </a>
                                 }
                             </div>
 
-                            <div class="project-badges">
-                                <span class="project-pill @sc">@cr.Status</span>
-                                <span class="project-pill @pc">@cr.Priority</span>
+                            <div class="pl-badges">
+                                <span class="pl-pill @sc">@cr.Status</span>
+                                <span class="pl-pill @pc">@cr.Priority</span>
                             </div>
 
-                            <div class="project-meta">
+                            <div class="pl-meta">
                                 Created @cr.CreatedAt.ToString("MMM dd, yyyy") by @(cr.CreatedBy?.FullName ?? "Unknown")
                             </div>
 
-                            <div class="project-stage-flow">
+                            <div class="pl-stage-flow">
                                 @for (var i = 0; i < stageItems.Count; i++)
                                 {
-                                    var stageClass = i == currentStageIndex ? "stage-pill-current" : i < currentStageIndex ? "stage-pill-complete" : string.Empty;
-                                    <span class="stage-pill @stageClass">@stageItems[i].Label</span>
+                                    var stgCls = i == currentStageIndex ? "pl-stage-now" : i < currentStageIndex ? "pl-stage-done" : string.Empty;
+                                    <span class="pl-stage @stgCls">@stageItems[i].Label</span>
                                     if (i < stageItems.Count - 1)
                                     {
-                                        <i class="bi bi-chevron-right stage-arrow"></i>
+                                        <i class="bi bi-chevron-right pl-stage-arrow"></i>
                                     }
                                 }
                             </div>
 
                             @if (!string.IsNullOrWhiteSpace(summary))
                             {
-                                <p class="project-summary">@summary</p>
+                                <p class="pl-desc">@summary</p>
                             }
                         </div>
 
-                        <aside class="project-side">
-                            <div class="side-block">
-                                <div class="side-title">Features Checklist</div>
+                        <aside class="pl-side">
+                            <div class="pl-sblock">
+                                <div class="pl-stitle">Features checklist</div>
                                 @if (totalFeatures == 0)
                                 {
-                                    <div class="side-muted">No features tracked.</div>
+                                    <div class="pl-smuted">No features tracked.</div>
                                 }
                                 else
                                 {
@@ -489,37 +219,37 @@
                                         .OrderBy(f => f.Name)
                                         .Take(3)
                                         .ToList();
-                                    <div class="feature-progress-label">
+                                    <div class="pl-fprog-label">
                                         <span>@completedFeatures / @totalFeatures</span>
                                         <span>@featurePercent%</span>
                                     </div>
-                                    <div class="feature-progress">
-                                        <div class="feature-progress-bar" style="width:@featurePercent%"></div>
+                                    <div class="pl-fprog">
+                                        <div class="pl-fprog-bar" style="width:@featurePercent%"></div>
                                     </div>
-                                    <div class="feature-preview-list">
+                                    <div class="pl-flist">
                                         @foreach (var feature in featurePreview)
                                         {
-                                            <div class="feature-preview-item">
+                                            <div class="pl-fitem">
                                                 <i class="bi @(feature.IsCompleted ? "bi-check-circle-fill text-success" : "bi-circle")"></i>
                                                 <span>@feature.Name</span>
                                             </div>
                                         }
                                         @if (totalFeatures > featurePreview.Count)
                                         {
-                                            <div class="side-muted">+@(totalFeatures - featurePreview.Count) more feature(s)</div>
+                                            <div class="pl-smuted">+@(totalFeatures - featurePreview.Count) more feature(s)</div>
                                         }
                                     </div>
                                 }
-                                <a asp-action="Features" asp-route-projectId="@cr.Id" class="side-link d-block mt-2">
-                                    <i class="bi bi-arrow-up-right-square me-1"></i>Open Feature View
+                                <a asp-action="Features" asp-route-projectId="@cr.Id" class="pl-slink d-block mt-2">
+                                    <i class="bi bi-arrow-up-right-square me-1"></i>Open feature view
                                 </a>
                             </div>
 
-                            <div class="side-block">
-                                <div class="side-title">Timeline</div>
+                            <div class="pl-sblock">
+                                <div class="pl-stitle">Timeline</div>
                                 @if (cr.TimelineStart.HasValue || cr.TimelineEnd.HasValue)
                                 {
-                                    <div class="side-text">
+                                    <div class="pl-stext">
                                         @(cr.TimelineStart?.ToString("MMM dd, yyyy") ?? "?")
                                         <i class="bi bi-arrow-right mx-1"></i>
                                         @(cr.TimelineEnd?.ToString("MMM dd, yyyy") ?? "?")
@@ -527,60 +257,60 @@
                                 }
                                 else
                                 {
-                                    <div class="side-muted">No timeline set.</div>
+                                    <div class="pl-smuted">No timeline set.</div>
                                 }
                             </div>
 
-                            <div class="side-block">
-                                <div class="side-title">Technology / Languages</div>
+                            <div class="pl-sblock">
+                                <div class="pl-stitle">Technology / languages</div>
                                 @if (!string.IsNullOrWhiteSpace(cr.TechnologyStack))
                                 {
-                                    <div class="side-text">@cr.TechnologyStack</div>
+                                    <div class="pl-stext">@cr.TechnologyStack</div>
                                 }
                                 else
                                 {
-                                    <div class="side-muted">No technology data.</div>
+                                    <div class="pl-smuted">No technology data.</div>
                                 }
                             </div>
 
-                            <div class="side-block">
-                                <div class="side-title">Links</div>
+                            <div class="pl-sblock">
+                                <div class="pl-stitle">Links</div>
                                 @if (!string.IsNullOrWhiteSpace(cr.GitHubRepoUrl))
                                 {
-                                    <a href="@cr.GitHubRepoUrl" target="_blank" rel="noopener" class="side-link d-block">
-                                        <i class="bi bi-github me-1"></i>Open Repository
+                                    <a href="@cr.GitHubRepoUrl" target="_blank" rel="noopener" class="pl-slink d-block">
+                                        <i class="bi bi-github me-1"></i>Open repository
                                     </a>
                                 }
                                 @if (!string.IsNullOrWhiteSpace(cr.FigmaLink))
                                 {
-                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="side-link d-block">
+                                    <a href="@cr.FigmaLink" target="_blank" rel="noopener" class="pl-slink d-block">
                                         <i class="bi bi-vector-pen me-1"></i>Open Figma
                                     </a>
                                 }
                                 @if (string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) && string.IsNullOrWhiteSpace(cr.FigmaLink))
                                 {
-                                    <div class="side-muted">No links attached.</div>
+                                    <div class="pl-smuted">No links attached.</div>
                                 }
                             </div>
 
-                            <div class="side-block">
-                                <div class="side-title">Person In Charge</div>
+                            <div class="pl-sblock">
+                                <div class="pl-stitle">Person in charge</div>
                                 @if (cr.Pics.Any())
                                 {
-                                    <div class="side-pics">
+                                    <div class="pl-spics">
                                         @foreach (var pic in cr.Pics.Take(3))
                                         {
-                                            <span class="pic-pill">@pic.Employee?.FullName</span>
+                                            <span class="pl-spic">@pic.Employee?.FullName</span>
                                         }
                                         @if (cr.Pics.Count > 3)
                                         {
-                                            <span class="pic-pill">+@(cr.Pics.Count - 3)</span>
+                                            <span class="pl-spic">+@(cr.Pics.Count - 3)</span>
                                         }
                                     </div>
                                 }
                                 else
                                 {
-                                    <div class="side-muted">No PIC assigned.</div>
+                                    <div class="pl-smuted">No PIC assigned.</div>
                                 }
                             </div>
                         </aside>

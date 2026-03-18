@@ -8,201 +8,233 @@
         .SelectMany(p => p.Features.Select(f => new { Project = p, Feature = f }))
         .OrderByDescending(x => x.Feature.CreatedAt)
         .ToList();
+
+    var statusClsMap = new Dictionary<string, string> {
+        {"Draft","fl-st-draft"}, {"InReview","fl-st-review"}, {"Approved","fl-st-approved"},
+        {"InProgress","fl-st-progress"}, {"Done","fl-st-done"}, {"Rejected","fl-st-rejected"}
+    };
+    var priorityClsMap = new Dictionary<string, string> {
+        {"Low","fl-pr-low"}, {"Medium","fl-pr-medium"}, {"High","fl-pr-high"}, {"Critical","fl-pr-critical"}
+    };
 }
 
 <style>
-    .feature-agent-progress {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.76rem;
-        margin-top: 4px;
-    }
-    .feature-agent-progress-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: #3b82f6;
-        box-shadow: 0 0 0 0 rgba(59,130,246,0.7);
-    }
-    .feature-agent-progress-dot.is-pulsing {
-        animation: featurePulse 1.25s infinite;
-    }
-    .feature-agent-progress-dot.is-queued {
-        background: #f59e0b;
-        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
-    }
-    @@keyframes featurePulse {
-        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
-        70% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
-        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    .fl-shell{max-width:1420px;margin:0 auto}
+
+    /* Hero */
+    .fl-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:16px;padding:28px 32px 24px;margin-bottom:24px;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .fl-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(16,185,129,.12) 0%,transparent 70%);pointer-events:none}
+    .fl-hero-badge{display:inline-flex;align-items:center;gap:5px;background:#0300c263;border:1px solid rgba(16,185,129,.25);color:#34d399;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .fl-hero-title{font-size:1.6rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .fl-hero-sub{font-size:.76rem;color:#a1a1aa;margin-top:3px;font-weight:500}
+    .fl-hero-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;z-index:1}
+    .fl-total{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,.08);color:#a1a1aa;border:1px solid rgba(255,255,255,.1)}
+    .fl-btn-new{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 20px;font-size:.82rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none;letter-spacing:.01em}
+    .fl-btn-new:hover{background:var(--accent-hover);color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.25)}
+
+    /* Section card */
+    .fl-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:box-shadow .2s ease}
+    .fl-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .fl-section-head{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .fl-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .fl-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .fl-badge-count{font-size:.66rem;font-weight:700;border-radius:999px;padding:2px 8px;background:#eef2f7;color:#71717a;margin-left:4px}
+
+    /* Table */
+    .fl-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .fl-table th{font-size:.7rem;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;border-bottom:2px solid var(--border);background:#fafbfc}
+    .fl-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:middle}
+    .fl-table tr:last-child td{border-bottom:none}
+    .fl-table tr:hover td{background:#fafbfc}
+    .fl-table-link{font-weight:600;text-decoration:none;color:var(--text-primary);transition:color .15s ease}
+    .fl-table-link:hover{color:var(--accent)}
+    .fl-table-muted{font-size:.74rem;color:#a1a1aa;margin-top:2px}
+    .fl-feat-num{font-family:Consolas,Monaco,monospace;font-size:.74rem;font-weight:700;color:var(--accent)}
+
+    /* Status / priority pills */
+    .fl-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid transparent;display:inline-block}
+    .fl-st-draft{background:#eef2ff;color:#4f46e5;border-color:#c7d2fe}
+    .fl-st-review{background:#e0f2fe;color:#0369a1;border-color:#bae6fd}
+    .fl-st-approved{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+    .fl-st-progress{background:#fef3c7;color:#b45309;border-color:#fde68a}
+    .fl-st-done{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+    .fl-st-rejected{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .fl-pr-low{background:#e8faf0;color:#0f766e;border-color:#b7f0df}
+    .fl-pr-medium{background:#e5edff;color:#1d4ed8;border-color:#bfdbfe}
+    .fl-pr-high{background:#fff4de;color:#b45309;border-color:#fde68a}
+    .fl-pr-critical{background:#ffe4e6;color:#be123c;border-color:#fecdd3}
+    .fl-stage-pill{font-size:.7rem;font-weight:600;color:#71717a}
+
+    /* Action buttons */
+    .fl-act{width:30px;height:30px;border-radius:8px;border:1px solid #d1d5db;color:#71717a;background:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;transition:all .15s ease;font-size:.8rem;cursor:pointer}
+    .fl-act:hover{background:#f8fafc;color:#111827;border-color:#a1a1aa}
+    .fl-act-del{border-color:#d1d5db}
+    .fl-act-del:hover{border-color:#fecaca;color:#dc2626;background:#fef2f2}
+    .fl-act:disabled{opacity:.45;cursor:not-allowed}
+
+    /* Agent status */
+    .fl-agent-dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex-shrink:0}
+    .fl-agent-dot.is-pulsing{background:#3b82f6;animation:flPulse 1.25s infinite}
+    .fl-agent-dot.is-queued{background:#f59e0b}
+    @@keyframes flPulse{0%{box-shadow:0 0 0 0 rgba(59,130,246,.7)}70%{box-shadow:0 0 0 8px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}
+
+    /* Empty */
+    .fl-empty{padding:40px 20px;text-align:center;color:#a1a1aa;font-size:.88rem}
+    .fl-empty i{font-size:2rem;display:block;margin-bottom:10px;opacity:.5}
+
+    @@media(max-width:991px){
+        .fl-hero{padding:22px 18px 20px}
+        .fl-hero-title{font-size:1.3rem}
     }
 </style>
 
-<div class="mod-header mb-4">
-    <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-list-check" style="color:#38bdf8"></i> Features</h1>
-        <p class="mod-subtitle">Admin manages project-tied features with project-like fields and developer/agent assignment</p>
-    </div>
-    @if (User.IsInRole("Admin"))
-    {
-        <a asp-action="CreateFeature" asp-route-returnUrl="@returnUrl" class="dp-btn-primary">
-            <i class="bi bi-plus-circle"></i> Add New Feature
-        </a>
-    }
-</div>
+<div class="fl-shell">
 
-<div class="dp" style="--dp-color:#38bdf8">
-    <div class="dp-header">
-        <div class="dp-header-icon" style="background:rgba(56,189,248,0.14);color:#38bdf8">
-            <i class="bi bi-kanban"></i>
+    @* Hero *@
+    <section class="fl-hero">
+        <div style="position:relative;z-index:1">
+            <div class="fl-hero-badge"><i class="bi bi-list-check"></i> Feature Board</div>
+            <div class="fl-hero-title">Features</div>
+            <div class="fl-hero-sub">Manage project features, assignments, and tracking</div>
         </div>
-        <span class="dp-header-title">Project Features</span>
-        <span class="dp-header-count">@projects.Count</span>
-    </div>
-
-    @if (!projects.Any())
-    {
-        <div class="dp-empty">
-            <i class="bi bi-inboxes"></i>
-            No features added yet.
+        <div class="fl-hero-actions">
+            <span class="fl-total">@projects.Count features</span>
+            @if (User.IsInRole("Admin"))
+            {
+                <a asp-action="CreateFeature" asp-route-returnUrl="@returnUrl" class="fl-btn-new">
+                    <i class="bi bi-plus-circle"></i> Add Feature
+                </a>
+            }
         </div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="dp-table">
-                <thead>
-                    <tr>
-                        <th>Feature #</th>
-                        <th>Feature</th>
-                        <th>Project</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>Stage</th>
-                        <th>Assignee</th>
-                        <th>Timeline</th>
-                        <th class="text-end">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var item in projects)
-                    {
-                        var feature = item.Feature;
-                        var project = item.Project;
+    </section>
 
-                        var statusBadge = feature.Status switch
-                        {
-                            WFHMonitor.Models.CrStatus.Done => "dp-badge dp-badge-green",
-                            WFHMonitor.Models.CrStatus.InProgress => "dp-badge dp-badge-indigo",
-                            WFHMonitor.Models.CrStatus.InReview => "dp-badge dp-badge-sky",
-                            WFHMonitor.Models.CrStatus.Rejected => "dp-badge dp-badge-red",
-                            _ => "dp-badge dp-badge-slate"
-                        };
+    @* Feature table *@
+    <div class="fl-section">
+        <div class="fl-section-head">
+            <div class="fl-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-kanban"></i></div>
+            <div class="fl-section-label">Project Features <span class="fl-badge-count">@projects.Count</span></div>
+        </div>
 
-                        var priorityBadge = feature.Priority switch
-                        {
-                            WFHMonitor.Models.CrPriority.Critical => "dp-badge dp-badge-red",
-                            WFHMonitor.Models.CrPriority.High => "dp-badge dp-badge-amber",
-                            WFHMonitor.Models.CrPriority.Medium => "dp-badge dp-badge-indigo",
-                            _ => "dp-badge dp-badge-slate"
-                        };
-
-                        var timelineText = feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue
-                            ? $"{feature.TimelineStart?.ToString("dd MMM yyyy") ?? "-"} to {feature.TimelineEnd?.ToString("dd MMM yyyy") ?? "-"}"
-                            : "-";
-
+        @if (!projects.Any())
+        {
+            <div class="fl-empty">
+                <i class="bi bi-inboxes"></i>
+                No features added yet.
+            </div>
+        }
+        else
+        {
+            <div style="overflow-x:auto">
+                <table class="fl-table">
+                    <thead>
                         <tr>
-                            <td>
-                                <span class="dp-badge dp-badge-slate">@feature.FeatureNumber</span>
-                            </td>
-                            <td>
-                                <a asp-action="FeatureDetails"
-                                   asp-route-featureId="@feature.Id"
-                                   class="dp-cell-title text-decoration-none">
-                                    @feature.Name
-                                </a>
-                                @if (!string.IsNullOrWhiteSpace(feature.Description))
-                                {
-                                    <div class="dp-cell-muted">@feature.Description</div>
-                                }
-                            </td>
-                            <td>
-                                <div class="dp-cell-title">@project.CrNumber</div>
-                                <div class="dp-cell-muted">@project.Title</div>
-                            </td>
-                            <td><span class="@statusBadge">@feature.Status</span></td>
-                            <td><span class="@priorityBadge">@feature.Priority</span></td>
-                            <td><span class="dp-badge dp-badge-slate">@feature.Stage</span></td>
-                            <td>
-                                @if (!string.IsNullOrWhiteSpace(feature.AssignedDeveloper?.FullName))
-                                {
-                                    <span class="dp-badge dp-badge-sky">@feature.AssignedDeveloper!.FullName</span>
-                                    @if (feature.AgentStatus != WFHMonitor.Models.FeatureAgentStatus.None)
-                                    {
-                                        var isQueued = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.Queued;
-                                        var isProcessing = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.InProgress;
-                                        <div class="feature-agent-progress">
-                                            <span class="feature-agent-progress-dot @(isProcessing ? "is-pulsing" : (isQueued ? "is-queued" : ""))"></span>
-                                            <span class="dp-cell-muted">@feature.AgentStatus</span>
-                                        </div>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="dp-cell-muted">Unassigned</span>
-                                }
-                            </td>
-                            <td class="dp-cell-muted">@timelineText</td>
-                            <td class="text-end">
-                                @if (User.IsInRole("Agent"))
-                                {
-                                    var canPickup = string.IsNullOrWhiteSpace(feature.AssignedDeveloperId) ||
-                                        string.Equals(feature.AssignedDeveloperId, currentUserId, StringComparison.Ordinal);
-                                    <form asp-action="PickupFeature" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="featureId" value="@feature.Id" />
-                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                        @if (canPickup)
-                                        {
-                                            <button type="submit" class="dp-btn" title="Pick up feature">
-                                                <i class="bi bi-hand-index-thumb"></i>
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <button type="button" class="dp-btn" title="Assigned to another user" disabled>
-                                                <i class="bi bi-lock"></i>
-                                            </button>
-                                        }
-                                    </form>
-                                }
-                                <a asp-action="Details" asp-route-id="@project.Id" class="dp-btn" title="Open project">
-                                    <i class="bi bi-box-arrow-up-right"></i>
-                                </a>
-                                @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
-                                {
-                                    <a asp-action="EditFeature"
-                                       asp-route-featureId="@feature.Id"
-                                       asp-route-returnUrl="@returnUrl"
-                                       class="dp-btn"
-                                       title="Edit feature">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <form asp-action="DeleteFeature" method="post" class="d-inline" onsubmit="return confirm('Remove this feature?');">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="featureId" value="@feature.Id" />
-                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                        <button type="submit" class="dp-btn dp-btn-danger" title="Delete feature">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                }
-                            </td>
+                            <th>Feature #</th>
+                            <th>Feature</th>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Stage</th>
+                            <th>Assignee</th>
+                            <th>Timeline</th>
+                            <th style="text-align:right">Action</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
+                    </thead>
+                    <tbody>
+                        @foreach (var item in projects)
+                        {
+                            var feature = item.Feature;
+                            var project = item.Project;
+                            var stKey = feature.Status.ToString();
+                            var prKey = feature.Priority.ToString();
+                            var timelineText = feature.TimelineStart.HasValue || feature.TimelineEnd.HasValue
+                                ? $"{feature.TimelineStart?.ToString("dd MMM") ?? "-"} to {feature.TimelineEnd?.ToString("dd MMM") ?? "-"}"
+                                : "-";
+
+                            <tr>
+                                <td><span class="fl-feat-num">@feature.FeatureNumber</span></td>
+                                <td>
+                                    <a asp-action="FeatureDetails" asp-route-featureId="@feature.Id" class="fl-table-link">@feature.Name</a>
+                                    @if (!string.IsNullOrWhiteSpace(feature.Description))
+                                    {
+                                        <div class="fl-table-muted">@feature.Description</div>
+                                    }
+                                </td>
+                                <td>
+                                    <span style="font-family:Consolas,monospace;font-size:.72rem;font-weight:700;color:var(--accent)">@project.CrNumber</span>
+                                    <div class="fl-table-muted">@project.Title</div>
+                                </td>
+                                <td><span class="fl-pill @(statusClsMap.ContainsKey(stKey) ? statusClsMap[stKey] : "")">@feature.Status</span></td>
+                                <td><span class="fl-pill @(priorityClsMap.ContainsKey(prKey) ? priorityClsMap[prKey] : "")">@feature.Priority</span></td>
+                                <td><span class="fl-stage-pill">@feature.Stage</span></td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(feature.AssignedDeveloper?.FullName))
+                                    {
+                                        <span style="font-size:.8rem;font-weight:600;color:var(--text-primary)">@feature.AssignedDeveloper!.FullName</span>
+                                        @if (feature.AgentStatus != WFHMonitor.Models.FeatureAgentStatus.None)
+                                        {
+                                            var isQueued = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.Queued;
+                                            var isProcessing = feature.AgentStatus == WFHMonitor.Models.FeatureAgentStatus.InProgress;
+                                            <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+                                                <span class="fl-agent-dot @(isProcessing ? "is-pulsing" : (isQueued ? "is-queued" : ""))"></span>
+                                                <span class="fl-table-muted">@feature.AgentStatus</span>
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:.78rem;color:#a1a1aa">Unassigned</span>
+                                    }
+                                </td>
+                                <td style="font-size:.74rem;color:#a1a1aa">@timelineText</td>
+                                <td style="text-align:right;white-space:nowrap">
+                                    @if (User.IsInRole("Agent"))
+                                    {
+                                        var canPickup = string.IsNullOrWhiteSpace(feature.AssignedDeveloperId) ||
+                                            string.Equals(feature.AssignedDeveloperId, currentUserId, StringComparison.Ordinal);
+                                        <form asp-action="PickupFeature" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="featureId" value="@feature.Id" />
+                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                            @if (canPickup)
+                                            {
+                                                <button type="submit" class="fl-act" title="Pick up feature" style="margin-right:4px">
+                                                    <i class="bi bi-hand-index-thumb"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="fl-act" title="Assigned to another user" disabled style="margin-right:4px">
+                                                    <i class="bi bi-lock"></i>
+                                                </button>
+                                            }
+                                        </form>
+                                    }
+                                    <a asp-action="Details" asp-route-id="@project.Id" class="fl-act" title="Open project" style="margin-right:4px">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                    @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
+                                    {
+                                        <a asp-action="EditFeature"
+                                           asp-route-featureId="@feature.Id"
+                                           asp-route-returnUrl="@returnUrl"
+                                           class="fl-act" title="Edit feature" style="margin-right:4px">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <form asp-action="DeleteFeature" method="post" class="d-inline" onsubmit="return confirm('Remove this feature?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="featureId" value="@feature.Id" />
+                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                            <button type="submit" class="fl-act fl-act-del" title="Delete feature">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>

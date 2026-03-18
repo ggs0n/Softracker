@@ -34,362 +34,494 @@
     var currentStageIndex = stageItems.FindIndex(s => s.Stage == normalizedStage);
     if (currentStageIndex < 0) currentStageIndex = 0;
 
-    var statusBadge = Model.Status switch
-    {
-        WFHMonitor.Models.CrStatus.Done => "bg-success",
-        WFHMonitor.Models.CrStatus.InProgress => "bg-primary",
-        WFHMonitor.Models.CrStatus.InReview or WFHMonitor.Models.CrStatus.Approved => "bg-info",
-        WFHMonitor.Models.CrStatus.Rejected => "bg-danger",
-        _ => "bg-secondary"
+    var statusClsMap = new Dictionary<string, string> {
+        {"Draft","fd-st-draft"}, {"InReview","fd-st-review"}, {"Approved","fd-st-approved"},
+        {"InProgress","fd-st-progress"}, {"Done","fd-st-done"}, {"Rejected","fd-st-rejected"}
     };
-
-    var priorityBadge = Model.Priority switch
-    {
-        WFHMonitor.Models.CrPriority.Critical => "bg-danger",
-        WFHMonitor.Models.CrPriority.High => "bg-warning text-dark",
-        WFHMonitor.Models.CrPriority.Medium => "bg-info text-dark",
-        _ => "bg-light text-dark border"
+    var priorityClsMap = new Dictionary<string, string> {
+        {"Low","fd-pr-low"}, {"Medium","fd-pr-medium"}, {"High","fd-pr-high"}, {"Critical","fd-pr-critical"}
     };
+    var stKey = Model.Status.ToString();
+    var prKey = Model.Priority.ToString();
 }
 
 <style>
-    .feature-agent-progress {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 600;
-    }
+    .fd-shell{max-width:1420px;margin:0 auto}
 
-    .feature-agent-progress-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        background: #3b82f6;
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-    }
+    /* Hero */
+    .fd-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:16px;padding:28px 32px 24px;margin-bottom:24px;overflow:hidden}
+    .fd-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(16,185,129,.12) 0%,transparent 70%);pointer-events:none}
+    .fd-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;position:relative;z-index:1}
+    .fd-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#34d399;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .fd-hero-title{font-size:1.65rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .fd-hero-meta{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+    .fd-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid transparent;display:inline-block}
+    .fd-st-draft{background:rgba(99,102,241,.15);color:#a5b4fc;border-color:rgba(99,102,241,.3)}
+    .fd-st-review{background:rgba(56,189,248,.15);color:#7dd3fc;border-color:rgba(56,189,248,.3)}
+    .fd-st-approved{background:rgba(34,197,94,.15);color:#86efac;border-color:rgba(34,197,94,.3)}
+    .fd-st-progress{background:rgba(251,191,36,.15);color:#fcd34d;border-color:rgba(251,191,36,.3)}
+    .fd-st-done{background:rgba(16,185,129,.15);color:#6ee7b7;border-color:rgba(16,185,129,.3)}
+    .fd-st-rejected{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3)}
+    .fd-pr-low{background:rgba(20,184,166,.15);color:#5eead4;border-color:rgba(20,184,166,.3)}
+    .fd-pr-medium{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)}
+    .fd-pr-high{background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.3)}
+    .fd-pr-critical{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3)}
+    .fd-hero-date{font-size:.74rem;color:#71717a}
+    .fd-hero-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
 
-    .feature-agent-progress-dot.is-pulsing {
-        animation: featurePulse 1.25s infinite;
-    }
+    .fd-btn-edit{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:8px 18px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none}
+    .fd-btn-edit:hover{background:rgba(251,191,36,.25);color:#fbbf24;transform:translateY(-1px)}
+    .fd-btn-back{background:rgba(255,255,255,.06);color:#a1a1aa;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 18px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none}
+    .fd-btn-back:hover{background:rgba(255,255,255,.12);color:#f4f5f7;transform:translateY(-1px)}
+    .fd-btn-pickup{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:8px 18px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease}
+    .fd-btn-pickup:hover{background:rgba(59,130,246,.25);color:#60a5fa;transform:translateY(-1px)}
+    .fd-btn-pickup:disabled{opacity:.45;cursor:not-allowed;transform:none}
 
-    .feature-agent-progress-dot.is-queued {
-        background: #f59e0b;
-        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
-    }
+    /* Stage flow */
+    .fd-stage-flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center;position:relative;z-index:1}
+    .fd-stage{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 13px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#71717a;transition:all .2s ease}
+    .fd-stage-done{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);color:#34d399}
+    .fd-stage-now{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#60a5fa}
+    .fd-stage-arrow{color:#52525b;font-size:.68rem}
 
-    @@keyframes featurePulse {
-        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
-        70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
-        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+    /* Grid */
+    .fd-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
+
+    /* Sections */
+    .fd-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:20px;overflow:hidden;transition:box-shadow .2s ease}
+    .fd-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .fd-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .fd-section-left{display:flex;align-items:center;gap:10px}
+    .fd-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .fd-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .fd-section-body{padding:18px 20px}
+
+    /* Description */
+    .fd-desc{color:#52525b;font-size:.86rem;line-height:1.6;white-space:pre-wrap}
+
+    /* Scope info */
+    .fd-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .fd-info-label{font-size:.68rem;font-weight:700;color:#a1a1aa;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+    .fd-info-value{font-size:.84rem;font-weight:600;color:var(--text-primary)}
+
+    /* Screenshots */
+    .fd-ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+    .fd-ss-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fafbfc;transition:box-shadow .2s ease}
+    .fd-ss-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.06)}
+    .fd-ss-card img{width:100%;height:160px;object-fit:contain;background:#f4f5f6;cursor:zoom-in;display:block}
+    .fd-ss-footer{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-top:1px solid var(--border)}
+    .fd-ss-name{font-size:.74rem;color:#71717a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* Upload */
+    .fd-upload-area{border:1px dashed #d1d5db;border-radius:10px;padding:14px 16px;background:#fafbfc}
+    .fd-upload-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .2s ease}
+    .fd-upload-btn:hover{background:var(--accent-hover)}
+    .fd-btn-outline{border:1px solid #d1d5db;border-radius:8px;padding:6px 14px;font-size:.76rem;font-weight:600;color:#52525b;background:#fff;display:inline-flex;align-items:center;gap:5px;text-decoration:none;transition:all .15s ease;cursor:pointer}
+    .fd-btn-outline:hover{border-color:#a1a1aa;color:#111827;background:#f8fafc}
+
+    /* Right side blocks */
+    .fd-sblock{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fafbfc;margin-bottom:10px}
+    .fd-sblock:last-child{margin-bottom:0}
+    .fd-stitle{font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:#a1a1aa;font-weight:700;margin-bottom:4px}
+    .fd-svalue{font-size:.82rem;font-weight:600;color:var(--text-primary)}
+    .fd-slink{font-size:.78rem;text-decoration:none;color:var(--accent);transition:color .15s ease;display:flex;align-items:center;gap:5px}
+    .fd-slink:hover{color:var(--accent-hover)}
+
+    /* Agent dot */
+    .fd-agent-dot{width:10px;height:10px;border-radius:999px;display:inline-block;flex-shrink:0;background:#71717a}
+    .fd-agent-dot.is-pulsing{background:#3b82f6;animation:fdPulse 1.25s infinite}
+    .fd-agent-dot.is-queued{background:#f59e0b}
+    @@keyframes fdPulse{0%{box-shadow:0 0 0 0 rgba(59,130,246,.7)}70%{box-shadow:0 0 0 10px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}
+
+    /* Action btn small */
+    .fd-act{width:28px;height:28px;border-radius:6px;border:1px solid #d1d5db;color:#71717a;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;cursor:pointer;transition:all .15s ease}
+    .fd-act:hover{border-color:#fecaca;color:#dc2626;background:#fef2f2}
+
+    .fd-empty{font-size:.8rem;color:#a1a1aa;font-style:italic}
+
+    /* Scan select / btn (for agent assignment) */
+    .fd-scan-select{background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:.78rem;color:var(--text-primary);font-family:inherit;width:100%}
+    .fd-scan-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+    .fd-scan-btn{background:var(--bg-dark);color:#e4e4e7;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 16px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s ease;width:100%;justify-content:center}
+    .fd-scan-btn:hover{background:#27272a;color:#f4f5f7}
+
+    /* Back link */
+    .fd-backlink{background:transparent;color:#a1a1aa;border:1px solid var(--border);border-radius:10px;padding:9px 20px;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s ease;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .fd-backlink:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+
+    @@media(max-width:991px){
+        .fd-grid{grid-template-columns:1fr}
+        .fd-hero-title{font-size:1.35rem}
+        .fd-hero{padding:22px 18px 20px}
+        .fd-info-grid{grid-template-columns:1fr}
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
-        <div class="text-muted small">@Model.FeatureNumber</div>
-        <h2 class="mb-1">@Model.Name</h2>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-            <span class="badge @statusBadge">@Model.Status</span>
-            <span class="badge @priorityBadge">@Model.Priority</span>
-            <span class="text-muted small">Created @Model.CreatedAt.ToString("MMM dd, yyyy")</span>
+<div class="fd-shell">
+
+    @* Hero *@
+    <section class="fd-hero">
+        <div class="fd-hero-top">
+            <div>
+                <div class="fd-hero-badge"><i class="bi bi-puzzle"></i> @Model.FeatureNumber</div>
+                <div class="fd-hero-title">@Model.Name</div>
+                <div class="fd-hero-meta">
+                    <span class="fd-pill @(statusClsMap.ContainsKey(stKey) ? statusClsMap[stKey] : "")">@Model.Status</span>
+                    <span class="fd-pill @(priorityClsMap.ContainsKey(prKey) ? priorityClsMap[prKey] : "")">@Model.Priority</span>
+                    <span class="fd-hero-date">Created @Model.CreatedAt.ToString("MMM dd, yyyy")</span>
+                </div>
+            </div>
+            <div class="fd-hero-actions">
+                @if (isOpenClawEnabled && User.IsInRole("Agent"))
+                {
+                    <form asp-action="PickupFeature" method="post" style="display:inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="featureId" value="@Model.Id" />
+                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                        <input type="hidden" name="featureAgentId" value="@(openClawFeatureAgentOptions.FirstOrDefault()?.Value ?? "main")" />
+                        @if (canAgentPickup)
+                        {
+                            <button type="submit" class="fd-btn-pickup" @(hasProAccess ? null : "disabled")>
+                                <i class="bi bi-hand-index-thumb"></i> Pick Up
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="fd-btn-pickup" disabled>
+                                <i class="bi bi-lock"></i> Assigned
+                            </button>
+                        }
+                    </form>
+                }
+                @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
+                {
+                    <a asp-action="EditFeature" asp-route-featureId="@Model.Id" asp-route-returnUrl="@returnUrl" class="fd-btn-edit">
+                        <i class="bi bi-pencil"></i> Edit
+                    </a>
+                }
+                <a asp-action="Features" asp-route-projectId="@Model.ChangeRequestId" class="fd-btn-back">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
         </div>
-        <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-2 text-center">
+        <div class="fd-stage-flow">
             @for (var i = 0; i < stageItems.Count; i++)
             {
                 var isComplete = i < currentStageIndex;
                 var isCurrent = i == currentStageIndex;
-                var badgeClass = isCurrent ? "bg-primary" : isComplete ? "bg-success" : "bg-light text-muted border";
-                <span class="badge @badgeClass fs-6 px-3 py-2">@stageItems[i].Label</span>
+                var cls = isCurrent ? "fd-stage-now" : isComplete ? "fd-stage-done" : "";
+                <span class="fd-stage @cls">@stageItems[i].Label</span>
                 if (i < stageItems.Count - 1)
                 {
-                    <i class="bi bi-chevron-right text-muted"></i>
+                    <i class="bi bi-chevron-right fd-stage-arrow"></i>
                 }
             }
         </div>
-    </div>
-    <div class="d-flex gap-2">
-        @if (isOpenClawEnabled && User.IsInRole("Agent"))
-        {
-            <form asp-action="PickupFeature" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="featureId" value="@Model.Id" />
-                <input type="hidden" name="returnUrl" value="@returnUrl" />
-                <input type="hidden" name="featureAgentId" value="@(openClawFeatureAgentOptions.FirstOrDefault()?.Value ?? "main")" />
-                @if (canAgentPickup)
-                {
-                    <button type="submit" class="btn btn-outline-primary" @(hasProAccess ? null : "disabled")>
-                        <i class="bi bi-hand-index-thumb me-1"></i>Pick Up Feature
-                    </button>
-                }
-                else
-                {
-                    <button type="button" class="btn btn-outline-secondary" disabled>
-                        <i class="bi bi-lock me-1"></i>Assigned to another user
-                    </button>
-                }
-            </form>
-        }
-        @if (User.IsInRole("Admin") || User.IsInRole("Developer"))
-        {
-            <a asp-action="EditFeature"
-               asp-route-featureId="@Model.Id"
-               asp-route-returnUrl="@returnUrl"
-               class="btn btn-warning">
-                <i class="bi bi-pencil me-1"></i>Edit
-            </a>
-        }
-        <a asp-action="Features"
-           asp-route-projectId="@Model.ChangeRequestId"
-           class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i>Back to Features
-        </a>
-    </div>
-</div>
+    </section>
 
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-card-text me-2"></i>Description
-            </div>
-            <div class="card-body" style="white-space:pre-wrap;">
-                @(string.IsNullOrWhiteSpace(Model.Description) ? "Not provided." : Model.Description)
-            </div>
-        </div>
+    @* Grid *@
+    <div class="fd-grid">
 
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-diagram-3 me-2"></i>Scope
+        @* Left Column *@
+        <div>
+
+            @* Description *@
+            <div class="fd-section">
+                <div class="fd-section-head">
+                    <div class="fd-section-left">
+                        <div class="fd-section-icon" style="background:#eef2ff;color:#6366f1"><i class="bi bi-card-text"></i></div>
+                        <div class="fd-section-label">Description</div>
+                    </div>
+                </div>
+                <div class="fd-section-body">
+                    <div class="fd-desc">@(string.IsNullOrWhiteSpace(Model.Description) ? "Not provided." : Model.Description)</div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="small text-muted">Affected Module</div>
-                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ModuleImpacted) ? "-" : Model.ModuleImpacted)</div>
+
+            @* Scope *@
+            <div class="fd-section">
+                <div class="fd-section-head">
+                    <div class="fd-section-left">
+                        <div class="fd-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-diagram-3"></i></div>
+                        <div class="fd-section-label">Scope</div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="small text-muted">Linked Bugs</div>
-                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LinkedBugs) ? "-" : Model.LinkedBugs)</div>
+                </div>
+                <div class="fd-section-body">
+                    <div class="fd-info-grid">
+                        <div>
+                            <div class="fd-info-label">Affected Module</div>
+                            <div class="fd-info-value">@(string.IsNullOrWhiteSpace(Model.ModuleImpacted) ? "-" : Model.ModuleImpacted)</div>
+                        </div>
+                        <div>
+                            <div class="fd-info-label">Linked Bugs</div>
+                            <div class="fd-info-value">@(string.IsNullOrWhiteSpace(Model.LinkedBugs) ? "-" : Model.LinkedBugs)</div>
+                        </div>
                     </div>
-                    <div class="col-md-12">
-                        <div class="small text-muted">Timeline</div>
-                        <div class="fw-semibold">@timeline</div>
+                    <div style="margin-top:14px">
+                        <div class="fd-info-label">Timeline</div>
+                        <div class="fd-info-value">@timeline</div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-images me-2"></i>Fix Screenshots</span>
+            @* Feature Plan *@
+            @if (!string.IsNullOrWhiteSpace(Model.AgentImplementationPlan))
+            {
+                <div class="fd-section">
+                    <div class="fd-section-head">
+                        <div class="fd-section-left">
+                            <div class="fd-section-icon" style="background:#fef3c7;color:#d97706"><i class="bi bi-journal-code"></i></div>
+                            <div class="fd-section-label">Feature Plan</div>
+                        </div>
+                    </div>
+                    <div class="fd-section-body">
+                        <div class="fd-desc">@Model.AgentImplementationPlan</div>
+                    </div>
+                </div>
+            }
+
+            @* Screenshots *@
+            <div class="fd-section">
+                <div class="fd-section-head">
+                    <div class="fd-section-left">
+                        <div class="fd-section-icon" style="background:#fce7f3;color:#db2777"><i class="bi bi-images"></i></div>
+                        <div class="fd-section-label">Fix Screenshots</div>
+                    </div>
+                    @if (canManageFeatureEvidence)
+                    {
+                        <button class="fd-btn-outline" type="button" data-bs-toggle="collapse" data-bs-target="#featureScreenshotUpload">
+                            <i class="bi bi-upload"></i> Upload
+                        </button>
+                    }
+                </div>
+
                 @if (canManageFeatureEvidence)
                 {
-                    <button class="btn btn-sm btn-outline-primary" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#featureScreenshotUpload">
-                        <i class="bi bi-upload me-1"></i>Upload Screenshot
-                    </button>
-                }
-            </div>
-
-            @if (canManageFeatureEvidence)
-            {
-                <div class="collapse" id="featureScreenshotUpload">
-                    <div class="card-body border-bottom">
-                        <form asp-action="UploadFeatureScreenshot" method="post" enctype="multipart/form-data">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="featureId" value="@Model.Id" />
-                            <input type="hidden" name="returnUrl" value="@returnUrl" />
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-9">
-                                    <label class="form-label fw-semibold small">Screenshot File <span class="text-danger">*</span></label>
-                                    <input type="file" name="file" accept="image/*" class="form-control form-control-sm" required />
-                                    <div class="text-muted" style="font-size:0.72rem;">JPG, PNG, GIF, WEBP - max 10 MB</div>
-                                </div>
-                                <div class="col-md-3">
-                                    <button type="submit" class="btn btn-sm btn-primary w-100">
-                                        <i class="bi bi-upload me-1"></i>Upload
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            }
-
-            <div class="card-body @(!Model.Screenshots.Any() ? "" : "p-0")">
-                @if (!Model.Screenshots.Any())
-                {
-                    <p class="text-muted fst-italic mb-0">No fix screenshots uploaded yet.</p>
-                }
-                else
-                {
-                    <div class="row g-0">
-                        @foreach (var img in Model.Screenshots.OrderByDescending(s => s.UploadedAt))
-                        {
-                            <div class="col-md-6 col-lg-4 p-2">
-                                <div class="card h-100 border">
-                                    <a href="/uploads/features/screenshots/@img.FileName" target="_blank">
-                                        <img src="/uploads/features/screenshots/@img.FileName"
-                                             class="card-img-top img-fluid"
-                                             style="height:auto; object-fit:contain; cursor:zoom-in; background:#f8f9fa;"
-                                             alt="@img.OriginalFileName" />
-                                    </a>
-                                    <div class="card-body py-2 px-3">
-                                        <p class="card-text small mb-0">@img.OriginalFileName</p>
+                    <div class="collapse" id="featureScreenshotUpload">
+                        <div class="fd-section-body" style="border-bottom:1px solid var(--border)">
+                            <form asp-action="UploadFeatureScreenshot" method="post" enctype="multipart/form-data">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="featureId" value="@Model.Id" />
+                                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                <div class="fd-upload-area">
+                                    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+                                        <div style="flex:1;min-width:200px">
+                                            <label style="font-size:.74rem;font-weight:600;color:#52525b;margin-bottom:4px;display:block">Screenshot File <span style="color:#ef4444">*</span></label>
+                                            <input type="file" name="file" accept="image/*" class="form-control form-control-sm" style="border:1px solid #d1d5db;border-radius:8px;font-size:.8rem" required />
+                                            <div style="font-size:.68rem;color:#a1a1aa;margin-top:3px">JPG, PNG, GIF, WEBP — max 10 MB</div>
+                                        </div>
+                                        <button type="submit" class="fd-upload-btn"><i class="bi bi-upload"></i> Upload</button>
                                     </div>
-                                    @if (canManageFeatureEvidence)
-                                    {
-                                        <div class="card-footer p-1 text-end bg-transparent border-top">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                }
+
+                <div class="fd-section-body">
+                    @if (!Model.Screenshots.Any())
+                    {
+                        <span class="fd-empty">No fix screenshots uploaded yet.</span>
+                    }
+                    else
+                    {
+                        <div class="fd-ss-grid">
+                            @foreach (var img in Model.Screenshots.OrderByDescending(s => s.UploadedAt))
+                            {
+                                <div class="fd-ss-card">
+                                    <a href="/uploads/features/screenshots/@img.FileName" target="_blank">
+                                        <img src="/uploads/features/screenshots/@img.FileName" alt="@img.OriginalFileName" />
+                                    </a>
+                                    <div class="fd-ss-footer">
+                                        <span class="fd-ss-name" title="@img.OriginalFileName">@img.OriginalFileName</span>
+                                        @if (canManageFeatureEvidence)
+                                        {
                                             <form asp-action="DeleteFeatureScreenshot" method="post" class="d-inline"
                                                   onsubmit="return confirm('Delete this screenshot?')">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="screenshotId" value="@img.Id" />
                                                 <input type="hidden" name="featureId" value="@Model.Id" />
                                                 <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                                <button type="submit" class="fd-act"><i class="bi bi-trash"></i></button>
                                             </form>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
                                 </div>
-                            </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div>
+
+        @* Right Column *@
+        <div>
+
+            @* Assignment *@
+            <div class="fd-section">
+                <div class="fd-section-head">
+                    <div class="fd-section-left">
+                        <div class="fd-section-icon" style="background:#dcfce7;color:#16a34a"><i class="bi bi-person-badge"></i></div>
+                        <div class="fd-section-label">Assignment</div>
+                    </div>
+                </div>
+                <div class="fd-section-body">
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Assigned To</div>
+                        <div class="fd-svalue">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
+                    </div>
+
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Agent Status</div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span class="fd-agent-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
+                            <span class="fd-svalue">@Model.AgentStatus</span>
+                        </div>
+                    </div>
+
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Project</div>
+                        @if (Model.ChangeRequest != null)
+                        {
+                            <a asp-action="Details" asp-route-id="@Model.ChangeRequestId" class="fd-slink">
+                                <i class="bi bi-folder2-open"></i> @Model.ChangeRequest.CrNumber — @Model.ChangeRequest.Title
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="fd-empty">-</span>
                         }
                     </div>
-                }
+
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Current Stage</div>
+                        <div class="fd-svalue">@normalizedStage</div>
+                    </div>
+
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">PR Link</div>
+                        @if (string.IsNullOrWhiteSpace(Model.PullRequestUrl))
+                        {
+                            <span class="fd-empty">-</span>
+                        }
+                        else
+                        {
+                            <a href="@Model.PullRequestUrl" target="_blank" rel="noopener noreferrer" class="fd-slink">
+                                <i class="bi bi-git"></i> View Pull Request
+                            </a>
+                        }
+                    </div>
+                </div>
             </div>
+
+            @* OpenClaw Agent (Admin + Pro) *@
+            @if (isOpenClawEnabled)
+            {
+                @if (User.IsInRole("Admin") && hasProAccess)
+                {
+                    <div class="fd-section">
+                        <div class="fd-section-head">
+                            <div class="fd-section-left">
+                                <div class="fd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
+                                <div class="fd-section-label">OpenClaw Agent</div>
+                            </div>
+                        </div>
+                        <div class="fd-section-body">
+                            <form asp-action="AssignFeatureToAgent" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="featureId" value="@Model.Id" />
+                                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                <div style="margin-bottom:10px">
+                                    <div class="fd-stitle">Feature Agent</div>
+                                    <select name="featureAgentId" class="fd-scan-select">
+                                        @foreach (var option in openClawFeatureAgentOptions)
+                                        {
+                                            <option value="@option.Value">@option.Text</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div style="margin-bottom:12px">
+                                    <div class="fd-stitle">Manual Assign To Agent</div>
+                                    <select name="assignedAgentId" class="fd-scan-select">
+                                        <option value="">Select agent</option>
+                                        @foreach (var option in agentOptions)
+                                        {
+                                            <option value="@option.Value" selected="@(option.Value == Model.AssignedDeveloperId ? "selected" : null)">@option.Text</option>
+                                        }
+                                    </select>
+                                </div>
+                                <button type="submit" class="fd-scan-btn">
+                                    @if (isAgentProcessing)
+                                    {
+                                        <span><i class="bi bi-arrow-repeat"></i> Agent Processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <span><i class="bi bi-person-check"></i> Assign + Run OpenClaw</span>
+                                    }
+                                </button>
+                                <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">Manual trigger. Assign agent and queue OpenClaw feature implementation.</div>
+                            </form>
+                        </div>
+                    </div>
+                }
+                else if (User.IsInRole("Admin"))
+                {
+                    <div class="fd-section">
+                        <div class="fd-section-head">
+                            <div class="fd-section-left">
+                                <div class="fd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
+                                <div class="fd-section-label">OpenClaw Agent</div>
+                            </div>
+                        </div>
+                        <div class="fd-section-body" style="text-align:center">
+                            <a asp-controller="Payment" asp-action="Index" style="background:rgba(217,119,6,.12);color:#d97706;border:1px solid rgba(217,119,6,.3);border-radius:10px;padding:10px 20px;font-size:.8rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none;transition:all .2s ease">
+                                <i class="bi bi-stars"></i> Upgrade to Pro
+                            </a>
+                        </div>
+                    </div>
+                }
+            }
+
+            @* Metadata *@
+            <div class="fd-section">
+                <div class="fd-section-head">
+                    <div class="fd-section-left">
+                        <div class="fd-section-icon" style="background:#f3f4f6;color:#374151"><i class="bi bi-info-circle"></i></div>
+                        <div class="fd-section-label">Metadata</div>
+                    </div>
+                </div>
+                <div class="fd-section-body">
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Feature ID</div>
+                        <div class="fd-svalue" style="font-family:Consolas,monospace;font-size:.78rem">@Model.Id</div>
+                    </div>
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Project ID</div>
+                        <div class="fd-svalue" style="font-family:Consolas,monospace;font-size:.78rem">@Model.ChangeRequestId</div>
+                    </div>
+                    <div class="fd-sblock">
+                        <div class="fd-stitle">Created</div>
+                        <div class="fd-svalue">@Model.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                    </div>
+                    @if (Model.AgentLastRunAt.HasValue)
+                    {
+                        <div class="fd-sblock">
+                            <div class="fd-stitle">Last Agent Run</div>
+                            <div class="fd-svalue">@Model.AgentLastRunAt.Value.ToString("MMM dd, yyyy HH:mm")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <div class="col-lg-4">
-        <div class="card mb-4">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-person-badge me-2"></i>Assignment
-            </div>
-            <div class="card-body">
-                <div class="small text-muted">Assigned To</div>
-                <div class="fw-semibold">@(Model.AssignedDeveloper?.FullName ?? "Unassigned")</div>
-
-                <div class="small text-muted mt-3">Agent Status</div>
-                <div class="feature-agent-progress">
-                    <span class="feature-agent-progress-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
-                    <span>@Model.AgentStatus</span>
-                </div>
-
-                <div class="small text-muted mt-3">Project</div>
-                <div class="fw-semibold">
-                    @if (Model.ChangeRequest != null)
-                    {
-                        <a asp-action="Details" asp-route-id="@Model.ChangeRequestId" class="text-decoration-none">
-                            @Model.ChangeRequest.CrNumber - @Model.ChangeRequest.Title
-                        </a>
-                    }
-                    else
-                    {
-                        <span>-</span>
-                    }
-                </div>
-
-                <div class="small text-muted mt-3">Current Stage</div>
-                <div class="fw-semibold">@normalizedStage</div>
-
-                <div class="small text-muted mt-3">PR Link</div>
-                <div class="fw-semibold">
-                    @if (string.IsNullOrWhiteSpace(Model.PullRequestUrl))
-                    {
-                        <span>-</span>
-                    }
-                    else
-                    {
-                        <a href="@Model.PullRequestUrl" target="_blank" rel="noopener noreferrer">
-                            @Model.PullRequestUrl
-                        </a>
-                    }
-                </div>
-
-                @if (isOpenClawEnabled)
-                {
-                    @if (User.IsInRole("Admin") && hasProAccess)
-                    {
-                        <hr />
-                        <form asp-action="AssignFeatureToAgent" method="post">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="featureId" value="@Model.Id" />
-                            <input type="hidden" name="returnUrl" value="@returnUrl" />
-                            <div class="small text-muted mb-1">OpenClaw Feature Agent</div>
-                            <select name="featureAgentId" class="form-select form-select-sm mb-2">
-                                @foreach (var option in openClawFeatureAgentOptions)
-                                {
-                                    <option value="@option.Value">@option.Text</option>
-                                }
-                            </select>
-                            <div class="small text-muted mb-1">Manual Assign To Agent</div>
-                            <select name="assignedAgentId" class="form-select form-select-sm mb-2">
-                                <option value="">Select agent</option>
-                                @foreach (var option in agentOptions)
-                                {
-                                    <option value="@option.Value" selected="@(option.Value == Model.AssignedDeveloperId ? "selected" : null)">@option.Text</option>
-                                }
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-dark w-100">
-                                @if (isAgentProcessing)
-                                {
-                                    <span><i class="bi bi-arrow-repeat me-1"></i>Agent Processing...</span>
-                                }
-                                else
-                                {
-                                    <span><i class="bi bi-person-check me-1"></i>Assign + Run OpenClaw</span>
-                                }
-                            </button>
-                            <div class="small text-muted mt-2">Manual trigger. Assign agent and queue OpenClaw feature implementation.</div>
-                        </form>
-                    }
-                    else if (User.IsInRole("Admin"))
-                    {
-                        <hr />
-                        <a asp-controller="Payment" asp-action="Index" class="btn btn-sm btn-outline-warning w-100">
-                            <i class="bi bi-stars me-1"></i>Upgrade to Pro for Feature Agent
-                        </a>
-                    }
-                }
-            </div>
-        </div>
-
-        @if (!string.IsNullOrWhiteSpace(Model.AgentImplementationPlan))
-        {
-            <div class="card mb-4">
-                <div class="card-header bg-light fw-semibold">
-                    <i class="bi bi-cpu me-2"></i>OpenClaw Feature Plan
-                </div>
-                <div class="card-body" style="white-space:pre-wrap;">@Model.AgentImplementationPlan</div>
-            </div>
-        }
-            
-        <div class="card">
-            <div class="card-header bg-light fw-semibold">
-                <i class="bi bi-info-circle me-2"></i>Metadata
-            </div>
-            <div class="card-body">
-                <div class="small text-muted">Feature ID</div>
-                <div class="fw-semibold">@Model.Id</div>
-
-                <div class="small text-muted mt-3">Project ID</div>
-                <div class="fw-semibold">@Model.ChangeRequestId</div>
-
-                <div class="small text-muted mt-3">Created At</div>
-                <div class="fw-semibold">@Model.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
-                @if (Model.AgentLastRunAt.HasValue)
-                {
-                    <div class="small text-muted mt-3">Last Agent Run</div>
-                    <div class="fw-semibold">@Model.AgentLastRunAt.Value.ToString("MMM dd, yyyy HH:mm")</div>
-                }
-            </div>
-        </div>
+    @* Back *@
+    <div style="margin-top:16px">
+        <a asp-action="Features" asp-route-projectId="@Model.ChangeRequestId" class="fd-backlink">
+            <i class="bi bi-arrow-left"></i> Back to Feature List
+        </a>
     </div>
-</div>
-
-<div class="mt-3">
-    <a asp-action="Features" asp-route-projectId="@Model.ChangeRequestId" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-2"></i>Back to Feature List
-    </a>
 </div>

@@ -4,74 +4,133 @@
     var isPrLinkOnly = ViewBag.IsPrLinkOnly as bool? ?? false;
 }
 
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-warning">
-                <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>@(isPrLinkOnly ? "Edit PR Link" : "Edit Bug")</h5>
+<style>
+    .eb-shell{max-width:1420px;margin:0 auto}
+    .eb-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(251,191,36,.18);border-radius:16px;padding:32px 36px 28px;margin-bottom:26px;overflow:hidden}
+    .eb-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(251,191,36,.12) 0%,transparent 70%);pointer-events:none}
+    .eb-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .eb-hero-title{font-size:1.65rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .eb-hero-sub{font-size:.78rem;color:#a1a1aa;margin-top:4px;font-weight:500}
+
+    .eb-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;transition:box-shadow .2s ease}
+    .eb-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .eb-section-head{display:flex;align-items:center;gap:10px;padding:15px 22px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .eb-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .eb-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .eb-section-label span{font-size:.68rem;font-weight:500;color:var(--text-muted);display:block;margin-top:1px;letter-spacing:0}
+    .eb-section-body{padding:22px 24px}
+
+    .eb-label{font-size:.76rem;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+    .eb-label .required{color:#ef4444;font-weight:700}
+    .eb-input{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit}
+    .eb-input:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .eb-input::placeholder{color:#a1a1aa}
+    .eb-select{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit;appearance:auto}
+    .eb-select:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .eb-textarea{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-size:.84rem;color:var(--text-primary);width:100%;resize:vertical;min-height:100px;font-family:inherit;transition:all .2s ease;line-height:1.55}
+    .eb-textarea:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .eb-error{font-size:.7rem;color:#ef4444;margin-top:3px}
+    .eb-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+    .eb-footer{display:flex;gap:10px;align-items:center;margin-top:8px}
+    .eb-btn-save{background:#fbbf24;color:#18181b;border:none;border-radius:10px;padding:11px 30px;font-size:.86rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .2s ease;letter-spacing:.01em}
+    .eb-btn-save:hover{background:#f59e0b;transform:translateY(-1px);box-shadow:0 6px 18px rgba(251,191,36,.25)}
+    .eb-btn-cancel{background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:10px;padding:11px 24px;font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s ease;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+    .eb-btn-cancel:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+
+    .eb-alert{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 16px;font-size:.8rem;color:#b91c1c;margin-bottom:16px}
+
+    @@media(max-width:640px){.eb-row{grid-template-columns:1fr}.eb-hero{padding:22px 18px 20px}.eb-section-body{padding:16px}}
+</style>
+
+<div class="eb-shell">
+
+    @* Hero *@
+    <section class="eb-hero">
+        <div class="eb-hero-badge"><i class="bi bi-pencil-square"></i> @(isPrLinkOnly ? "Edit PR Link" : "Edit Bug")</div>
+        <div class="eb-hero-title">@(isPrLinkOnly ? "Edit PR Link" : "Edit Bug")</div>
+        <div class="eb-hero-sub">@(isPrLinkOnly ? "Update the pull request link for this bug" : "Update bug details and assignment")</div>
+    </section>
+
+    @if (isPrLinkOnly)
+    {
+        <form asp-action="UpdatePullRequestUrl" asp-route-id="@Model.Id" method="post">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="All" class="eb-alert" style="display:none"></div>
+
+            <div class="eb-section">
+                <div class="eb-section-head">
+                    <div class="eb-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-link-45deg"></i></div>
+                    <div class="eb-section-label">Pull Request<span>Update the PR link</span></div>
+                </div>
+                <div class="eb-section-body">
+                    <label asp-for="PullRequestUrl" class="eb-label">Pull Request Link</label>
+                    <input asp-for="PullRequestUrl" class="eb-input" placeholder="https://github.com/org/repo/pull/123" />
+                    <span asp-validation-for="PullRequestUrl" class="eb-error"></span>
+                </div>
             </div>
-            <div class="card-body p-4">
-                @if (isPrLinkOnly)
-                {
-                    <form asp-action="UpdatePullRequestUrl" asp-route-id="@Model.Id" method="post">
-                        @Html.AntiForgeryToken()
-                        <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
-                        <div class="mb-3">
-                            <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
-                            <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
-                            <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
+            <div class="eb-footer">
+                <button type="submit" class="eb-btn-save"><i class="bi bi-check-lg"></i> Save PR Link</button>
+                <a asp-action="Details" asp-route-id="@Model.Id" class="eb-btn-cancel">Cancel</a>
+            </div>
+        </form>
+    }
+    else
+    {
+        <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="All" class="eb-alert" style="display:none"></div>
+
+            @* Bug Details *@
+            <div class="eb-section">
+                <div class="eb-section-head">
+                    <div class="eb-section-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-bug-fill"></i></div>
+                    <div class="eb-section-label">Bug Details<span>Core information about the defect</span></div>
+                </div>
+                <div class="eb-section-body">
+                    <div style="margin-bottom:16px">
+                        <label asp-for="Title" class="eb-label">Title <span class="required">*</span></label>
+                        <input asp-for="Title" class="eb-input" />
+                        <span asp-validation-for="Title" class="eb-error"></span>
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label asp-for="Description" class="eb-label">Description</label>
+                        <textarea asp-for="Description" class="eb-textarea"></textarea>
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label asp-for="Workflow" class="eb-label">Workflow</label>
+                        <textarea asp-for="Workflow" class="eb-textarea" style="min-height:80px"></textarea>
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label asp-for="StepsToReproduce" class="eb-label">Steps To Reproduce</label>
+                        <textarea asp-for="StepsToReproduce" class="eb-textarea"></textarea>
+                    </div>
+                    <div class="eb-row">
+                        <div>
+                            <label asp-for="ModuleImpacted" class="eb-label">Module Impacted</label>
+                            <input asp-for="ModuleImpacted" class="eb-input" />
                         </div>
-
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-check-lg me-2"></i>Save PR Link
-                            </button>
-                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
+                        <div>
+                            <label asp-for="PullRequestUrl" class="eb-label">Pull Request Link</label>
+                            <input asp-for="PullRequestUrl" class="eb-input" placeholder="https://github.com/org/repo/pull/123" />
+                            <span asp-validation-for="PullRequestUrl" class="eb-error"></span>
                         </div>
-                    </form>
-                }
-                else
-                {
-                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
-                        @Html.AntiForgeryToken()
-                        <div asp-validation-summary="All" class="alert alert-danger small"></div>
+                    </div>
+                </div>
+            </div>
 
-                        <div class="mb-3">
-                            <label asp-for="Title" class="form-label fw-semibold">Title</label>
-                            <input asp-for="Title" class="form-control" />
-                            <span asp-validation-for="Title" class="text-danger small"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="Description" class="form-label fw-semibold">Description</label>
-                            <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="Workflow" class="form-label fw-semibold">Workflow</label>
-                            <textarea asp-for="Workflow" class="form-control" rows="3"></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="StepsToReproduce" class="form-label fw-semibold">Steps To Reproduce</label>
-                            <textarea asp-for="StepsToReproduce" class="form-control" rows="4"></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="ModuleImpacted" class="form-label fw-semibold">Module Impacted</label>
-                            <input asp-for="ModuleImpacted" class="form-control" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
-                            <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
-                            <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
-                            <select asp-for="ChangeRequestId" class="form-select">
+            @* Project & Assignment *@
+            <div class="eb-section">
+                <div class="eb-section-head">
+                    <div class="eb-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-folder2-open"></i></div>
+                    <div class="eb-section-label">Project & Assignment<span>Link to a project and assign ownership</span></div>
+                </div>
+                <div class="eb-section-body">
+                    <div class="eb-row" style="margin-bottom:16px">
+                        <div>
+                            <label asp-for="ChangeRequestId" class="eb-label">Project</label>
+                            <select asp-for="ChangeRequestId" class="eb-select">
                                 <option value="">-- None --</option>
                                 @foreach (var cr in Model.ChangeRequestOptions)
                                 {
@@ -79,66 +138,66 @@
                                 }
                             </select>
                         </div>
-
-                        <div class="mb-3">
-                            <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Project (Free Text)</label>
-                            <input asp-for="ChangeRequestReferenceText" class="form-control" />
+                        <div>
+                            <label asp-for="ChangeRequestReferenceText" class="eb-label">Project (Free Text)</label>
+                            <input asp-for="ChangeRequestReferenceText" class="eb-input" />
                         </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label asp-for="Status" class="form-label fw-semibold">Status</label>
-                                <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="form-select"></select>
-                            </div>
-                            <div class="col-md-6">
-                                <label asp-for="AssigneeType" class="form-label fw-semibold">Assign To</label>
-                                <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="form-select" id="assigneeType">
-                                </select>
-                            </div>
+                    </div>
+                    <div class="eb-row" style="margin-bottom:16px">
+                        <div>
+                            <label asp-for="Status" class="eb-label">Status</label>
+                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="eb-select"></select>
                         </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6" id="developerAssignGroup">
-                                <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assign To Developer</label>
-                                <select asp-for="AssignedDeveloperId" class="form-select">
-                                    <option value="">-- Unassigned --</option>
-                                    @foreach (var dev in Model.DeveloperOptions)
-                                    {
-                                        <option value="@dev.Value" selected="@(dev.Value == Model.AssignedDeveloperId ? "selected" : null)">@dev.Text</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6 d-none" id="agentAssignGroup">
-                                <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
-                                <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
-                                    <option value="">-- Select Agent --</option>
-                                    @foreach (var agent in Model.AgentOptions)
-                                    {
-                                        <option value="@agent.Value" selected="@(agent.Value == Model.AssignedAgentId ? "selected" : null)">@agent.Text</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6" id="agentStatusGroup">
-                                <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
-                                <select asp-for="AgentStatus" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAgentStatus>()" class="form-select"></select>
-                            </div>
+                        <div>
+                            <label asp-for="AssigneeType" class="eb-label">Assign To</label>
+                            <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="eb-select" id="assigneeType"></select>
                         </div>
-
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-check-lg me-2"></i>Save Changes
-                            </button>
-                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                    <div class="eb-row">
+                        <div id="developerAssignGroup">
+                            <label asp-for="AssignedDeveloperId" class="eb-label">Assign To Developer</label>
+                            <select asp-for="AssignedDeveloperId" class="eb-select">
+                                <option value="">-- Unassigned --</option>
+                                @foreach (var dev in Model.DeveloperOptions)
+                                {
+                                    <option value="@dev.Value" selected="@(dev.Value == Model.AssignedDeveloperId ? "selected" : null)">@dev.Text</option>
+                                }
+                            </select>
                         </div>
-                    </form>
-                }
+                        <div class="d-none" id="agentAssignGroup">
+                            <label asp-for="AssignedAgentId" class="eb-label">Assign To Agent</label>
+                            <select asp-for="AssignedAgentId" class="eb-select" id="AssignedAgentId">
+                                <option value="">-- Select Agent --</option>
+                                @foreach (var agent in Model.AgentOptions)
+                                {
+                                    <option value="@agent.Value" selected="@(agent.Value == Model.AssignedAgentId ? "selected" : null)">@agent.Text</option>
+                                }
+                            </select>
+                        </div>
+                        <div id="agentStatusGroup">
+                            <label asp-for="AgentStatus" class="eb-label">Agent Status</label>
+                            <select asp-for="AgentStatus" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAgentStatus>()" class="eb-select"></select>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
+
+            <div class="eb-footer">
+                <button type="submit" class="eb-btn-save"><i class="bi bi-check-lg"></i> Save Changes</button>
+                <a asp-action="Details" asp-route-id="@Model.Id" class="eb-btn-cancel">Cancel</a>
+            </div>
+        </form>
+    }
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var vs = document.querySelector('[data-valmsg-summary]');
+            if (vs && vs.querySelector('li')) vs.style.display = 'block';
+        });
+    </script>
     @if (!isPrLinkOnly)
     {
         <script>

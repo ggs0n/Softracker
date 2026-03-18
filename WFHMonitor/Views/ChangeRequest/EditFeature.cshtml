@@ -10,122 +10,181 @@
     };
 }
 
-<div class="row">
-    <div class="col-lg-9">
-        <div class="card">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Edit Feature</h5>
+<style>
+    .ef-shell{max-width:1420px;margin:0 auto}
+    .ef-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(251,191,36,.18);border-radius:16px;padding:32px 36px 28px;margin-bottom:26px;overflow:hidden}
+    .ef-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(251,191,36,.12) 0%,transparent 70%);pointer-events:none}
+    .ef-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .ef-hero-title{font-size:1.65rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .ef-hero-sub{font-size:.78rem;color:#a1a1aa;margin-top:4px;font-weight:500}
+
+    .ef-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;transition:box-shadow .2s ease}
+    .ef-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .ef-section-head{display:flex;align-items:center;gap:10px;padding:15px 22px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .ef-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .ef-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .ef-section-label span{font-size:.68rem;font-weight:500;color:var(--text-muted);display:block;margin-top:1px;letter-spacing:0}
+    .ef-section-body{padding:22px 24px}
+
+    .ef-label{font-size:.76rem;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+    .ef-label .required{color:#ef4444;font-weight:700}
+    .ef-input{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit}
+    .ef-input:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .ef-input::placeholder{color:#a1a1aa}
+    .ef-select{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit;appearance:auto}
+    .ef-select:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .ef-textarea{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-size:.84rem;color:var(--text-primary);width:100%;resize:vertical;min-height:110px;font-family:inherit;transition:all .2s ease;line-height:1.55}
+    .ef-textarea:focus{outline:none;border-color:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+    .ef-error{font-size:.7rem;color:#ef4444;margin-top:3px}
+    .ef-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .ef-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+
+    .ef-footer{display:flex;gap:10px;align-items:center;margin-top:8px}
+    .ef-btn-save{background:#fbbf24;color:#18181b;border:none;border-radius:10px;padding:11px 30px;font-size:.86rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .2s ease;letter-spacing:.01em}
+    .ef-btn-save:hover{background:#f59e0b;transform:translateY(-1px);box-shadow:0 6px 18px rgba(251,191,36,.25)}
+    .ef-btn-cancel{background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:10px;padding:11px 24px;font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s ease;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+    .ef-btn-cancel:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+
+    .ef-alert{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 16px;font-size:.8rem;color:#b91c1c;margin-bottom:16px}
+
+    @@media(max-width:640px){.ef-row,.ef-row-3{grid-template-columns:1fr}.ef-hero{padding:22px 18px 20px}.ef-section-body{padding:16px}}
+</style>
+
+<div class="ef-shell">
+    <form asp-action="EditFeature" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="FeatureId" />
+        <input type="hidden" asp-for="ReturnUrl" />
+
+        @* Hero *@
+        <section class="ef-hero">
+            <div class="ef-hero-badge"><i class="bi bi-pencil-square"></i> Edit Feature</div>
+            <div class="ef-hero-title">Edit Feature</div>
+            <div class="ef-hero-sub">Update feature details and assignment</div>
+        </section>
+
+        @* Validation *@
+        <div asp-validation-summary="All" class="ef-alert" style="display:none"></div>
+
+        @* Feature Details *@
+        <div class="ef-section">
+            <div class="ef-section-head">
+                <div class="ef-section-icon" style="background:#dcfce7;color:#16a34a"><i class="bi bi-list-check"></i></div>
+                <div class="ef-section-label">Feature Details<span>Core information about this feature</span></div>
             </div>
-            <div class="card-body p-4">
-                <form asp-action="EditFeature" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" asp-for="FeatureId" />
-                    <input type="hidden" asp-for="ReturnUrl" />
-                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
+            <div class="ef-section-body">
+                <div style="margin-bottom:16px">
+                    <label asp-for="ChangeRequestId" class="ef-label">Related Project <span class="required">*</span></label>
+                    <select asp-for="ChangeRequestId" asp-items="Model.ProjectOptions" class="ef-select">
+                        <option value="">-- Select Project --</option>
+                    </select>
+                    <span asp-validation-for="ChangeRequestId" class="ef-error"></span>
+                </div>
 
-                    <div class="mb-3">
-                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Related Project <span class="text-danger">*</span></label>
-                        <select asp-for="ChangeRequestId" asp-items="Model.ProjectOptions" class="form-select">
-                            <option value="">-- Select Project --</option>
-                        </select>
-                        <span asp-validation-for="ChangeRequestId" class="text-danger small"></span>
+                <div style="margin-bottom:16px">
+                    <label asp-for="Name" class="ef-label">Feature Title <span class="required">*</span></label>
+                    <input asp-for="Name" class="ef-input" />
+                    <span asp-validation-for="Name" class="ef-error"></span>
+                </div>
+
+                <div style="margin-bottom:16px">
+                    <label asp-for="Description" class="ef-label">Description</label>
+                    <textarea asp-for="Description" class="ef-textarea"></textarea>
+                    <span asp-validation-for="Description" class="ef-error"></span>
+                </div>
+
+                <div class="ef-row" style="margin-bottom:16px">
+                    <div>
+                        <label asp-for="ModuleImpacted" class="ef-label">Affected Module</label>
+                        <input asp-for="ModuleImpacted" class="ef-input" placeholder="e.g. Auth, Payment, Dashboard" />
+                        <span asp-validation-for="ModuleImpacted" class="ef-error"></span>
                     </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label fw-semibold">Feature Title <span class="text-danger">*</span></label>
-                        <input asp-for="Name" class="form-control" />
-                        <span asp-validation-for="Name" class="text-danger small"></span>
+                    <div>
+                        <label asp-for="LinkedBugs" class="ef-label">Linked Bugs</label>
+                        <input asp-for="LinkedBugs" class="ef-input" placeholder="e.g. BUG-2026-0012, BUG-2026-0019" />
+                        <span asp-validation-for="LinkedBugs" class="ef-error"></span>
                     </div>
+                </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
-                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-                        <span asp-validation-for="Description" class="text-danger small"></span>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label asp-for="ModuleImpacted" class="form-label fw-semibold">Affected Module</label>
-                            <input asp-for="ModuleImpacted" class="form-control" placeholder="e.g. Auth, Payment, Dashboard" />
-                            <span asp-validation-for="ModuleImpacted" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="LinkedBugs" class="form-label fw-semibold">Linked Bugs</label>
-                            <input asp-for="LinkedBugs" class="form-control" placeholder="e.g. BUG-2026-0012, BUG-2026-0019" />
-                            <span asp-validation-for="LinkedBugs" class="text-danger small"></span>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="PullRequestUrl" class="form-label fw-semibold">PR Link</label>
-                        <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
-                        <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
-                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="form-select"></select>
-                        </div>
-                        <div class="col-md-4">
-                            <label asp-for="Priority" class="form-label fw-semibold">Priority</label>
-                            <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="form-select"></select>
-                        </div>
-                        <div class="col-md-4">
-                            <label asp-for="Stage" class="form-label fw-semibold">Stage</label>
-                            <select asp-for="Stage" asp-items="stageOptions" class="form-select"></select>
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label asp-for="TimelineStart" class="form-label fw-semibold">Start Date</label>
-                            <input asp-for="TimelineStart" type="date" class="form-control" />
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="TimelineEnd" class="form-label fw-semibold">End Date</label>
-                            <input asp-for="TimelineEnd" type="date" class="form-control" />
-                        </div>
-                    </div>
-
-                    <div class="mb-4">
-                        <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assigned To (Developer / Agent)</label>
-                        <select asp-for="AssignedDeveloperId" asp-items="Model.DeveloperOptions" class="form-select">
-                            <option value="">-- Select Developer or Agent --</option>
-                        </select>
-                        <span asp-validation-for="AssignedDeveloperId" class="text-danger small"></span>
-                    </div>
-
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-check-lg me-2"></i>Save Feature
-                        </button>
-                        @if (!string.IsNullOrWhiteSpace(Model.ReturnUrl))
-                        {
-                            <a href="@Model.ReturnUrl" class="btn btn-outline-secondary">Cancel</a>
-                        }
-                        else
-                        {
-                            <a asp-action="Features" class="btn btn-outline-secondary">Cancel</a>
-                        }
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-3">
-        <div class="card">
-            <div class="card-header bg-light">
-                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Rule</h6>
-            </div>
-            <div class="card-body small text-muted">
-                Edit feature details and assignment without recreating the feature.
+                <div>
+                    <label asp-for="PullRequestUrl" class="ef-label">PR Link</label>
+                    <input asp-for="PullRequestUrl" class="ef-input" placeholder="https://github.com/org/repo/pull/123" />
+                    <span asp-validation-for="PullRequestUrl" class="ef-error"></span>
+                </div>
             </div>
         </div>
-    </div>
+
+        @* Status & Timeline *@
+        <div class="ef-section">
+            <div class="ef-section-head">
+                <div class="ef-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-calendar-range"></i></div>
+                <div class="ef-section-label">Status & Timeline<span>Planning and tracking fields</span></div>
+            </div>
+            <div class="ef-section-body">
+                <div class="ef-row-3" style="margin-bottom:16px">
+                    <div>
+                        <label asp-for="Status" class="ef-label">Status</label>
+                        <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrStatus>()" class="ef-select"></select>
+                    </div>
+                    <div>
+                        <label asp-for="Priority" class="ef-label">Priority</label>
+                        <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="ef-select"></select>
+                    </div>
+                    <div>
+                        <label asp-for="Stage" class="ef-label">Stage</label>
+                        <select asp-for="Stage" asp-items="stageOptions" class="ef-select"></select>
+                    </div>
+                </div>
+
+                <div class="ef-row">
+                    <div>
+                        <label asp-for="TimelineStart" class="ef-label">Start Date</label>
+                        <input asp-for="TimelineStart" type="date" class="ef-input" />
+                    </div>
+                    <div>
+                        <label asp-for="TimelineEnd" class="ef-label">End Date</label>
+                        <input asp-for="TimelineEnd" type="date" class="ef-input" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Assignment *@
+        <div class="ef-section">
+            <div class="ef-section-head">
+                <div class="ef-section-icon" style="background:#fef3c7;color:#d97706"><i class="bi bi-person-badge"></i></div>
+                <div class="ef-section-label">Assignment<span>Developer or agent ownership</span></div>
+            </div>
+            <div class="ef-section-body">
+                <label asp-for="AssignedDeveloperId" class="ef-label">Assigned To (Developer / Agent)</label>
+                <select asp-for="AssignedDeveloperId" asp-items="Model.DeveloperOptions" class="ef-select">
+                    <option value="">-- Select Developer or Agent --</option>
+                </select>
+                <span asp-validation-for="AssignedDeveloperId" class="ef-error"></span>
+            </div>
+        </div>
+
+        @* Footer *@
+        <div class="ef-footer">
+            <button type="submit" class="ef-btn-save"><i class="bi bi-check-lg"></i> Save Feature</button>
+            @if (!string.IsNullOrWhiteSpace(Model.ReturnUrl))
+            {
+                <a href="@Model.ReturnUrl" class="ef-btn-cancel">Cancel</a>
+            }
+            else
+            {
+                <a asp-action="Features" class="ef-btn-cancel">Cancel</a>
+            }
+        </div>
+    </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var vs = document.querySelector('[data-valmsg-summary]');
+            if (vs && vs.querySelector('li')) vs.style.display = 'block';
+        });
+    </script>
 }

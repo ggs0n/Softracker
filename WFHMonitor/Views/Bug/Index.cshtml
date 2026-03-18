@@ -6,293 +6,248 @@
 
     var projectToneClasses = new[]
     {
-        "bug-project-tone-1",
-        "bug-project-tone-2",
-        "bug-project-tone-3",
-        "bug-project-tone-4",
-        "bug-project-tone-5",
-        "bug-project-tone-6",
-        "bug-project-tone-7",
-        "bug-project-tone-8"
+        "bl-tone-1","bl-tone-2","bl-tone-3","bl-tone-4",
+        "bl-tone-5","bl-tone-6","bl-tone-7","bl-tone-8"
     };
 
     int ResolveProjectToneIndex(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            return 0;
-
+        if (string.IsNullOrWhiteSpace(value)) return 0;
         unchecked
         {
             var hash = 23;
             foreach (var ch in value.Trim().ToUpperInvariant())
                 hash = (hash * 31) + ch;
-
             return Math.Abs(hash) % projectToneClasses.Length;
         }
     }
+
+    var statusClsMap = new Dictionary<string, string> {
+        {"New","bl-st-new"}, {"Testing","bl-st-testing"}, {"Complete","bl-st-complete"}
+    };
 }
 
 <style>
-    .bug-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
+    .bl-shell{max-width:1420px;margin:0 auto}
 
-    .bug-filter-form {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
+    /* Hero */
+    .bl-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(239,68,68,.18);border-radius:16px;padding:28px 32px 24px;margin-bottom:24px;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .bl-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(239,68,68,.1) 0%,transparent 70%);pointer-events:none}
+    .bl-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .bl-hero-title{font-size:1.6rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .bl-hero-sub{font-size:.76rem;color:#a1a1aa;margin-top:3px;font-weight:500}
+    .bl-hero-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;position:relative;z-index:1;flex-wrap:wrap}
+    .bl-total{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,.08);color:#a1a1aa;border:1px solid rgba(255,255,255,.1)}
+    .bl-btn-new{background:#ef4444;color:#fff;border:none;border-radius:10px;padding:9px 20px;font-size:.82rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none;letter-spacing:.01em}
+    .bl-btn-new:hover{background:#dc2626;color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(239,68,68,.25)}
 
-    .bug-filter-select {
-        min-width: 150px;
-        height: 33px;
-    }
+    /* Filter bar */
+    .bl-filter{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .bl-filter-select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 10px;font-size:.76rem;color:#e4e4e7;font-family:inherit;min-width:130px}
+    .bl-filter-select option{background:#18181b;color:#e4e4e7}
+    .bl-filter-btn{background:rgba(255,255,255,.08);color:#a1a1aa;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;font-size:.76rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s ease;text-decoration:none}
+    .bl-filter-btn:hover{background:rgba(255,255,255,.14);color:#f4f5f7}
 
-    .bug-toolbar-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 33px;
-        padding: 0 10px;
-        border-radius: 8px;
-        border: 1px solid #d9dee8;
-        background: #fff;
-        color: #475569;
-        text-decoration: none;
-        font-size: 0.76rem;
-        font-weight: 600;
-        line-height: 1;
-        transition: all 0.2s ease;
-    }
+    /* Section card */
+    .bl-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:box-shadow .2s ease}
+    .bl-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .bl-section-head{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .bl-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .bl-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .bl-badge-count{font-size:.66rem;font-weight:700;border-radius:999px;padding:2px 8px;background:#eef2f7;color:#71717a;margin-left:4px}
 
-    .bug-toolbar-btn:hover {
-        background: #f8fafc;
-        border-color: #cbd5e1;
-        color: #1e293b;
-    }
+    /* Table */
+    .bl-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .bl-table th{font-size:.7rem;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;border-bottom:2px solid var(--border);background:#fafbfc}
+    .bl-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:middle}
+    .bl-table tr:last-child td{border-bottom:none}
+    .bl-table tr:hover td{background:#fafbfc}
+    .bl-table-link{font-weight:600;text-decoration:none;color:var(--text-primary);transition:color .15s ease}
+    .bl-table-link:hover{color:#ef4444}
+    .bl-bug-num{font-family:Consolas,Monaco,monospace;font-size:.74rem;font-weight:700;color:#ef4444}
 
-    @@media (max-width: 768px) {
-        .bug-toolbar {
-            width: 100%;
-            justify-content: flex-start;
-        }
-    }
+    /* Status pills */
+    .bl-pill{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px;border:1px solid transparent;display:inline-block}
+    .bl-st-new{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .bl-st-testing{background:#e5edff;color:#1d4ed8;border-color:#bfdbfe}
+    .bl-st-complete{background:#d1fae5;color:#047857;border-color:#a7f3d0}
 
-    .bug-project-chip {
-        font-weight: 700;
-        border-width: 1px;
-        border-style: solid;
-        border-radius: 999px;
-        padding: 0.23rem 0.56rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.02em;
-    }
+    /* Project tone chips */
+    .bl-proj-chip{font-weight:700;border-width:1px;border-style:solid;border-radius:999px;padding:3px 10px;font-size:.72rem;letter-spacing:.02em}
+    .bl-tone-1{color:#0ea5e9;border-color:rgba(14,165,233,.45);background:rgba(14,165,233,.14)}
+    .bl-tone-2{color:#22c55e;border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.14)}
+    .bl-tone-3{color:#f97316;border-color:rgba(249,115,22,.45);background:rgba(249,115,22,.14)}
+    .bl-tone-4{color:#f43f5e;border-color:rgba(244,63,94,.45);background:rgba(244,63,94,.14)}
+    .bl-tone-5{color:#a78bfa;border-color:rgba(167,139,250,.45);background:rgba(167,139,250,.14)}
+    .bl-tone-6{color:#06b6d4;border-color:rgba(6,182,212,.45);background:rgba(6,182,212,.14)}
+    .bl-tone-7{color:#f59e0b;border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
+    .bl-tone-8{color:#84cc16;border-color:rgba(132,204,22,.45);background:rgba(132,204,22,.14)}
 
-    .bug-project-tone-1 { color: #0ea5e9; border-color: rgba(14,165,233,0.45); background: rgba(14,165,233,0.14); }
-    .bug-project-tone-2 { color: #22c55e; border-color: rgba(34,197,94,0.45); background: rgba(34,197,94,0.14); }
-    .bug-project-tone-3 { color: #f97316; border-color: rgba(249,115,22,0.45); background: rgba(249,115,22,0.14); }
-    .bug-project-tone-4 { color: #f43f5e; border-color: rgba(244,63,94,0.45); background: rgba(244,63,94,0.14); }
-    .bug-project-tone-5 { color: #a78bfa; border-color: rgba(167,139,250,0.45); background: rgba(167,139,250,0.14); }
-    .bug-project-tone-6 { color: #06b6d4; border-color: rgba(6,182,212,0.45); background: rgba(6,182,212,0.14); }
-    .bug-project-tone-7 { color: #f59e0b; border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.14); }
-    .bug-project-tone-8 { color: #84cc16; border-color: rgba(132,204,22,0.45); background: rgba(132,204,22,0.14); }
+    /* Action buttons */
+    .bl-act{width:30px;height:30px;border-radius:8px;border:1px solid #d1d5db;color:#71717a;background:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;transition:all .15s ease;font-size:.8rem;cursor:pointer}
+    .bl-act:hover{background:#f8fafc;color:#111827;border-color:#a1a1aa}
+    .bl-act-warn:hover{border-color:#fde68a;color:#b45309;background:#fefce8}
+    .bl-act-del:hover{border-color:#fecaca;color:#dc2626;background:#fef2f2}
 
-    .bug-agent-progress {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
+    /* PR link */
+    .bl-pr-link{font-size:.76rem;text-decoration:none;color:var(--accent);display:inline-flex;align-items:center;gap:4px;transition:color .15s ease}
+    .bl-pr-link:hover{color:var(--accent-hover)}
 
-    .bug-agent-progress-dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 999px;
-        background: #3b82f6;
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-    }
+    /* Agent dot */
+    .bl-agent-dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex-shrink:0}
+    .bl-agent-dot.is-pulsing{background:#3b82f6;animation:blPulse 1.25s infinite}
+    .bl-agent-dot.is-queued{background:#f59e0b}
+    @@keyframes blPulse{0%{box-shadow:0 0 0 0 rgba(59,130,246,.7)}70%{box-shadow:0 0 0 8px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}
 
-    .bug-agent-progress-dot.is-pulsing {
-        animation: bugPulse 1.25s infinite;
-    }
+    /* Empty */
+    .bl-empty{padding:40px 20px;text-align:center;color:#a1a1aa;font-size:.88rem}
+    .bl-empty i{font-size:2rem;display:block;margin-bottom:10px;opacity:.5}
 
-    .bug-agent-progress-dot.is-queued {
-        background: #f59e0b;
-        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
-    }
-
-    @@keyframes bugPulse {
-        0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
-        70% { box-shadow: 0 0 0 9px rgba(59,130,246,0); }
-        100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
-    }
+    @@media(max-width:991px){.bl-hero{padding:22px 18px 20px}.bl-hero-title{font-size:1.3rem}}
 </style>
 
-<div class="mod-header">
-    <div class="mod-header-left">
-        <h1 class="mod-title"><i class="bi bi-bug-fill" style="color:#f87171"></i> Bug Tracker</h1>
-        <p class="mod-subtitle">Track and manage all reported defects</p>
-    </div>
-    <div class="bug-toolbar">
-        <form asp-action="Index" method="get" class="bug-filter-form">
-            <select name="status" class="form-select form-select-sm bug-filter-select">
-                <option value="">All Status</option>
-                @foreach (var statusValue in Enum.GetValues<WFHMonitor.Models.BugStatus>())
-                {
-                    <option value="@statusValue" selected="@(selectedStatus == statusValue ? "selected" : null)">@statusValue</option>
-                }
-            </select>
-            <button type="submit" class="bug-toolbar-btn" title="Apply status filter">
-                <i class="bi bi-funnel"></i> Filter
-            </button>
-            @if (selectedStatus.HasValue)
-            {
-                <a asp-action="Index" class="bug-toolbar-btn" title="Clear filter">
-                    <i class="bi bi-x-circle"></i> Clear
-                </a>
-            }
-        </form>
-        <a asp-action="Index" asp-route-status="@selectedStatusText" class="bug-toolbar-btn" title="Refresh status">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-        </a>
-        @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
-        {
-            <a asp-action="Create" class="dp-btn-primary">
-                <i class="bi bi-plus-circle"></i> New Bug
-            </a>
-        }
-    </div>
-</div>
+<div class="bl-shell">
 
-<div class="dp" style="--dp-color:#ef4444">
-    <div class="dp-header">
-        <div class="dp-header-icon" style="background:rgba(239,68,68,0.12);color:#f87171">
-            <i class="bi bi-bug-fill"></i>
+    @* Hero *@
+    <section class="bl-hero">
+        <div style="position:relative;z-index:1">
+            <div class="bl-hero-badge"><i class="bi bi-bug-fill"></i> Bug Tracker</div>
+            <div class="bl-hero-title">Bugs</div>
+            <div class="bl-hero-sub">Track and manage all reported defects</div>
         </div>
-        <span class="dp-header-title">All Bugs</span>
-        <span class="dp-header-count">@Model.Count shown</span>
-    </div>
-
-    @if (!Model.Any())
-    {
-        <div class="dp-empty">
-            <i class="bi bi-bug"></i>
-            No bugs reported yet
-        </div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="dp-table">
-                <thead>
-                    <tr>
-                        <th>Bug #</th>
-                        <th>Title</th>
-                        <th>PR Link</th>
-                        <th>Project</th>
-                        <th>Status</th>
-                        <th>Assigned</th>
-                        <th>Created</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var bug in Model)
+        <div class="bl-hero-actions">
+            <form asp-action="Index" method="get" class="bl-filter">
+                <select name="status" class="bl-filter-select">
+                    <option value="">All Status</option>
+                    @foreach (var statusValue in Enum.GetValues<WFHMonitor.Models.BugStatus>())
                     {
-                        var projectNumber = bug.ChangeRequest?.CrNumber;
-                        var projectText = !string.IsNullOrWhiteSpace(projectNumber)
-                            ? projectNumber
-                            : bug.ChangeRequestReferenceText;
-                        var projectToneClass = projectToneClasses[ResolveProjectToneIndex(projectText ?? string.Empty)];
+                        <option value="@statusValue" selected="@(selectedStatus == statusValue ? "selected" : null)">@statusValue</option>
+                    }
+                </select>
+                <button type="submit" class="bl-filter-btn"><i class="bi bi-funnel"></i> Filter</button>
+                @if (selectedStatus.HasValue)
+                {
+                    <a asp-action="Index" class="bl-filter-btn"><i class="bi bi-x-circle"></i> Clear</a>
+                }
+            </form>
+            <a asp-action="Index" asp-route-status="@selectedStatusText" class="bl-filter-btn"><i class="bi bi-arrow-clockwise"></i></a>
+            <span class="bl-total">@Model.Count bugs</span>
+            @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
+            {
+                <a asp-action="Create" class="bl-btn-new"><i class="bi bi-plus-circle"></i> New Bug</a>
+            }
+        </div>
+    </section>
+
+    @* Bug table *@
+    <div class="bl-section">
+        <div class="bl-section-head">
+            <div class="bl-section-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-bug-fill"></i></div>
+            <div class="bl-section-label">All Bugs <span class="bl-badge-count">@Model.Count</span></div>
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div class="bl-empty">
+                <i class="bi bi-bug"></i>
+                No bugs reported yet
+            </div>
+        }
+        else
+        {
+            <div style="overflow-x:auto">
+                <table class="bl-table">
+                    <thead>
                         <tr>
-                            <td class="dp-cell-mono">@bug.BugNumber</td>
-                            <td class="dp-cell-title">
-                                <a asp-action="Details" asp-route-id="@bug.Id">@bug.Title</a>
-                            </td>
-                            <td>
-                                @if (!string.IsNullOrWhiteSpace(bug.PullRequestUrl))
-                                {
-                                    <a href="@bug.PullRequestUrl" target="_blank" rel="noopener noreferrer" class="dp-btn">
-                                        <i class="bi bi-box-arrow-up-right me-1"></i>Open PR
-                                    </a>
-                                }
-                                else
-                                {
-                                    <span class="dp-cell-muted">-</span>
-                                }
-                            </td>
-                            <td>
-                                @if (bug.ChangeRequest != null)
-                                {
-                                    <span class="bug-project-chip @projectToneClass">@bug.ChangeRequest.CrNumber</span>
-                                    <span class="dp-cell-muted ms-1 d-none d-xl-inline">@bug.ChangeRequest.Title</span>
-                                }
-                                else if (!string.IsNullOrWhiteSpace(bug.ChangeRequestReferenceText))
-                                {
-                                    <span class="bug-project-chip @projectToneClass">@bug.ChangeRequestReferenceText</span>
-                                }
-                                else
-                                {
-                                    <span class="dp-cell-muted">—</span>
-                                }
-                            </td>
-                            <td>
-                                @{
-                                    var statusCls = bug.Status.ToString() switch {
-                                        "New"      => "dp-badge-red",
-                                        "Testing"  => "dp-badge-indigo",
-                                        "Complete" => "dp-badge-green",
-                                        _            => "dp-badge-slate"
-                                    };
-                                }
-                                <span class="dp-badge @statusCls">@bug.Status</span>
-                            </td>
-                            <td>
-                                @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
-                                {
-                                    var isAgentQueued = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.Queued;
-                                    var isAgentProcessing = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.InProgress;
-                                    <span class="dp-badge dp-badge-sky"><i class="bi bi-cpu me-1"></i>Agent</span>
-                                    <span class="bug-agent-progress ms-1">
-                                        <span class="bug-agent-progress-dot @(isAgentProcessing ? "is-pulsing" : (isAgentQueued ? "is-queued" : ""))"></span>
-                                        <span class="dp-cell-muted">@bug.AgentStatus</span>
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span style="color:var(--text-on-dark);font-size:0.82rem">@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
-                                }
-                            </td>
-                            <td class="dp-cell-muted">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
-                            <td class="text-end">
-                                <div class="d-inline-flex gap-1">
-                                    <a asp-action="Details" asp-route-id="@bug.Id" class="dp-btn" title="View">
+                            <th>Bug #</th>
+                            <th>Title</th>
+                            <th>PR Link</th>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Assigned</th>
+                            <th>Created</th>
+                            <th style="text-align:right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var bug in Model)
+                        {
+                            var projectNumber = bug.ChangeRequest?.CrNumber;
+                            var projectText = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber : bug.ChangeRequestReferenceText;
+                            var projectToneClass = projectToneClasses[ResolveProjectToneIndex(projectText ?? string.Empty)];
+                            var stKey = bug.Status.ToString();
+
+                            <tr>
+                                <td><span class="bl-bug-num">@bug.BugNumber</span></td>
+                                <td>
+                                    <a asp-action="Details" asp-route-id="@bug.Id" class="bl-table-link">@bug.Title</a>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(bug.PullRequestUrl))
+                                    {
+                                        <a href="@bug.PullRequestUrl" target="_blank" rel="noopener noreferrer" class="bl-pr-link">
+                                            <i class="bi bi-box-arrow-up-right"></i> Open PR
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:.78rem;color:#a1a1aa">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (bug.ChangeRequest != null)
+                                    {
+                                        <span class="bl-proj-chip @projectToneClass">@bug.ChangeRequest.CrNumber</span>
+                                        <span style="font-size:.72rem;color:#a1a1aa;margin-left:4px" class="d-none d-xl-inline">@bug.ChangeRequest.Title</span>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(bug.ChangeRequestReferenceText))
+                                    {
+                                        <span class="bl-proj-chip @projectToneClass">@bug.ChangeRequestReferenceText</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:.78rem;color:#a1a1aa">—</span>
+                                    }
+                                </td>
+                                <td><span class="bl-pill @(statusClsMap.ContainsKey(stKey) ? statusClsMap[stKey] : "")">@bug.Status</span></td>
+                                <td>
+                                    @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)
+                                    {
+                                        var isAQueued = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.Queued;
+                                        var isAProcessing = bug.AgentStatus == WFHMonitor.Models.BugAgentStatus.InProgress;
+                                        <span style="font-size:.78rem;font-weight:600;color:var(--text-primary)"><i class="bi bi-cpu" style="font-size:.72rem;margin-right:3px"></i>Agent</span>
+                                        <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+                                            <span class="bl-agent-dot @(isAProcessing ? "is-pulsing" : (isAQueued ? "is-queued" : ""))"></span>
+                                            <span style="font-size:.72rem;color:#a1a1aa">@bug.AgentStatus</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:.8rem">@(bug.AssignedDeveloper?.FullName ?? "Unassigned")</span>
+                                    }
+                                </td>
+                                <td style="font-size:.74rem;color:#a1a1aa">@bug.CreatedAt.ToString("MMM dd, yyyy")</td>
+                                <td style="text-align:right;white-space:nowrap">
+                                    <a asp-action="Details" asp-route-id="@bug.Id" class="bl-act" title="View" style="margin-right:4px">
                                         <i class="bi bi-eye"></i>
                                     </a>
                                     @if (User.IsInRole("Admin") || User.IsInRole("Tester"))
                                     {
-                                        <a asp-action="Edit" asp-route-id="@bug.Id" class="dp-btn dp-btn-warn" title="Edit">
+                                        <a asp-action="Edit" asp-route-id="@bug.Id" class="bl-act bl-act-warn" title="Edit" style="margin-right:4px">
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         <form asp-action="Delete" asp-route-id="@bug.Id" method="post" class="d-inline"
                                               onsubmit="return confirm('Delete @bug.BugNumber?')">
                                             @Html.AntiForgeryToken()
-                                            <button class="dp-btn dp-btn-danger" title="Delete">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                            <button class="bl-act bl-act-del" title="Delete"><i class="bi bi-trash"></i></button>
                                         </form>
                                     }
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>

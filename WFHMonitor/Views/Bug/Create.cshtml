@@ -1,52 +1,108 @@
 @model WFHMonitor.ViewModels.BugFormViewModel
 @{ ViewData["Title"] = "New Bug"; }
 
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-bug me-2"></i>New Bug</h5>
+<style>
+    .nb-shell{max-width:1420px;margin:0 auto}
+    .nb-hero{position:relative;background:var(--bg-dark);border:1px solid rgba(239,68,68,.18);border-radius:16px;padding:32px 36px 28px;margin-bottom:26px;overflow:hidden}
+    .nb-hero::before{content:'';position:absolute;top:-60px;right:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(239,68,68,.1) 0%,transparent 70%);pointer-events:none}
+    .nb-hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .nb-hero-title{font-size:1.65rem;font-weight:800;color:#f4f5f7;letter-spacing:-.02em;line-height:1.15}
+    .nb-hero-sub{font-size:.78rem;color:#a1a1aa;margin-top:4px;font-weight:500}
+
+    .nb-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;transition:box-shadow .2s ease}
+    .nb-section:hover{box-shadow:0 8px 28px rgba(0,0,0,.06)}
+    .nb-section-head{display:flex;align-items:center;gap:10px;padding:15px 22px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#f6f7f9)}
+    .nb-section-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+    .nb-section-label{font-size:.82rem;font-weight:700;color:var(--text-primary);letter-spacing:.01em}
+    .nb-section-label span{font-size:.68rem;font-weight:500;color:var(--text-muted);display:block;margin-top:1px;letter-spacing:0}
+    .nb-section-body{padding:22px 24px}
+
+    .nb-label{font-size:.76rem;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+    .nb-label .required{color:#ef4444;font-weight:700}
+    .nb-input{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit}
+    .nb-input:focus{outline:none;border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.12)}
+    .nb-input::placeholder{color:#a1a1aa}
+    .nb-select{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;font-size:.84rem;color:var(--text-primary);width:100%;transition:all .2s ease;font-family:inherit;appearance:auto}
+    .nb-select:focus{outline:none;border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.12)}
+    .nb-textarea{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-size:.84rem;color:var(--text-primary);width:100%;resize:vertical;min-height:100px;font-family:inherit;transition:all .2s ease;line-height:1.55}
+    .nb-textarea:focus{outline:none;border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.12)}
+    .nb-hint{font-size:.68rem;color:var(--text-muted);margin-top:4px}
+    .nb-error{font-size:.7rem;color:#ef4444;margin-top:3px}
+    .nb-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+    .nb-footer{display:flex;gap:10px;align-items:center;margin-top:8px}
+    .nb-btn-create{background:#ef4444;color:#fff;border:none;border-radius:10px;padding:11px 30px;font-size:.86rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .2s ease;letter-spacing:.01em}
+    .nb-btn-create:hover{background:#dc2626;transform:translateY(-1px);box-shadow:0 6px 18px rgba(239,68,68,.25)}
+    .nb-btn-cancel{background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:10px;padding:11px 24px;font-size:.86rem;font-weight:600;cursor:pointer;transition:all .2s ease;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+    .nb-btn-cancel:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+
+    .nb-alert{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 16px;font-size:.8rem;color:#b91c1c;margin-bottom:16px}
+
+    @@media(max-width:640px){.nb-row{grid-template-columns:1fr}.nb-hero{padding:22px 18px 20px}.nb-section-body{padding:16px}}
+</style>
+
+<div class="nb-shell">
+    <form asp-action="Create" method="post" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+
+        @* Hero *@
+        <section class="nb-hero">
+            <div class="nb-hero-badge"><i class="bi bi-bug"></i> New Bug</div>
+            <div class="nb-hero-title">Report a Bug</div>
+            <div class="nb-hero-sub">Document the defect with reproduction steps and supporting evidence</div>
+        </section>
+
+        <div asp-validation-summary="All" class="nb-alert" style="display:none"></div>
+
+        @* Bug Details *@
+        <div class="nb-section">
+            <div class="nb-section-head">
+                <div class="nb-section-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-bug-fill"></i></div>
+                <div class="nb-section-label">Bug Details<span>Core information about the defect</span></div>
             </div>
-            <div class="card-body p-4">
-                <form asp-action="Create" method="post" enctype="multipart/form-data">
-                    @Html.AntiForgeryToken()
-                    <div asp-validation-summary="All" class="alert alert-danger small"></div>
-
-                    <div class="mb-3">
-                        <label asp-for="Title" class="form-label fw-semibold">Title</label>
-                        <input asp-for="Title" class="form-control" />
-                        <span asp-validation-for="Title" class="text-danger small"></span>
+            <div class="nb-section-body">
+                <div style="margin-bottom:16px">
+                    <label asp-for="Title" class="nb-label">Title <span class="required">*</span></label>
+                    <input asp-for="Title" class="nb-input" placeholder="Brief summary of the bug" />
+                    <span asp-validation-for="Title" class="nb-error"></span>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label asp-for="Description" class="nb-label">Description</label>
+                    <textarea asp-for="Description" class="nb-textarea" placeholder="Detailed description of the bug..."></textarea>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label asp-for="Workflow" class="nb-label">Workflow</label>
+                    <textarea asp-for="Workflow" class="nb-textarea" style="min-height:80px" placeholder="What workflow triggers this bug?"></textarea>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label asp-for="StepsToReproduce" class="nb-label">Steps To Reproduce</label>
+                    <textarea asp-for="StepsToReproduce" class="nb-textarea" placeholder="1. Go to...&#10;2. Click on...&#10;3. Observe..."></textarea>
+                </div>
+                <div class="nb-row">
+                    <div>
+                        <label asp-for="ModuleImpacted" class="nb-label">Module Impacted</label>
+                        <input asp-for="ModuleImpacted" class="nb-input" placeholder="e.g. Auth, Payment, Dashboard" />
                     </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Description" class="form-label fw-semibold">Description</label>
-                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                    <div>
+                        <label asp-for="PullRequestUrl" class="nb-label">Pull Request Link</label>
+                        <input asp-for="PullRequestUrl" class="nb-input" placeholder="https://github.com/org/repo/pull/123" />
+                        <span asp-validation-for="PullRequestUrl" class="nb-error"></span>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Workflow" class="form-label fw-semibold">Workflow</label>
-                        <textarea asp-for="Workflow" class="form-control" rows="3"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="StepsToReproduce" class="form-label fw-semibold">Steps To Reproduce</label>
-                        <textarea asp-for="StepsToReproduce" class="form-control" rows="4"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ModuleImpacted" class="form-label fw-semibold">Module Impacted</label>
-                        <input asp-for="ModuleImpacted" class="form-control" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="PullRequestUrl" class="form-label fw-semibold">Pull Request Link</label>
-                        <input asp-for="PullRequestUrl" class="form-control" placeholder="https://github.com/org/repo/pull/123" />
-                        <span asp-validation-for="PullRequestUrl" class="text-danger small"></span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ChangeRequestId" class="form-label fw-semibold">Project</label>
-                        <select asp-for="ChangeRequestId" class="form-select">
+        @* Project & Assignment *@
+        <div class="nb-section">
+            <div class="nb-section-head">
+                <div class="nb-section-icon" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-folder2-open"></i></div>
+                <div class="nb-section-label">Project & Assignment<span>Link to a project and assign ownership</span></div>
+            </div>
+            <div class="nb-section-body">
+                <div class="nb-row" style="margin-bottom:16px">
+                    <div>
+                        <label asp-for="ChangeRequestId" class="nb-label">Project</label>
+                        <select asp-for="ChangeRequestId" class="nb-select">
                             <option value="">-- None --</option>
                             @foreach (var cr in Model.ChangeRequestOptions)
                             {
@@ -54,77 +110,83 @@
                             }
                         </select>
                     </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ChangeRequestReferenceText" class="form-label fw-semibold">Project (Free Text)</label>
-                        <input asp-for="ChangeRequestReferenceText" class="form-control" id="crFreeText" />
-                        <div class="form-text">Use this if the project is not listed.</div>
+                    <div>
+                        <label asp-for="ChangeRequestReferenceText" class="nb-label">Project (Free Text)</label>
+                        <input asp-for="ChangeRequestReferenceText" class="nb-input" id="crFreeText" placeholder="Use if project not listed" />
+                        <div class="nb-hint">Use this if the project is not listed.</div>
                     </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label asp-for="Status" class="form-label fw-semibold">Status</label>
-                            <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="form-select"></select>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="AssigneeType" class="form-label fw-semibold">Assign To</label>
-                            <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="form-select" id="assigneeType">
-                            </select>
-                        </div>
+                </div>
+                <div class="nb-row" style="margin-bottom:16px">
+                    <div>
+                        <label asp-for="Status" class="nb-label">Status</label>
+                        <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="nb-select"></select>
                     </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6" id="developerAssignGroup">
-                            <label asp-for="AssignedDeveloperId" class="form-label fw-semibold">Assign To Developer</label>
-                            <select asp-for="AssignedDeveloperId" class="form-select">
-                                <option value="">-- Unassigned --</option>
-                                @foreach (var dev in Model.DeveloperOptions)
-                                {
-                                    <option value="@dev.Value">@dev.Text</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-6 d-none" id="agentAssignGroup">
-                            <label asp-for="AssignedAgentId" class="form-label fw-semibold">Assign To Agent</label>
-                            <select asp-for="AssignedAgentId" class="form-select" id="AssignedAgentId">
-                                <option value="">-- Select Agent --</option>
-                                @foreach (var agent in Model.AgentOptions)
-                                {
-                                    <option value="@agent.Value">@agent.Text</option>
-                                }
-                            </select>
-                            <span asp-validation-for="AssignedAgentId" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6 d-none" id="agentStatusGroup">
-                            <label asp-for="AgentStatus" class="form-label fw-semibold">Agent Status</label>
-                            <input class="form-control" value="Queued" disabled />
-                        </div>
+                    <div>
+                        <label asp-for="AssigneeType" class="nb-label">Assign To</label>
+                        <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="nb-select" id="assigneeType"></select>
                     </div>
-
-                    <div class="mb-3">
-                        <label asp-for="DocumentFile" class="form-label fw-semibold">Supporting Document</label>
-                        <input asp-for="DocumentFile" type="file" class="form-control" />
-                        <div class="form-text">PDF, Word, Excel, PowerPoint, TXT - max 20 MB</div>
+                </div>
+                <div class="nb-row">
+                    <div id="developerAssignGroup">
+                        <label asp-for="AssignedDeveloperId" class="nb-label">Assign To Developer</label>
+                        <select asp-for="AssignedDeveloperId" class="nb-select">
+                            <option value="">-- Unassigned --</option>
+                            @foreach (var dev in Model.DeveloperOptions)
+                            {
+                                <option value="@dev.Value">@dev.Text</option>
+                            }
+                        </select>
                     </div>
-
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg me-2"></i>Create Bug
-                        </button>
-                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    <div class="d-none" id="agentAssignGroup">
+                        <label asp-for="AssignedAgentId" class="nb-label">Assign To Agent</label>
+                        <select asp-for="AssignedAgentId" class="nb-select" id="AssignedAgentId">
+                            <option value="">-- Select Agent --</option>
+                            @foreach (var agent in Model.AgentOptions)
+                            {
+                                <option value="@agent.Value">@agent.Text</option>
+                            }
+                        </select>
+                        <span asp-validation-for="AssignedAgentId" class="nb-error"></span>
                     </div>
-                </form>
+                    <div class="d-none" id="agentStatusGroup">
+                        <label asp-for="AgentStatus" class="nb-label">Agent Status</label>
+                        <input class="nb-input" value="Queued" disabled />
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+
+        @* Document *@
+        <div class="nb-section">
+            <div class="nb-section-head">
+                <div class="nb-section-icon" style="background:#fef3c7;color:#d97706"><i class="bi bi-paperclip"></i></div>
+                <div class="nb-section-label">Supporting Document<span>Attach evidence or documentation</span></div>
+            </div>
+            <div class="nb-section-body">
+                <label asp-for="DocumentFile" class="nb-label">Document File</label>
+                <input asp-for="DocumentFile" type="file" class="form-control" style="border:1px solid #d1d5db;border-radius:10px;font-size:.84rem;padding:8px 14px" />
+                <div class="nb-hint">PDF, Word, Excel, PowerPoint, TXT — max 20 MB</div>
+            </div>
+        </div>
+
+        @* Footer *@
+        <div class="nb-footer">
+            <button type="submit" class="nb-btn-create"><i class="bi bi-check-lg"></i> Create Bug</button>
+            <a asp-action="Index" class="nb-btn-cancel">Cancel</a>
+        </div>
+    </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var vs = document.querySelector('[data-valmsg-summary]');
+            if (vs && vs.querySelector('li')) vs.style.display = 'block';
+        });
+
         function isAgentSelected() {
             const value = $('#assigneeType').val();
-            // Enum select can post either name ("Agent") or numeric value ("1")
             return value === 'Agent' || value === '1';
         }
 
