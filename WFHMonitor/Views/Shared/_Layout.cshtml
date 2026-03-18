@@ -4,6 +4,7 @@
 @using WFHMonitor.Services.Interfaces
 @inject INotificationService NotificationService
 @inject ISystemSettingsService SystemSettingsService
+@inject IGitHubOAuthService GitHubOAuthService
 @inject UserManager<ApplicationUser> UserManager
 
 <!DOCTYPE html>
@@ -46,6 +47,10 @@
         Bell = notificationBell,
         ReturnUrl = returnUrl
     };
+    var canManageGitHubConnection = User.IsInRole("Admin") || User.IsInRole("Developer") || User.IsInRole("Employee");
+    var isGitHubOAuthConfigured = GitHubOAuthService.IsOAuthConfigured();
+    var isGitHubConnected = canManageGitHubConnection && !string.IsNullOrWhiteSpace(userId)
+        && await GitHubOAuthService.IsConnectedAsync(userId);
     var isProjectsSectionActive = ctrl == "ChangeRequest" || ctrl == "Bug";
     var isMonitorSectionActive = ctrl == "Monitor";
     var isPaymentSectionActive = ctrl == "Payment";
@@ -102,6 +107,7 @@
                         {
                             <li>
                                 <a asp-controller="ChangeRequest" asp-action="Index"
+                                   data-onboarding-id="project-create-entry"
                                    class="@(ctrl == "ChangeRequest" && act != "Features" ? "active" : "")">
                                     <i class="bi bi-grid-1x2"></i> All Projects
                                 </a>
@@ -207,6 +213,56 @@
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
             <div class="d-flex align-items-center gap-2">
+                @if (canManageGitHubConnection)
+                {
+                    if (isGitHubOAuthConfigured)
+                    {
+                        if (isGitHubConnected)
+                        {
+                            <form asp-controller="GitHubAuth" asp-action="Disconnect" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                <button type="submit"
+                                        data-onboarding-id="github-connect-button"
+                                        class="btn btn-sm btn-outline-success notification-btn"
+                                        title="Disconnect GitHub">
+                                    <i class="bi bi-github me-1"></i>GitHub Connected
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a asp-controller="GitHubAuth"
+                               asp-action="Connect"
+                               asp-route-returnUrl="@returnUrl"
+                               data-onboarding-id="github-connect-button"
+                               class="btn btn-sm btn-outline-dark notification-btn"
+                               title="Connect GitHub">
+                                <i class="bi bi-github me-1"></i>Connect GitHub
+                            </a>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button"
+                                data-onboarding-id="github-connect-button"
+                                class="btn btn-sm btn-outline-secondary notification-btn"
+                                title="GitHub OAuth is not configured"
+                                disabled>
+                            <i class="bi bi-github me-1"></i>GitHub Unavailable
+                        </button>
+                    }
+                }
+                @if (User.IsInRole("Admin") || User.IsInRole("Developer") || User.IsInRole("Employee"))
+                {
+                    <button type="button"
+                            id="onboardingStartTourButton"
+                            data-onboarding-id="start-tour-button"
+                            class="btn btn-sm btn-outline-secondary notification-btn"
+                            title="Help / Start Tour">
+                        <i class="bi bi-question-circle me-1"></i>Help / Start Tour
+                    </button>
+                }
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary notification-btn"
                             id="notificationBellButton"
@@ -261,6 +317,38 @@
             @RenderBody()
         </div>
     </div>
+
+    @if (User.IsInRole("Admin") || User.IsInRole("Developer") || User.IsInRole("Employee"))
+    {
+        <div id="onboardingOverlay" class="onboarding-overlay d-none" aria-hidden="true">
+            <div class="onboarding-backdrop"></div>
+            <div class="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+                <div class="onboarding-card-head">
+                    <div class="onboarding-step-label" id="onboardingStepLabel">Step 1 of 3</div>
+                    <button type="button" class="btn-close" id="onboardingDismissTop" aria-label="Close"></button>
+                </div>
+                <h5 class="onboarding-title mb-2" id="onboardingTitle"></h5>
+                <p class="onboarding-description mb-3" id="onboardingDescription"></p>
+                <div class="onboarding-status-note mb-3 d-none" id="onboardingStatusNote"></div>
+                <div class="onboarding-actions">
+                    <a href="#" class="btn btn-sm btn-outline-primary d-none" id="onboardingGoTarget"></a>
+                </div>
+                <div class="onboarding-footer">
+                    <div class="onboarding-footer-left">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="onboardingBack">Back</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="onboardingNext">Next</button>
+                    </div>
+                    <div class="onboarding-footer-right">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="onboardingRestart">Restart</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="onboardingDismiss">Dismiss</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <form id="onboardingAntiForgeryForm" class="d-none">
+            @Html.AntiForgeryToken()
+        </form>
+    }
 }
 else
 {
@@ -270,6 +358,7 @@ else
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
+<script src="~/js/onboarding.js" asp-append-version="true"></script>
 <script>
     (function () {
         const bellButton = document.getElementById('notificationBellButton');

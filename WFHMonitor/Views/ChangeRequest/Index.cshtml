@@ -372,7 +372,7 @@
             <span class="projects-total">@Model.Count total</span>
             @if (User.IsInRole("Admin"))
             {
-                <a asp-action="Create" class="dp-btn-primary">
+                <a asp-action="Create" class="dp-btn-primary" data-onboarding-id="project-create-entry">
                     <i class="bi bi-plus-circle"></i> New Project
                 </a>
             }
@@ -386,7 +386,7 @@
             <div class="fw-semibold">No projects yet.</div>
             @if (User.IsInRole("Admin"))
             {
-                <a asp-action="Create" class="dp-btn-primary mt-3">
+                <a asp-action="Create" class="dp-btn-primary mt-3" data-onboarding-id="project-create-entry">
                     <i class="bi bi-plus-circle"></i> Create First Project
                 </a>
             }

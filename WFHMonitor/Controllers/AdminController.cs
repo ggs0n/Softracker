@@ -33,6 +33,10 @@ public class AdminController : Controller
         var accessDenied = EnsureAdminAccess();
         if (accessDenied != null) return accessDenied;
 
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         var today = DateTime.UtcNow.Date;
 
         var teamRoles = new[] { "Employee", "Developer", "Tester", "Agent" };
@@ -42,7 +46,9 @@ public class AdminController : Controller
 
         foreach (var role in teamRoles)
         {
-            var users = await _userManager.GetUsersInRoleAsync(role);
+            var users = (await _userManager.GetUsersInRoleAsync(role))
+                .Where(u => IsCompanyVisibleToAdmin(u.CompanyName, currentCompanyName, currentAdminId, u.Id))
+                .ToList();
             foreach (var user in users)
             {
                 teamMemberIds.Add(user.Id);
@@ -56,26 +62,44 @@ public class AdminController : Controller
         var agentIdList = agentIds.ToList();
         var developerIdList = developerIds.ToList();
 
+        var companyProjectsQuery = _db.ChangeRequests
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(currentCompanyName))
+            companyProjectsQuery = companyProjectsQuery.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == currentCompanyName);
+        else if (!string.IsNullOrWhiteSpace(currentAdminId))
+            companyProjectsQuery = companyProjectsQuery.Where(c => c.CreatedById == currentAdminId);
+
+        var projects = await companyProjectsQuery
+            .OrderByDescending(c => c.UpdatedAt)
+            .ToListAsync();
+
+        var companyProjectIds = projects
+            .Select(p => p.Id)
+            .ToList();
+
         var tasksDoneToday = await _db.WorkTasks
             .Include(t => t.Assignee)
-            .Where(t => t.Status == WorkTaskStatus.Done && t.UpdatedAt.Date == today)
+            .Where(t =>
+                t.Status == WorkTaskStatus.Done &&
+                t.UpdatedAt.Date == today &&
+                t.ChangeRequestId.HasValue &&
+                companyProjectIds.Contains(t.ChangeRequestId.Value))
             .AsNoTracking()
             .ToListAsync();
 
         var blockedTasks = await _db.WorkTasks
             .Include(t => t.Assignee)
-            .Where(t => t.Status == WorkTaskStatus.Blocked)
+            .Where(t =>
+                t.Status == WorkTaskStatus.Blocked &&
+                t.ChangeRequestId.HasValue &&
+                companyProjectIds.Contains(t.ChangeRequestId.Value))
             .AsNoTracking()
-            .ToListAsync();
-
-        // Project overview with task & bug breakdowns
-        var projects = await _db.ChangeRequests
-            .AsNoTracking()
-            .OrderByDescending(c => c.UpdatedAt)
             .ToListAsync();
 
         var allTasks = await _db.WorkTasks
-            .Where(t => t.ChangeRequestId != null)
+            .Where(t => t.ChangeRequestId.HasValue && companyProjectIds.Contains(t.ChangeRequestId.Value))
             .GroupBy(t => t.ChangeRequestId)
             .Select(g => new
             {
@@ -88,7 +112,7 @@ public class AdminController : Controller
             .ToListAsync();
 
         var allBugs = await _db.BugReports
-            .Where(b => b.ChangeRequestId != null)
+            .Where(b => b.ChangeRequestId.HasValue && companyProjectIds.Contains(b.ChangeRequestId.Value))
             .GroupBy(b => b.ChangeRequestId)
             .Select(g => new
             {
@@ -100,6 +124,7 @@ public class AdminController : Controller
             .ToListAsync();
 
         var allFeatures = await _db.ProjectFeatures
+            .Where(f => companyProjectIds.Contains(f.ChangeRequestId))
             .GroupBy(f => f.ChangeRequestId)
             .Select(g => new
             {
@@ -137,25 +162,36 @@ public class AdminController : Controller
         }).ToList();
 
         // Global bug stats
-        var totalBugs = await _db.BugReports.CountAsync();
-        var completeBugs = await _db.BugReports.CountAsync(b => b.Status == BugStatus.Complete);
+        var totalBugs = await _db.BugReports.CountAsync(b => b.ChangeRequestId.HasValue && companyProjectIds.Contains(b.ChangeRequestId.Value));
+        var completeBugs = await _db.BugReports.CountAsync(b =>
+            b.ChangeRequestId.HasValue &&
+            companyProjectIds.Contains(b.ChangeRequestId.Value) &&
+            b.Status == BugStatus.Complete);
 
         var agentFeaturesShipped = agentIdList.Count == 0
             ? 0
             : await _db.ProjectFeatures.CountAsync(f =>
+                companyProjectIds.Contains(f.ChangeRequestId) &&
                 f.AssignedDeveloperId != null &&
                 agentIdList.Contains(f.AssignedDeveloperId) &&
                 (f.AgentStatus == FeatureAgentStatus.PrRaised || f.Status == CrStatus.Done || f.IsCompleted));
 
-        var agentBugsFound = await _db.BugReports.CountAsync(b => b.AssigneeType == BugAssigneeType.Agent);
+        var agentBugsFound = await _db.BugReports.CountAsync(b =>
+            b.ChangeRequestId.HasValue &&
+            companyProjectIds.Contains(b.ChangeRequestId.Value) &&
+            b.AssigneeType == BugAssigneeType.Agent);
 
         var agentBugsFixed = await _db.BugReports.CountAsync(b =>
+            b.ChangeRequestId.HasValue &&
+            companyProjectIds.Contains(b.ChangeRequestId.Value) &&
             b.AssigneeType == BugAssigneeType.Agent &&
             (b.AgentStatus == BugAgentStatus.PrRaised || b.Status == BugStatus.Complete));
 
         var developerBugsFixed = developerIdList.Count == 0
             ? 0
             : await _db.BugReports.CountAsync(b =>
+                b.ChangeRequestId.HasValue &&
+                companyProjectIds.Contains(b.ChangeRequestId.Value) &&
                 b.AssigneeType == BugAssigneeType.Developer &&
                 b.AssignedDeveloperId != null &&
                 developerIdList.Contains(b.AssignedDeveloperId) &&
@@ -164,6 +200,7 @@ public class AdminController : Controller
         var developerFeaturesDelivered = developerIdList.Count == 0
             ? 0
             : await _db.ProjectFeatures.CountAsync(f =>
+                companyProjectIds.Contains(f.ChangeRequestId) &&
                 f.AssignedDeveloperId != null &&
                 developerIdList.Contains(f.AssignedDeveloperId) &&
                 (f.Status == CrStatus.Done || f.IsCompleted));
@@ -207,6 +244,9 @@ public class AdminController : Controller
         var accessDenied = EnsureAdminAccess();
         if (accessDenied != null) return accessDenied;
 
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        model.CompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         var registration = await _userRegistrationService.RegisterAsync(model);
         if (registration.Succeeded)
         {
@@ -244,6 +284,17 @@ public class AdminController : Controller
         if (user == null)
         {
             TempData["Error"] = "Employee not found.";
+            return RedirectToAction(nameof(Employees));
+        }
+
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        if (!IsCompanyVisibleToAdmin(
+                user.CompanyName,
+                NormalizeCompanyName(currentAdmin?.CompanyName),
+                currentAdmin?.Id,
+                user.Id))
+        {
+            TempData["Error"] = "You cannot manage users from another company.";
             return RedirectToAction(nameof(Employees));
         }
 
@@ -296,12 +347,17 @@ public class AdminController : Controller
 
     private async Task<AdminEmployeesViewModel> BuildEmployeesViewModel(RegisterViewModel? newEmployee = null)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
         var roles = new[] { "Employee", "Developer", "Tester", "Agent" };
         var items = new List<EmployeeListItem>();
         foreach (var role in roles)
         {
             var users = await _userManager.GetUsersInRoleAsync(role);
-            items.AddRange(users.Select(user => new EmployeeListItem { Employee = user, Role = role }));
+            items.AddRange(users
+                .Where(user => IsCompanyVisibleToAdmin(user.CompanyName, currentCompanyName, currentAdminId, user.Id))
+                .Select(user => new EmployeeListItem { Employee = user, Role = role }));
         }
 
         items = items
@@ -311,7 +367,23 @@ public class AdminController : Controller
         return new AdminEmployeesViewModel
         {
             Employees = items,
-            NewEmployee = newEmployee ?? new RegisterViewModel()
+            NewEmployee = newEmployee ?? new RegisterViewModel { CompanyName = currentCompanyName }
         };
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static bool IsCompanyVisibleToAdmin(string? targetCompanyName, string? adminCompanyName, string? adminUserId, string? targetUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(adminCompanyName))
+            return string.Equals(NormalizeCompanyName(targetCompanyName), adminCompanyName, StringComparison.OrdinalIgnoreCase);
+
+        return !string.IsNullOrWhiteSpace(adminUserId) &&
+               !string.IsNullOrWhiteSpace(targetUserId) &&
+               string.Equals(adminUserId, targetUserId, StringComparison.Ordinal);
     }
 }

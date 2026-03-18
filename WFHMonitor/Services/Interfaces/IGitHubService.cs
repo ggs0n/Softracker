@@ -7,4 +7,22 @@ public interface IGitHubService
     Task<GitHubRepositoryInfo> GetRepositoryInfoAsync(string owner, string repo);
     Task<string?> GetReadmeContentAsync(string owner, string repo);
     Task<Dictionary<string, long>> GetRepositoryLanguagesAsync(string owner, string repo);
+    Task<List<GitHubConnectedRepository>> GetCurrentUserRepositoriesAsync(int maxCount = 200);
+}
+
+public class GitHubOAuthCallbackResult
+{
+    public bool Succeeded { get; set; }
+    public string ReturnUrl { get; set; } = "/";
+    public string? ErrorMessage { get; set; }
+}
+
+public interface IGitHubOAuthService
+{
+    bool IsOAuthConfigured();
+    Task<bool> IsConnectedAsync(string userId);
+    Task<string?> GetCurrentUserAccessTokenAsync();
+    Task<string> BuildAuthorizeUrlAsync(string userId, string? returnUrl);
+    Task<GitHubOAuthCallbackResult> CompleteAuthorizationAsync(string code, string state, string currentUserId);
+    Task DisconnectAsync(string userId);
 }

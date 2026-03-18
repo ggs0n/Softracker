@@ -31,13 +31,40 @@ public class BugService : IBugService
         _notificationService = notificationService;
     }
 
-    public async Task<List<BugReport>> GetIndexBugsAsync(bool isAdmin, int? orgTeamId, BugStatus? status = null)
+    public async Task<List<BugReport>> GetIndexBugsAsync(
+        bool isAdmin,
+        int? orgTeamId,
+        string? companyName,
+        string? currentUserId,
+        BugStatus? status = null)
     {
         IQueryable<BugReport> query = _db.BugReports
             .Include(b => b.ChangeRequest)
+                .ThenInclude(c => c!.CreatedBy)
             .Include(b => b.AssignedDeveloper)
             .Include(b => b.CreatedBy)
             .AsNoTracking();
+
+        var normalizedCompany = NormalizeCompanyName(companyName);
+        if (!string.IsNullOrWhiteSpace(normalizedCompany))
+        {
+            query = query.Where(b =>
+                (b.ChangeRequestId.HasValue &&
+                 b.ChangeRequest != null &&
+                 b.ChangeRequest.CreatedBy != null &&
+                 b.ChangeRequest.CreatedBy.CompanyName == normalizedCompany) ||
+                (!b.ChangeRequestId.HasValue &&
+                 b.CreatedBy != null &&
+                 b.CreatedBy.CompanyName == normalizedCompany));
+        }
+        else if (!string.IsNullOrWhiteSpace(currentUserId))
+        {
+            query = query.Where(b =>
+                b.CreatedById == currentUserId ||
+                (b.ChangeRequestId.HasValue &&
+                 b.ChangeRequest != null &&
+                 b.ChangeRequest.CreatedById == currentUserId));
+        }
 
         if (!isAdmin)
         {
@@ -68,6 +95,7 @@ public class BugService : IBugService
     {
         return await _db.BugReports
             .Include(b => b.ChangeRequest)
+                .ThenInclude(c => c!.CreatedBy)
             .Include(b => b.AssignedDeveloper)
             .Include(b => b.CreatedBy)
             .Include(b => b.Screenshots.OrderBy(s => s.UploadedAt))
@@ -85,14 +113,24 @@ public class BugService : IBugService
         return _db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
     }
 
-    public async Task PopulateFormOptionsAsync(BugFormViewModel model, bool isAdmin, int? orgTeamId)
+    public async Task PopulateFormOptionsAsync(
+        BugFormViewModel model,
+        bool isAdmin,
+        int? orgTeamId,
+        string? companyName,
+        string? currentUserId)
     {
-        model.DeveloperOptions = await GetDeveloperOptionsAsync();
-        model.AgentOptions = await GetAgentOptionsAsync();
-        model.ChangeRequestOptions = await GetChangeRequestOptionsAsync(isAdmin, orgTeamId);
+        model.DeveloperOptions = await GetDeveloperOptionsAsync(companyName, currentUserId);
+        model.AgentOptions = await GetAgentOptionsAsync(companyName, currentUserId);
+        model.ChangeRequestOptions = await GetChangeRequestOptionsAsync(isAdmin, orgTeamId, companyName, currentUserId);
     }
 
-    public async Task<BugFormViewModel?> BuildEditViewModelAsync(int id, bool isAdmin, int? orgTeamId)
+    public async Task<BugFormViewModel?> BuildEditViewModelAsync(
+        int id,
+        bool isAdmin,
+        int? orgTeamId,
+        string? companyName,
+        string? currentUserId)
     {
         var bug = await _db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
         if (bug == null) return null;
@@ -115,7 +153,7 @@ public class BugService : IBugService
             AssignedAgentId = bug.AssigneeType == BugAssigneeType.Agent ? bug.AssignedDeveloperId : null
         };
 
-        await PopulateFormOptionsAsync(vm, isAdmin, orgTeamId);
+        await PopulateFormOptionsAsync(vm, isAdmin, orgTeamId, companyName, currentUserId);
         return vm;
     }
 
@@ -374,27 +412,39 @@ public class BugService : IBugService
         return (true, string.Empty);
     }
 
-    private async Task<List<SelectListItem>> GetDeveloperOptionsAsync()
+    private async Task<List<SelectListItem>> GetDeveloperOptionsAsync(string? companyName, string? currentUserId)
     {
         var developers = await _userManager.GetUsersInRoleAsync("Developer");
+        developers = FilterUsersByCompany(developers, companyName, currentUserId);
         return developers
             .OrderBy(d => d.FullName)
             .Select(d => new SelectListItem(d.FullName, d.Id))
             .ToList();
     }
 
-    private async Task<List<SelectListItem>> GetAgentOptionsAsync()
+    private async Task<List<SelectListItem>> GetAgentOptionsAsync(string? companyName, string? currentUserId)
     {
         var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        agents = FilterUsersByCompany(agents, companyName, currentUserId);
         return agents
             .OrderBy(a => a.FullName)
             .Select(a => new SelectListItem(a.FullName, a.Id))
             .ToList();
     }
 
-    private Task<List<SelectListItem>> GetChangeRequestOptionsAsync(bool isAdmin, int? orgTeamId)
+    private Task<List<SelectListItem>> GetChangeRequestOptionsAsync(
+        bool isAdmin,
+        int? orgTeamId,
+        string? companyName,
+        string? currentUserId)
     {
         var query = _db.ChangeRequests.AsQueryable();
+        var normalizedCompany = NormalizeCompanyName(companyName);
+        if (!string.IsNullOrWhiteSpace(normalizedCompany))
+            query = query.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == normalizedCompany);
+        else if (!string.IsNullOrWhiteSpace(currentUserId))
+            query = query.Where(c => c.CreatedById == currentUserId);
+
         if (!isAdmin)
         {
             if (orgTeamId.HasValue)
@@ -480,6 +530,31 @@ public class BugService : IBugService
     {
         var trimmed = (value ?? string.Empty).Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static IList<ApplicationUser> FilterUsersByCompany(
+        IEnumerable<ApplicationUser> users,
+        string? companyName,
+        string? currentUserId)
+    {
+        var normalizedCompany = NormalizeCompanyName(companyName);
+        if (!string.IsNullOrWhiteSpace(normalizedCompany))
+        {
+            return users
+                .Where(u => string.Equals(NormalizeCompanyName(u.CompanyName), normalizedCompany, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentUserId))
+            return users.Where(u => u.Id == currentUserId).ToList();
+
+        return users.ToList();
     }
 
 }

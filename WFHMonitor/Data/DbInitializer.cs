@@ -352,6 +352,8 @@ public static class DbInitializer
         await db.Database.ExecuteSqlRawAsync("""
             IF COL_LENGTH('AspNetUsers', 'SubscriptionPlan') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [SubscriptionPlan] nvarchar(20) NOT NULL CONSTRAINT [DF_AspNetUsers_SubscriptionPlan] DEFAULT 'Free';
+            IF COL_LENGTH('AspNetUsers', 'CompanyName') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [CompanyName] nvarchar(200) NULL;
             IF COL_LENGTH('AspNetUsers', 'OrganizationTeam') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [OrganizationTeam] nvarchar(20) NOT NULL CONSTRAINT [DF_AspNetUsers_OrganizationTeam] DEFAULT 'Unassigned';
             IF COL_LENGTH('AspNetUsers', 'IsProSubscriptionActive') IS NULL
@@ -393,6 +395,16 @@ public static class DbInitializer
               AND [ProSubscribedAt] IS NOT NULL
               AND [ProSubscriptionEndsAt] IS NULL;
             END
+
+            IF COL_LENGTH('AspNetUsers', 'FullName') IS NOT NULL
+               AND COL_LENGTH('AspNetUsers', 'Email') IS NOT NULL
+            BEGIN
+                UPDATE [AspNetUsers]
+                SET [FullName] = REPLACE(REPLACE(REPLACE(LEFT([Email], CHARINDEX('@', [Email]) - 1), '.', ' '), '_', ' '), '-', ' ')
+                WHERE [FullName] = [Email]
+                  AND [Email] IS NOT NULL
+                  AND CHARINDEX('@', [Email]) > 1;
+            END
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -402,6 +414,7 @@ public static class DbInitializer
                 (
                     [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(100) NOT NULL,
+                    [CompanyName] nvarchar(200) NULL,
                     [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_OrgTeams_CreatedAt] DEFAULT SYSUTCDATETIME(),
                     [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_OrgTeams_UpdatedAt] DEFAULT SYSUTCDATETIME(),
                     CONSTRAINT [PK_OrgTeams] PRIMARY KEY ([Id])
@@ -409,7 +422,14 @@ public static class DbInitializer
             END
 
             IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
-               AND NOT EXISTS
+               AND COL_LENGTH('OrgTeams', 'CompanyName') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[OrgTeams]
+                    ADD [CompanyName] nvarchar(200) NULL;
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+               AND EXISTS
                (
                    SELECT 1
                    FROM sys.indexes
@@ -417,8 +437,21 @@ public static class DbInitializer
                      AND object_id = OBJECT_ID(N'[dbo].[OrgTeams]')
                )
             BEGIN
-                CREATE UNIQUE INDEX [IX_OrgTeams_Name]
-                    ON [dbo].[OrgTeams]([Name]);
+                DROP INDEX [IX_OrgTeams_Name] ON [dbo].[OrgTeams];
+            END
+
+            IF OBJECT_ID(N'[dbo].[OrgTeams]', N'U') IS NOT NULL
+               AND COL_LENGTH('OrgTeams', 'CompanyName') IS NOT NULL
+               AND NOT EXISTS
+               (
+                   SELECT 1
+                   FROM sys.indexes
+                   WHERE name = 'IX_OrgTeams_CompanyName_Name'
+                     AND object_id = OBJECT_ID(N'[dbo].[OrgTeams]')
+               )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_OrgTeams_CompanyName_Name]
+                    ON [dbo].[OrgTeams]([CompanyName], [Name]);
             END
 
             IF COL_LENGTH('AspNetUsers', 'OrgTeamId') IS NULL
@@ -481,6 +514,39 @@ public static class DbInitializer
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH('OrgTeams', 'CompanyName') IS NOT NULL
+            BEGIN
+                UPDATE t
+                SET [CompanyName] = src.[CompanyName]
+                FROM [dbo].[OrgTeams] t
+                CROSS APPLY
+                (
+                    SELECT TOP 1 u.[CompanyName]
+                    FROM [dbo].[AspNetUsers] u
+                    WHERE u.[OrgTeamId] = t.[Id]
+                      AND u.[CompanyName] IS NOT NULL
+                      AND LTRIM(RTRIM(u.[CompanyName])) <> ''
+                    ORDER BY u.[Id]
+                ) src
+                WHERE t.[CompanyName] IS NULL
+                   OR LTRIM(RTRIM(t.[CompanyName])) = '';
+
+                UPDATE t
+                SET [CompanyName] = src.[CompanyName]
+                FROM [dbo].[OrgTeams] t
+                CROSS APPLY
+                (
+                    SELECT TOP 1 u.[CompanyName]
+                    FROM [dbo].[ChangeRequests] c
+                    INNER JOIN [dbo].[AspNetUsers] u ON u.[Id] = c.[CreatedById]
+                    WHERE c.[OrgTeamId] = t.[Id]
+                      AND u.[CompanyName] IS NOT NULL
+                      AND LTRIM(RTRIM(u.[CompanyName])) <> ''
+                    ORDER BY c.[Id]
+                ) src
+                WHERE (t.[CompanyName] IS NULL OR LTRIM(RTRIM(t.[CompanyName])) = '');
+            END
+
             DECLARE @Team1Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 1' ORDER BY [Id]);
             DECLARE @Team2Id int = (SELECT TOP 1 [Id] FROM [dbo].[OrgTeams] WHERE [Name] = 'Team 2' ORDER BY [Id]);
 
@@ -694,6 +760,73 @@ public static class DbInitializer
                 WHERE [FreeProjectLimit] < 0
                    OR [FreeBugLimit] < 0
                    OR [FreeFeatureLimit] < 0;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[UserOnboardingStates]
+                (
+                    [UserId] nvarchar(450) NOT NULL,
+                    [IsDismissed] bit NOT NULL CONSTRAINT [DF_UserOnboardingStates_IsDismissed] DEFAULT 0,
+                    [IsCompleted] bit NOT NULL CONSTRAINT [DF_UserOnboardingStates_IsCompleted] DEFAULT 0,
+                    [LastSeenStepKey] nvarchar(50) NOT NULL CONSTRAINT [DF_UserOnboardingStates_LastSeenStepKey] DEFAULT 'add-project',
+                    [DismissedAt] datetime2 NULL,
+                    [CompletedAt] datetime2 NULL,
+                    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_UserOnboardingStates_CreatedAt] DEFAULT SYSUTCDATETIME(),
+                    [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_UserOnboardingStates_UpdatedAt] DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT [PK_UserOnboardingStates] PRIMARY KEY ([UserId]),
+                    CONSTRAINT [FK_UserOnboardingStates_AspNetUsers_UserId]
+                        FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers]([Id]) ON DELETE CASCADE
+                );
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'LastSeenStepKey') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[UserOnboardingStates]
+                    ADD [LastSeenStepKey] nvarchar(50) NOT NULL
+                    CONSTRAINT [DF_UserOnboardingStates_LastSeenStepKey] DEFAULT 'add-project';
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'DismissedAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[UserOnboardingStates]
+                    ADD [DismissedAt] datetime2 NULL;
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'CompletedAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[UserOnboardingStates]
+                    ADD [CompletedAt] datetime2 NULL;
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'CreatedAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[UserOnboardingStates]
+                    ADD [CreatedAt] datetime2 NOT NULL
+                    CONSTRAINT [DF_UserOnboardingStates_CreatedAt] DEFAULT SYSUTCDATETIME();
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'UpdatedAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[UserOnboardingStates]
+                    ADD [UpdatedAt] datetime2 NOT NULL
+                    CONSTRAINT [DF_UserOnboardingStates_UpdatedAt] DEFAULT SYSUTCDATETIME();
+            END
+
+            IF OBJECT_ID(N'[dbo].[UserOnboardingStates]', N'U') IS NOT NULL
+               AND COL_LENGTH('UserOnboardingStates', 'LastSeenStepKey') IS NOT NULL
+            BEGIN
+                UPDATE [dbo].[UserOnboardingStates]
+                SET [LastSeenStepKey] = 'add-project'
+                WHERE [LastSeenStepKey] IS NULL
+                   OR LTRIM(RTRIM([LastSeenStepKey])) = '';
             END
             """);
     }

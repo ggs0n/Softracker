@@ -35,6 +35,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 builder.Services.Configure<GitHubSettings>(
     builder.Configuration.GetSection("GitHubSettings"));
+builder.Services.Configure<GitHubOAuthSettings>(
+    builder.Configuration.GetSection("GitHubOAuth"));
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("JwtSettings"));
 builder.Services.Configure<ProjectMonitoringSettings>(
@@ -44,6 +46,7 @@ builder.Services.Configure<StripeBillingSettings>(
 builder.Services.Configure<OpenClawSettings>(
     builder.Configuration.GetSection("OpenClaw"));
 builder.Services.AddHttpClient<IGitHubService, GitHubService>();
+builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
 builder.Services.AddHttpClient<IStripeBillingService, StripeBillingService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
@@ -62,9 +65,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueu
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
+builder.Services.AddScoped<IOnboardingService, OnboardingService>();
 builder.Services.AddScoped<IOutlookCalendarSyncService, OutlookCalendarSyncService>();
 builder.Services.AddScoped<IProjectMonitoringService, ProjectMonitoringService>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllersWithViews();
 

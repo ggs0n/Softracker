@@ -1533,3 +1533,103 @@ h1, h2, h3 { text-wrap: balance; }
 .dp a:not(.dp-btn):not(.dp-btn-primary):not(.btn) {
   transition: color var(--duration);
 }
+
+/* ===================== ONBOARDING ===================== */
+.onboarding-open {
+  overflow: hidden;
+}
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.onboarding-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.64);
+}
+
+.onboarding-card {
+  position: absolute;
+  top: 84px;
+  right: 24px;
+  width: min(420px, calc(100vw - 32px));
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: #f8fafc;
+  color: #0f172a;
+  box-shadow: 0 18px 48px rgba(2, 6, 23, 0.35);
+  padding: 14px;
+}
+
+.onboarding-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding-step-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #334155;
+}
+
+.onboarding-title {
+  font-weight: 800;
+  color: #111827;
+}
+
+.onboarding-description {
+  margin: 0;
+  color: #334155;
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.onboarding-status-note {
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.onboarding-actions {
+  margin-bottom: 12px;
+}
+
+.onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding-footer-left,
+.onboarding-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.onboarding-highlight-target {
+  position: relative;
+  z-index: 2050;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 2px rgba(99, 102, 241, 0.95),
+    0 0 0 8px rgba(99, 102, 241, 0.2);
+}
+
+@media (max-width: 767px) {
+  .onboarding-card {
+    top: 74px;
+    right: 16px;
+  }
+}

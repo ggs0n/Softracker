@@ -69,6 +69,8 @@ public class BugController : Controller
             var bugs = await _bugService.GetIndexBugsAsync(
                 User.IsInRole("Admin"),
                 currentUser?.OrgTeamId,
+                currentUser?.CompanyName,
+                currentUser?.Id,
                 status);
             ViewBag.SelectedStatus = status;
             return View(bugs);
@@ -122,7 +124,7 @@ public class BugController : Controller
 
         var vm = new BugFormViewModel();
         var currentUser = await _userManager.GetUserAsync(User);
-        await _bugService.PopulateFormOptionsAsync(vm, User.IsInRole("Admin"), currentUser?.OrgTeamId);
+        await _bugService.PopulateFormOptionsAsync(vm, User.IsInRole("Admin"), currentUser?.OrgTeamId, currentUser?.CompanyName, currentUser?.Id);
         return View(vm);
     }
 
@@ -181,7 +183,7 @@ public class BugController : Controller
         if (!CanAccessBugByTeam(bug, currentUser))
             return Forbid();
 
-        var vm = await _bugService.BuildEditViewModelAsync(id, User.IsInRole("Admin"), currentUser?.OrgTeamId);
+        var vm = await _bugService.BuildEditViewModelAsync(id, User.IsInRole("Admin"), currentUser?.OrgTeamId, currentUser?.CompanyName, currentUser?.Id);
         if (vm == null) return NotFound();
 
         var userId = currentUser?.Id;
@@ -463,22 +465,28 @@ public class BugController : Controller
         if (!string.IsNullOrWhiteSpace(error))
             TempData["Error"] = error;
 
-        await _bugService.PopulateFormOptionsAsync(model, User.IsInRole("Admin"), currentUser?.OrgTeamId);
+        await _bugService.PopulateFormOptionsAsync(model, User.IsInRole("Admin"), currentUser?.OrgTeamId, currentUser?.CompanyName, currentUser?.Id);
         return View(model);
     }
 
     private bool CanAccessBugByTeam(BugReport bug, ApplicationUser? currentUser)
     {
-        if (User.IsInRole("Admin"))
-            return true;
+        if (!IsCompanyAllowed(currentUser?.CompanyName, bug.ChangeRequest?.CreatedBy?.CompanyName, bug.CreatedBy?.CompanyName))
+            return false;
 
         if (bug.ChangeRequestId.HasValue)
         {
+            if (User.IsInRole("Admin"))
+                return true;
+
             if (bug.ChangeRequest?.OrgTeamId is null)
                 return true;
 
             return currentUser?.OrgTeamId.HasValue == true && currentUser.OrgTeamId == bug.ChangeRequest.OrgTeamId;
         }
+
+        if (User.IsInRole("Admin"))
+            return true;
 
         if (User.IsInRole("Developer") || User.IsInRole("Agent"))
             return bug.AssignedDeveloperId == currentUser?.Id;
@@ -492,9 +500,13 @@ public class BugController : Controller
             return true;
 
         var project = await _db.ChangeRequests
+            .Include(c => c.CreatedBy)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == changeRequestId.Value);
         if (project == null)
+            return false;
+
+        if (!IsCompanyAllowed(currentUser?.CompanyName, project.CreatedBy?.CompanyName))
             return false;
 
         if (User.IsInRole("Admin"))
@@ -527,7 +539,11 @@ public class BugController : Controller
 
     private async Task<List<SelectListItem>> GetAgentUserOptionsAsync()
     {
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var currentUser = await _userManager.GetUserAsync(User);
+        var currentCompany = NormalizeCompanyName(currentUser?.CompanyName);
+        var agents = (await _userManager.GetUsersInRoleAsync("Agent"))
+            .Where(a => IsCompanyAllowed(currentCompany, a.CompanyName))
+            .ToList();
         return agents
             .OrderBy(a => a.FullName)
             .Select(a => new SelectListItem(a.FullName, a.Id))
@@ -536,7 +552,11 @@ public class BugController : Controller
 
     private async Task<string?> ResolveOpenClawAssigneeAgentIdAsync()
     {
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var currentUser = await _userManager.GetUserAsync(User);
+        var currentCompany = NormalizeCompanyName(currentUser?.CompanyName);
+        var agents = (await _userManager.GetUsersInRoleAsync("Agent"))
+            .Where(a => IsCompanyAllowed(currentCompany, a.CompanyName))
+            .ToList();
         var preferred = agents
             .OrderBy(a => a.FullName)
             .FirstOrDefault(a =>
@@ -571,4 +591,26 @@ public class BugController : Controller
     private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
         settings.EnableOpenClawAgents &&
         (HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan);
+
+    private static bool IsCompanyAllowed(string? currentCompanyName, params string?[] recordCompanyCandidates)
+    {
+        var current = NormalizeCompanyName(currentCompanyName);
+        if (string.IsNullOrWhiteSpace(current))
+            return true;
+
+        foreach (var candidate in recordCompanyCandidates)
+        {
+            var normalized = NormalizeCompanyName(candidate);
+            if (string.Equals(current, normalized, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
 }

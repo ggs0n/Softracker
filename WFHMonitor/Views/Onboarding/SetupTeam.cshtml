@@ -1,0 +1,423 @@
+@model WFHMonitor.ViewModels.OnboardingSetupTeamViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Setup Team - Softracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>
+        :root {
+            --ob-bg: #18181b;
+            --ob-bg-raised: #1f1f23;
+            --ob-surface: rgba(255,255,255,0.04);
+            --ob-surface-hover: rgba(255,255,255,0.07);
+            --ob-border: rgba(255,255,255,0.08);
+            --ob-border-hover: rgba(255,255,255,0.16);
+            --ob-text: #e4e4e7;
+            --ob-text-muted: #a1a1aa;
+            --ob-text-bright: #ffffff;
+            --ob-accent: #10b981;
+            --ob-accent-hover: #059669;
+            --ob-accent-bg: rgba(16,185,129,0.1);
+            --ob-accent-border: rgba(16,185,129,0.25);
+            --ob-accent-glow: rgba(16,185,129,0.2);
+            --ob-card-radius: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100dvh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--ob-text);
+            background: var(--ob-bg);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- Background --- */
+        .ob-bg-canvas {
+            position: fixed; inset: 0; z-index: 0;
+            overflow: hidden; pointer-events: none;
+        }
+        .ob-bg-canvas::before, .ob-bg-canvas::after {
+            content: ''; position: absolute; border-radius: 50%;
+            filter: blur(130px); opacity: 0.4;
+            animation: meshFloat 20s ease-in-out infinite alternate;
+        }
+        .ob-bg-canvas::before {
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, #10b981 0%, transparent 70%);
+            top: -20%; left: -10%;
+        }
+        .ob-bg-canvas::after {
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, #059669 0%, transparent 70%);
+            bottom: -15%; right: -10%;
+            animation-delay: -8s; animation-direction: alternate-reverse;
+        }
+        .ob-blob-3 {
+            position: absolute; width: 450px; height: 450px; border-radius: 50%;
+            background: radial-gradient(circle, #34d399 0%, transparent 70%);
+            filter: blur(130px); opacity: 0.15;
+            top: 45%; left: 55%; transform: translate(-50%, -50%);
+            animation: meshFloat 24s ease-in-out infinite alternate-reverse;
+            animation-delay: -4s;
+        }
+        .ob-grid-overlay {
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 100%);
+            -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 100%);
+        }
+        .ob-noise {
+            position: absolute; inset: 0;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            opacity: 0.03; mix-blend-mode: overlay;
+        }
+        @@keyframes meshFloat {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(50px, -35px) scale(1.08); }
+            100% { transform: translate(-25px, 25px) scale(0.95); }
+        }
+
+        /* --- Particles --- */
+        .ob-particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+        .ob-particle {
+            position: absolute; border-radius: 50%;
+            background: rgba(16,185,129,0.25);
+            animation: particleFloat linear infinite;
+        }
+        @@keyframes particleFloat {
+            0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+            10%  { opacity: 1; }
+            90%  { opacity: 1; }
+            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+        }
+
+        /* --- Page --- */
+        .ob-page {
+            position: relative; z-index: 1;
+            min-height: 100dvh; display: flex; flex-direction: column;
+            padding: 24px clamp(20px, 4vw, 48px);
+        }
+
+        /* --- Top bar --- */
+        .ob-topbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+        .ob-skip-btn {
+            border: 1px solid var(--ob-border); background: var(--ob-surface);
+            color: var(--ob-text-muted); font-size: 0.85rem; font-weight: 500;
+            padding: 8px 16px; border-radius: 10px; cursor: pointer;
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            transition: all 0.25s ease;
+        }
+        .ob-skip-btn:hover {
+            background: var(--ob-surface-hover); border-color: var(--ob-border-hover);
+            color: var(--ob-text-bright);
+        }
+
+        /* --- Main --- */
+        .ob-main { margin: auto; width: min(720px, 100%); text-align: center; }
+
+        /* --- Logo --- */
+        .ob-logo { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+        .ob-logo-icon {
+            width: 46px; height: 46px; border-radius: 12px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; color: #fff;
+            box-shadow: 0 0 28px rgba(16,185,129,0.3);
+        }
+        .ob-logo-text {
+            font-size: 1.75rem; font-weight: 800; letter-spacing: -0.04em;
+            background: linear-gradient(135deg, #e4e4e7 0%, #ffffff 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+
+        /* --- Step badge --- */
+        .ob-step-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--ob-accent);
+            background: var(--ob-accent-bg); border: 1px solid var(--ob-accent-border);
+            padding: 6px 16px; border-radius: 100px; margin-bottom: 24px;
+        }
+
+        /* --- Title --- */
+        .ob-title {
+            font-size: clamp(2rem, 4.5vw, 2.8rem); font-weight: 800;
+            line-height: 1.1; letter-spacing: -0.03em;
+            color: var(--ob-text-bright); margin-bottom: 10px;
+        }
+        .ob-subtitle {
+            max-width: 520px; margin: 0 auto 36px;
+            color: var(--ob-text-muted); font-size: 1rem; line-height: 1.6;
+        }
+
+        /* --- Phase picker --- */
+        .ob-phase-picker { display: flex; gap: 12px; justify-content: center; margin-bottom: 36px; }
+        .ob-phase-btn {
+            border: 1px solid var(--ob-border); background: var(--ob-bg-raised);
+            color: var(--ob-text-muted); font-size: 0.95rem; font-weight: 600;
+            padding: 14px 28px; border-radius: 14px; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            min-width: 110px;
+        }
+        .ob-phase-btn:hover {
+            border-color: var(--ob-border-hover); background: var(--ob-surface-hover);
+            transform: translateY(-2px);
+        }
+        .ob-phase-btn.is-active {
+            border-color: var(--ob-accent-border); background: var(--ob-accent-bg);
+            color: var(--ob-accent);
+            box-shadow: 0 0 24px var(--ob-accent-glow);
+        }
+        .ob-phase-count { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+        .ob-phase-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+
+        /* --- Members form --- */
+        .ob-members-card {
+            background: var(--ob-bg-raised); border: 1px solid var(--ob-border);
+            border-radius: var(--ob-card-radius); padding: 28px; text-align: left;
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        }
+        .ob-members-card.is-hidden { display: none; }
+
+        .ob-member-row {
+            display: grid; grid-template-columns: auto 1fr auto;
+            gap: 12px; align-items: center; padding: 12px 0;
+            border-bottom: 1px solid var(--ob-border);
+        }
+        .ob-member-row:last-child { border-bottom: none; }
+
+        .ob-member-num {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: var(--ob-accent-bg); color: var(--ob-accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; font-weight: 700; flex-shrink: 0;
+        }
+
+        .ob-input {
+            width: 100%; padding: 10px 14px; border-radius: 10px;
+            border: 1px solid var(--ob-border); background: rgba(255,255,255,0.04);
+            color: var(--ob-text-bright); font-size: 0.9rem;
+            font-family: inherit; transition: border-color 0.2s ease;
+        }
+        .ob-input:focus {
+            outline: none; border-color: var(--ob-accent-border);
+            box-shadow: 0 0 0 3px var(--ob-accent-glow);
+        }
+        .ob-input::placeholder { color: var(--ob-text-muted); opacity: 0.6; }
+
+        .ob-select {
+            padding: 10px 14px; border-radius: 10px;
+            border: 1px solid var(--ob-border); background: var(--ob-bg-raised);
+            color: var(--ob-text-bright); font-size: 0.9rem;
+            font-family: inherit; cursor: pointer;
+            transition: border-color 0.2s ease; min-width: 130px;
+        }
+        .ob-select:focus {
+            outline: none; border-color: var(--ob-accent-border);
+            box-shadow: 0 0 0 3px var(--ob-accent-glow);
+        }
+        .ob-select option { background: var(--ob-bg-raised); color: var(--ob-text-bright); }
+
+        /* --- Password note --- */
+        .ob-pw-note {
+            display: flex; align-items: center; gap: 8px;
+            margin-top: 16px; padding: 10px 14px; border-radius: 10px;
+            background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15);
+            font-size: 0.85rem; color: var(--ob-text-muted);
+        }
+        .ob-pw-note i { color: var(--ob-accent); }
+        .ob-pw-note code {
+            background: rgba(255,255,255,0.08); padding: 2px 8px;
+            border-radius: 6px; font-family: monospace; color: var(--ob-accent);
+            font-size: 0.85rem;
+        }
+
+        /* --- Footer actions --- */
+        .ob-actions {
+            display: flex; justify-content: flex-end; gap: 12px;
+            margin-top: 24px;
+        }
+        .ob-btn-secondary {
+            border: 1px solid var(--ob-border); background: transparent;
+            color: var(--ob-text-muted); font-size: 0.9rem; font-weight: 500;
+            padding: 12px 24px; border-radius: 12px; cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        .ob-btn-secondary:hover {
+            background: var(--ob-surface-hover); border-color: var(--ob-border-hover);
+            color: var(--ob-text-bright);
+        }
+        .ob-btn-primary {
+            border: none; background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff; font-size: 0.9rem; font-weight: 600;
+            padding: 12px 28px; border-radius: 12px; cursor: pointer;
+            box-shadow: 0 4px 20px var(--ob-accent-glow);
+            transition: all 0.25s ease;
+        }
+        .ob-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(16,185,129,0.35);
+        }
+
+        /* --- Responsive --- */
+        @@media (max-width: 600px) {
+            .ob-phase-picker { flex-wrap: wrap; }
+            .ob-member-row { grid-template-columns: auto 1fr; }
+            .ob-member-row .ob-select { grid-column: 2; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ob-bg-canvas">
+        <div class="ob-blob-3"></div>
+        <div class="ob-grid-overlay"></div>
+        <div class="ob-noise"></div>
+    </div>
+    <div class="ob-particles" id="particles"></div>
+
+    <div class="ob-page">
+        <div class="ob-topbar">
+            <form asp-controller="Onboarding" asp-action="SkipSetupTeam" method="post" class="m-0">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                <button type="submit" class="ob-skip-btn">
+                    <i class="bi bi-arrow-right-short"></i> Skip to dashboard
+                </button>
+            </form>
+        </div>
+
+        <main class="ob-main">
+            <div class="ob-logo">
+                <div class="ob-logo-icon"><i class="bi bi-cpu"></i></div>
+                <span class="ob-logo-text">Softracker</span>
+            </div>
+
+            <div class="ob-step-badge">
+                <i class="bi bi-people"></i> Onboarding Step 3 of 3
+            </div>
+
+            <h1 class="ob-title">Invite your team</h1>
+            <p class="ob-subtitle">How many members do you want to start with? You can always add more later from the Admin panel.</p>
+
+            <!-- Phase 1: Pick member count -->
+            <div class="ob-phase-picker" id="phasePicker">
+                <button type="button" class="ob-phase-btn" data-count="2">
+                    <span class="ob-phase-count">2</span>
+                    <span class="ob-phase-label">Members</span>
+                </button>
+                <button type="button" class="ob-phase-btn" data-count="5">
+                    <span class="ob-phase-count">5</span>
+                    <span class="ob-phase-label">Members</span>
+                </button>
+                <button type="button" class="ob-phase-btn" data-count="10">
+                    <span class="ob-phase-count">10</span>
+                    <span class="ob-phase-label">Members</span>
+                </button>
+            </div>
+
+            <!-- Phase 2: Member form -->
+            <form asp-controller="Onboarding" asp-action="SetupTeam" method="post" id="teamForm" class="ob-members-card is-hidden">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+                <input type="hidden" name="MemberCount" id="memberCountField" value="0" />
+
+                <div id="memberRows"></div>
+
+                <div class="ob-pw-note">
+                    <i class="bi bi-shield-lock"></i>
+                    <span>All members will be created with default password <code>abc123</code>. They can change it after first login.</span>
+                </div>
+
+                <div class="ob-actions">
+                    <button type="button" class="ob-btn-secondary" id="backBtn">
+                        <i class="bi bi-arrow-left"></i> Back
+                    </button>
+                    <button type="submit" class="ob-btn-primary">
+                        Add Members & Go to Dashboard <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            // Particles
+            var pc = document.getElementById('particles');
+            if (pc) {
+                for (var i = 0; i < 25; i++) {
+                    var p = document.createElement('div');
+                    p.className = 'ob-particle';
+                    p.style.left = Math.random() * 100 + '%';
+                    p.style.animationDuration = (14 + Math.random() * 18) + 's';
+                    p.style.animationDelay = -(Math.random() * 30) + 's';
+                    p.style.width = p.style.height = (2 + Math.random() * 2.5) + 'px';
+                    pc.appendChild(p);
+                }
+            }
+
+            var picker = document.getElementById('phasePicker');
+            var form = document.getElementById('teamForm');
+            var rows = document.getElementById('memberRows');
+            var countField = document.getElementById('memberCountField');
+            var backBtn = document.getElementById('backBtn');
+            var buttons = picker.querySelectorAll('.ob-phase-btn');
+            var roles = ['Employee', 'Developer', 'Tester'];
+
+            function buildRows(count) {
+                rows.innerHTML = '';
+                countField.value = count;
+                for (var i = 0; i < count; i++) {
+                    var div = document.createElement('div');
+                    div.className = 'ob-member-row';
+                    div.innerHTML =
+                        '<div class="ob-member-num">' + (i + 1) + '</div>' +
+                        '<input type="email" class="ob-input" name="Members[' + i + '].Email" placeholder="member' + (i + 1) + '@@company.com" required />' +
+                        '<select class="ob-select" name="Members[' + i + '].Role">' +
+                        roles.map(function (r) { return '<option value="' + r + '">' + r + '</option>'; }).join('') +
+                        '</select>';
+                    rows.appendChild(div);
+                }
+            }
+
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var count = parseInt(btn.dataset.count);
+                    buttons.forEach(function (b) { b.classList.remove('is-active'); });
+                    btn.classList.add('is-active');
+                    buildRows(count);
+                    picker.style.marginBottom = '20px';
+                    form.classList.remove('is-hidden');
+                    // Smooth scroll to form
+                    setTimeout(function () {
+                        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                });
+            });
+
+            backBtn.addEventListener('click', function () {
+                form.classList.add('is-hidden');
+                buttons.forEach(function (b) { b.classList.remove('is-active'); });
+                picker.style.marginBottom = '';
+                rows.innerHTML = '';
+            });
+        })();
+    </script>
+</body>
+</html>

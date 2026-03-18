@@ -33,6 +33,10 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignMemberTeam([Bind(Prefix = "AssignmentForm")] TeamAssignmentFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         model.MemberId = (model.MemberId ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(model.MemberId))
             ModelState.AddModelError("AssignmentForm.MemberId", "Please select a team member.");
@@ -40,6 +44,8 @@ public class TeamController : Controller
         var member = string.IsNullOrWhiteSpace(model.MemberId) ? null : await _userManager.FindByIdAsync(model.MemberId);
         if (member == null)
             ModelState.AddModelError("AssignmentForm.MemberId", "Selected member not found.");
+        else if (!IsCompanyVisibleToAdmin(member.CompanyName, currentCompanyName, currentAdminId, member.Id))
+            ModelState.AddModelError("AssignmentForm.MemberId", "You cannot assign members from another company.");
 
         if (member != null && await _userManager.IsInRoleAsync(member, "Admin"))
             ModelState.AddModelError("AssignmentForm.MemberId", "Admin account cannot be assigned to a delivery team.");
@@ -47,7 +53,8 @@ public class TeamController : Controller
         OrgTeam? selectedTeam = null;
         if (model.TeamId.HasValue)
         {
-            selectedTeam = await _db.OrgTeams.FirstOrDefaultAsync(t => t.Id == model.TeamId.Value);
+            selectedTeam = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
+                .FirstOrDefaultAsync(t => t.Id == model.TeamId.Value);
             if (selectedTeam == null)
                 ModelState.AddModelError("AssignmentForm.TeamId", "Selected team was not found.");
         }
@@ -75,19 +82,28 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignProjectTeam([Bind(Prefix = "ProjectAssignmentForm")] ProjectTeamAssignmentFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         if (!model.ProjectId.HasValue)
             ModelState.AddModelError("ProjectAssignmentForm.ProjectId", "Please select a project.");
 
         var project = model.ProjectId.HasValue
-            ? await _db.ChangeRequests.FirstOrDefaultAsync(c => c.Id == model.ProjectId.Value)
+            ? await _db.ChangeRequests
+                .Include(c => c.CreatedBy)
+                .FirstOrDefaultAsync(c => c.Id == model.ProjectId.Value)
             : null;
         if (project == null)
             ModelState.AddModelError("ProjectAssignmentForm.ProjectId", "Selected project not found.");
+        else if (!IsCompanyVisibleToAdmin(project.CreatedBy?.CompanyName, currentCompanyName, currentAdminId, project.CreatedById))
+            ModelState.AddModelError("ProjectAssignmentForm.ProjectId", "You cannot assign projects from another company.");
 
         OrgTeam? selectedTeam = null;
         if (model.TeamId.HasValue)
         {
-            selectedTeam = await _db.OrgTeams.FirstOrDefaultAsync(t => t.Id == model.TeamId.Value);
+            selectedTeam = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
+                .FirstOrDefaultAsync(t => t.Id == model.TeamId.Value);
             if (selectedTeam == null)
                 ModelState.AddModelError("ProjectAssignmentForm.TeamId", "Selected team was not found.");
         }
@@ -109,11 +125,15 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AddTeam([Bind(Prefix = "TeamCreateForm")] TeamCreateFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         model.Name = (model.Name ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(model.Name))
             ModelState.AddModelError("TeamCreateForm.Name", "Team name is required.");
 
-        var exists = await _db.OrgTeams.AnyAsync(t => t.Name.ToLower() == model.Name.ToLower());
+        var exists = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
+            .AnyAsync(t => t.Name.ToLower() == model.Name.ToLower());
         if (exists)
             ModelState.AddModelError("TeamCreateForm.Name", "Team name already exists.");
 
@@ -123,6 +143,7 @@ public class TeamController : Controller
         _db.OrgTeams.Add(new OrgTeam
         {
             Name = model.Name,
+            CompanyName = currentCompanyName,
             UpdatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync();
@@ -134,19 +155,23 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> RenameTeam([Bind(Prefix = "TeamRenameForm")] TeamRenameFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         model.Name = (model.Name ?? string.Empty).Trim();
         if (model.TeamId <= 0)
             ModelState.AddModelError("TeamRenameForm.TeamId", "Please select a team.");
         if (string.IsNullOrWhiteSpace(model.Name))
             ModelState.AddModelError("TeamRenameForm.Name", "New team name is required.");
 
-        var team = await _db.OrgTeams.FirstOrDefaultAsync(t => t.Id == model.TeamId);
+        var team = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
+            .FirstOrDefaultAsync(t => t.Id == model.TeamId);
         if (team == null)
             ModelState.AddModelError("TeamRenameForm.TeamId", "Selected team not found.");
 
         if (team != null)
         {
-            var duplicate = await _db.OrgTeams
+            var duplicate = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
                 .AnyAsync(t => t.Id != team.Id && t.Name.ToLower() == model.Name.ToLower());
             if (duplicate)
                 ModelState.AddModelError("TeamRenameForm.Name", "Team name already exists.");
@@ -166,10 +191,14 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteTeam([Bind(Prefix = "TeamDeleteForm")] TeamDeleteFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         if (model.TeamId <= 0)
             ModelState.AddModelError("TeamDeleteForm.TeamId", "Please select a team to delete.");
 
-        var team = await _db.OrgTeams.FirstOrDefaultAsync(t => t.Id == model.TeamId);
+        var team = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
+            .FirstOrDefaultAsync(t => t.Id == model.TeamId);
         if (team == null)
             ModelState.AddModelError("TeamDeleteForm.TeamId", "Selected team not found.");
 
@@ -206,6 +235,10 @@ public class TeamController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateCeo([Bind(Prefix = "CeoForm")] TeamCeoFormViewModel model)
     {
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
         model.CeoUserId = (model.CeoUserId ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(model.CeoUserId))
             ModelState.AddModelError("CeoForm.CeoUserId", "Please select a CEO account.");
@@ -215,6 +248,8 @@ public class TeamController : Controller
             : await _userManager.FindByIdAsync(model.CeoUserId);
         if (ceoUser == null)
             ModelState.AddModelError("CeoForm.CeoUserId", "Selected CEO account not found.");
+        else if (!IsCompanyVisibleToAdmin(ceoUser.CompanyName, currentCompanyName, currentAdminId, ceoUser.Id))
+            ModelState.AddModelError("CeoForm.CeoUserId", "Selected CEO must be in your company.");
 
         if (!ModelState.IsValid)
             return View(nameof(Index), await BuildDashboardAsync(ceoFormModel: model));
@@ -259,7 +294,11 @@ public class TeamController : Controller
         TeamDeleteFormViewModel? teamDeleteFormModel = null,
         TeamCeoFormViewModel? ceoFormModel = null)
     {
-        var teams = await _db.OrgTeams
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        var currentAdminId = currentAdmin?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
+
+        var teams = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
             .OrderBy(t => t.Name)
             .AsNoTracking()
             .ToListAsync();
@@ -272,6 +311,9 @@ public class TeamController : Controller
             var users = await _userManager.GetUsersInRoleAsync(role);
             foreach (var user in users)
             {
+                if (!IsCompanyVisibleToAdmin(user.CompanyName, currentCompanyName, currentAdminId, user.Id))
+                    continue;
+
                 if (!usersById.ContainsKey(user.Id))
                     usersById[user.Id] = user;
 
@@ -292,10 +334,19 @@ public class TeamController : Controller
             .OrderBy(u => u.FullName)
             .ToList();
 
-        var projects = await _db.ChangeRequests
+        var projectQuery = _db.ChangeRequests
+            .Include(c => c.CreatedBy)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(currentCompanyName))
+            projectQuery = projectQuery.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == currentCompanyName);
+        else if (!string.IsNullOrWhiteSpace(currentAdminId))
+            projectQuery = projectQuery.Where(c => c.CreatedById == currentAdminId);
+
+        var projects = await projectQuery
             .OrderByDescending(c => c.UpdatedAt)
             .ThenByDescending(c => c.Id)
-            .AsNoTracking()
             .Select(c => new ProjectTeamNodeViewModel
             {
                 ProjectId = c.Id,
@@ -342,31 +393,40 @@ public class TeamController : Controller
                 t.TeamId.ToString()))
             .ToList();
 
-        var allUsers = _userManager.Users
+        var allUsers = await _userManager.Users
+            .AsNoTracking()
             .OrderBy(u => u.FullName)
-            .Select(u => new { u.Id, u.FullName, u.Email });
+            .Select(u => new { u.Id, u.FullName, u.Email, u.CompanyName })
+            .ToListAsync();
 
         var profile = await _db.OrganizationProfiles
             .Include(p => p.CeoUser)
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == 1);
 
-        var currentAdmin = await _userManager.GetUserAsync(User);
         var ceoForm = ceoFormModel ?? new TeamCeoFormViewModel();
+        var visibleProfileCeo = profile?.CeoUser != null &&
+                                IsCompanyVisibleToAdmin(
+                                    profile.CeoUser.CompanyName,
+                                    currentCompanyName,
+                                    currentAdminId,
+                                    profile.CeoUser.Id);
         ceoForm.CeoUserId = string.IsNullOrWhiteSpace(ceoForm.CeoUserId)
-            ? (profile?.CeoUserId ?? string.Empty)
+            ? (visibleProfileCeo ? profile!.CeoUserId ?? string.Empty : string.Empty)
             : ceoForm.CeoUserId;
-        ceoForm.CeoOptions = await allUsers
+        ceoForm.CeoOptions = allUsers
+            .Where(u => IsCompanyVisibleToAdmin(u.CompanyName, currentCompanyName, currentAdminId, u.Id))
             .Select(u => new SelectListItem(
                 string.IsNullOrWhiteSpace(u.Email) ? u.FullName : $"{u.FullName} ({u.Email})",
                 u.Id))
-            .ToListAsync();
+            .ToList();
 
         return new TeamDashboardViewModel
         {
-            CeoName = profile?.CeoUser?.FullName
-                ?? (string.IsNullOrWhiteSpace(currentAdmin?.FullName) ? "Me" : currentAdmin!.FullName),
-            CeoEmail = profile?.CeoUser?.Email ?? (currentAdmin?.Email ?? string.Empty),
+            CeoName = visibleProfileCeo
+                ? (profile!.CeoUser!.FullName ?? (string.IsNullOrWhiteSpace(currentAdmin?.FullName) ? "Me" : currentAdmin!.FullName))
+                : (string.IsNullOrWhiteSpace(currentAdmin?.FullName) ? "Me" : currentAdmin!.FullName),
+            CeoEmail = visibleProfileCeo ? profile!.CeoUser!.Email ?? (currentAdmin?.Email ?? string.Empty) : (currentAdmin?.Email ?? string.Empty),
             Teams = teamCards,
             UnassignedMembers = members.Where(n => !n.TeamId.HasValue).ToList(),
             UnassignedProjects = projects.Where(p => !p.TeamId.HasValue).ToList(),
@@ -395,5 +455,29 @@ public class TeamController : Controller
         if (string.Equals(teamName, "Team 2", StringComparison.OrdinalIgnoreCase))
             return OrganizationTeam.Team2;
         return OrganizationTeam.Unassigned;
+    }
+
+    private static IQueryable<OrgTeam> ApplyTeamCompanyScope(IQueryable<OrgTeam> query, string? companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return query.Where(t => t.CompanyName == null || t.CompanyName == string.Empty);
+
+        return query.Where(t => t.CompanyName == companyName);
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static bool IsCompanyVisibleToAdmin(string? targetCompanyName, string? adminCompanyName, string? adminUserId, string? targetUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(adminCompanyName))
+            return string.Equals(NormalizeCompanyName(targetCompanyName), adminCompanyName, StringComparison.OrdinalIgnoreCase);
+
+        return !string.IsNullOrWhiteSpace(adminUserId) &&
+               !string.IsNullOrWhiteSpace(targetUserId) &&
+               string.Equals(adminUserId, targetUserId, StringComparison.Ordinal);
     }
 }

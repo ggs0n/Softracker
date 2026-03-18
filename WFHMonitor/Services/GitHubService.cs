@@ -28,15 +28,30 @@ public record GitHubRepositoryInfo(
     string? Homepage
 );
 
+public record GitHubConnectedRepository(
+    string Name,
+    string FullName,
+    string OwnerLogin,
+    string HtmlUrl,
+    string DefaultBranch,
+    bool IsPrivate,
+    string? Description
+);
+
 public class GitHubService : IGitHubService
 {
     private readonly HttpClient _http;
     private readonly string _token;
+    private readonly IGitHubOAuthService _gitHubOAuthService;
 
-    public GitHubService(HttpClient http, IOptions<GitHubSettings> settings)
+    public GitHubService(
+        HttpClient http,
+        IOptions<GitHubSettings> settings,
+        IGitHubOAuthService gitHubOAuthService)
     {
         _http = http;
         _token = settings.Value.Token;
+        _gitHubOAuthService = gitHubOAuthService;
     }
 
     public async Task<List<GitHubCommit>> GetCommitsAsync(string owner, string repo, string branch, int count = 10)
@@ -104,7 +119,7 @@ public class GitHubService : IGitHubService
 
     public async Task<string?> GetReadmeContentAsync(string owner, string repo)
     {
-        var request = CreateRequest(HttpMethod.Get, $"https://api.github.com/repos/{owner}/{repo}/readme");
+        var request = await CreateRequestAsync(HttpMethod.Get, $"https://api.github.com/repos/{owner}/{repo}/readme");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
 
         var response = await _http.SendAsync(request);
@@ -158,9 +173,108 @@ public class GitHubService : IGitHubService
         return result;
     }
 
+    public async Task<List<GitHubConnectedRepository>> GetCurrentUserRepositoriesAsync(int maxCount = 200)
+    {
+        if (maxCount <= 0)
+            return new List<GitHubConnectedRepository>();
+
+        var oauthToken = await _gitHubOAuthService.GetCurrentUserAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(oauthToken))
+            throw new Exception("Connect your GitHub account first.");
+
+        var repositories = new List<GitHubConnectedRepository>();
+        var page = 1;
+        const int pageSize = 100;
+        const int maxPages = 10;
+
+        while (repositories.Count < maxCount && page <= maxPages)
+        {
+            var remaining = maxCount - repositories.Count;
+            var requestedPageSize = Math.Max(1, Math.Min(pageSize, remaining));
+            var requestUrl =
+                $"https://api.github.com/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=updated&per_page={requestedPageSize}&page={page}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            request.Headers.UserAgent.ParseAdd("WFHMonitor/1.0");
+            request.Headers.Accept.ParseAdd("application/vnd.github+json");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oauthToken);
+
+            var response = await _http.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new Exception($"GitHub API {(int)response.StatusCode}: {error}");
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                break;
+
+            var countInPage = 0;
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                var name = item.TryGetProperty("name", out var nameEl)
+                    ? nameEl.GetString()
+                    : null;
+                var fullName = item.TryGetProperty("full_name", out var fullNameEl)
+                    ? fullNameEl.GetString()
+                    : null;
+                var htmlUrl = item.TryGetProperty("html_url", out var htmlUrlEl)
+                    ? htmlUrlEl.GetString()
+                    : null;
+                var defaultBranch = item.TryGetProperty("default_branch", out var branchEl)
+                    ? branchEl.GetString()
+                    : null;
+                var isPrivate = item.TryGetProperty("private", out var privateEl) && privateEl.ValueKind == JsonValueKind.True;
+                var description = item.TryGetProperty("description", out var descEl)
+                    ? descEl.GetString()
+                    : null;
+
+                string ownerLogin = string.Empty;
+                if (item.TryGetProperty("owner", out var ownerEl) &&
+                    ownerEl.ValueKind == JsonValueKind.Object &&
+                    ownerEl.TryGetProperty("login", out var loginEl))
+                {
+                    ownerLogin = loginEl.GetString() ?? string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(name) ||
+                    string.IsNullOrWhiteSpace(fullName) ||
+                    string.IsNullOrWhiteSpace(htmlUrl))
+                {
+                    continue;
+                }
+
+                repositories.Add(new GitHubConnectedRepository(
+                    name,
+                    fullName,
+                    ownerLogin,
+                    htmlUrl,
+                    string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch,
+                    isPrivate,
+                    description
+                ));
+
+                countInPage++;
+                if (repositories.Count >= maxCount)
+                    break;
+            }
+
+            if (countInPage == 0 || countInPage < requestedPageSize)
+                break;
+
+            page++;
+        }
+
+        return repositories
+            .OrderBy(r => r.FullName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private async Task<string> SendGitHubGetAsync(string url)
     {
-        var request = CreateRequest(HttpMethod.Get, url);
+        var request = await CreateRequestAsync(HttpMethod.Get, url);
         var response = await _http.SendAsync(request);
 
         if (!response.IsSuccessStatusCode)
@@ -172,13 +286,16 @@ public class GitHubService : IGitHubService
         return await response.Content.ReadAsStringAsync();
     }
 
-    private HttpRequestMessage CreateRequest(HttpMethod method, string url)
+    private async Task<HttpRequestMessage> CreateRequestAsync(HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);
         request.Headers.UserAgent.ParseAdd("WFHMonitor/1.0");
 
-        if (!string.IsNullOrWhiteSpace(_token))
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        var oauthToken = await _gitHubOAuthService.GetCurrentUserAccessTokenAsync();
+        var tokenToUse = !string.IsNullOrWhiteSpace(oauthToken) ? oauthToken : _token;
+
+        if (!string.IsNullOrWhiteSpace(tokenToUse))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenToUse);
 
         return request;
     }

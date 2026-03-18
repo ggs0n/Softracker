@@ -26,6 +26,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<ModulePermissionSetting> ModulePermissionSettings => Set<ModulePermissionSetting>();
     public DbSet<SystemPreference> SystemPreferences => Set<SystemPreference>();
+    public DbSet<UserOnboardingState> UserOnboardingStates => Set<UserOnboardingState>();
     public DbSet<OrgTeam> OrgTeams => Set<OrgTeam>();
     public DbSet<OrganizationProfile> OrganizationProfiles => Set<OrganizationProfile>();
 
@@ -44,6 +45,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValue(OrganizationTeam.Unassigned);
+
+            e.Property(u => u.CompanyName)
+                .HasMaxLength(200);
 
             e.Property(u => u.IsProSubscriptionActive)
                 .HasDefaultValue(false);
@@ -380,12 +384,38 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasDefaultValue(false);
         });
 
+        builder.Entity<UserOnboardingState>(e =>
+        {
+            e.HasKey(s => s.UserId);
+
+            e.Property(s => s.UserId)
+                .HasMaxLength(450);
+
+            e.Property(s => s.LastSeenStepKey)
+                .HasMaxLength(50)
+                .HasDefaultValue(OnboardingStepKeys.AddProject);
+
+            e.Property(s => s.IsDismissed)
+                .HasDefaultValue(false);
+
+            e.Property(s => s.IsCompleted)
+                .HasDefaultValue(false);
+
+            e.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<OrgTeam>(e =>
         {
-            e.HasIndex(t => t.Name).IsUnique();
+            e.HasIndex(t => new { t.CompanyName, t.Name }).IsUnique();
 
             e.Property(t => t.Name)
                 .HasMaxLength(100);
+
+            e.Property(t => t.CompanyName)
+                .HasMaxLength(200);
         });
 
         builder.Entity<OrganizationProfile>(e =>

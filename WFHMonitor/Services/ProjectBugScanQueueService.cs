@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -21,15 +22,18 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ProjectBugScanQueueService> _logger;
     private readonly OpenClawSettings _openClawSettings;
+    private readonly IWebHostEnvironment _environment;
 
     public ProjectBugScanQueueService(
         IServiceScopeFactory scopeFactory,
         ILogger<ProjectBugScanQueueService> logger,
-        IOptions<OpenClawSettings> openClawSettings)
+        IOptions<OpenClawSettings> openClawSettings,
+        IWebHostEnvironment environment)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _environment = environment;
     }
 
     public Task EnqueueAsync(ProjectBugScanQueueItem item, CancellationToken cancellationToken = default)
@@ -151,6 +155,21 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
             .Where(f => knownTitles.Add(f.Title))
             .Take(openClaw.MaxFindingsPerScan)
             .ToList();
+        var agentResponsePaths = GetCandidateScreenshotPaths(scanResult.AgentResponseText);
+        var fallbackScreenshotSource = GetConfiguredScreenshotFiles();
+        var fallbackScreenshotFiles = fallbackScreenshotSource.Files;
+        var combinedFallback = new List<string>(agentResponsePaths.Count + fallbackScreenshotFiles.Count);
+        combinedFallback.AddRange(agentResponsePaths);
+        combinedFallback.AddRange(fallbackScreenshotFiles);
+        var consumedScreenshotFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var diagnostics = new ScreenshotImportDiagnostics
+        {
+            SourceFolderCount = fallbackScreenshotSource.SourceFolderCount,
+            ExistingFolderCount = fallbackScreenshotSource.ExistingFolderCount,
+            FallbackPoolCount = combinedFallback.Count
+        };
+        var findingsWithExplicitPaths = 0;
+        var explicitPathCount = 0;
 
         if (findings.Count == 0)
         {
@@ -162,6 +181,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
         }
 
         var created = 0;
+        var importedScreenshots = 0;
         var errors = new List<string>();
         foreach (var finding in findings)
         {
@@ -184,7 +204,38 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
 
             var result = await bugService.CreateAsync(model, item.RequestedByUserId);
             if (result.Succeeded)
+            {
                 created++;
+                if (finding.ScreenshotPaths.Count > 0)
+                {
+                    findingsWithExplicitPaths++;
+                    explicitPathCount += finding.ScreenshotPaths.Count;
+                }
+                var screenshotCandidates =
+                    finding.ScreenshotPaths.Count > 0
+                        ? finding.ScreenshotPaths
+                        : (IReadOnlyList<string>)combinedFallback;
+                var importLimitPerBug = finding.ScreenshotPaths.Count > 0
+                    ? Math.Clamp(_openClawSettings.FeatureScreenshotImportMaxFiles, 1, 20)
+                    : 1;
+
+                var importResult = await TryImportBugScreenshotsAsync(
+                    db,
+                    result.BugId,
+                    screenshotCandidates,
+                    consumedScreenshotFiles,
+                    importLimitPerBug,
+                    cancellationToken);
+                importedScreenshots += importResult.Imported;
+                diagnostics.Imported += importResult.Imported;
+                diagnostics.Candidates += importResult.Candidates;
+                diagnostics.InvalidPath += importResult.InvalidPath;
+                diagnostics.ConsumedAlready += importResult.ConsumedAlready;
+                diagnostics.MissingFile += importResult.MissingFile;
+                diagnostics.DuplicateName += importResult.DuplicateName;
+                diagnostics.NonImage += importResult.NonImage;
+                diagnostics.CopyError += importResult.CopyError;
+            }
             else if (!string.IsNullOrWhiteSpace(result.Error))
                 errors.Add(result.Error);
         }
@@ -201,12 +252,126 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
             var summary = created > 0
                 ? $"Scan complete with '{selectedScanAgentId}'. Added {created} bug(s)."
                 : "Scan complete - no new bugs found for this project.";
+            if (importedScreenshots > 0)
+                summary = $"{summary} Imported {importedScreenshots} screenshot(s).";
+            else if (created > 0)
+                summary = $"{summary} No screenshots imported.";
+            summary = $"{summary} {BuildScreenshotDebugSummary(findingsWithExplicitPaths, explicitPathCount, diagnostics)}";
             if (errors.Count > 0)
                 summary = $"{summary} {errors.Count} item(s) could not be created.";
             project.BugScanLastMessage = TrimMessage(summary);
         }
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<ScreenshotImportResult> TryImportBugScreenshotsAsync(
+        ApplicationDbContext db,
+        int bugId,
+        IReadOnlyList<string> screenshotPaths,
+        ISet<string> consumedSourceFiles,
+        int maxFilesPerBug,
+        CancellationToken cancellationToken)
+    {
+        var result = new ScreenshotImportResult
+        {
+            Candidates = screenshotPaths.Count
+        };
+
+        if (bugId <= 0 || screenshotPaths.Count == 0 || maxFilesPerBug <= 0)
+            return result;
+
+        var existingOriginalNames = await db.BugScreenshots
+            .AsNoTracking()
+            .Where(s => s.BugReportId == bugId)
+            .Select(s => s.OriginalFileName)
+            .ToListAsync(cancellationToken);
+
+        var existingSet = existingOriginalNames
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var uploadFolder = Path.Combine(_environment.WebRootPath, "uploads", "bugs", "screenshots");
+        Directory.CreateDirectory(uploadFolder);
+
+        var imported = 0;
+        var seenSourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pathCandidate in screenshotPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (imported >= maxFilesPerBug)
+                break;
+
+            var resolvedPath = ResolvePath(pathCandidate);
+            if (string.IsNullOrWhiteSpace(resolvedPath))
+            {
+                result.InvalidPath++;
+                continue;
+            }
+
+            if (!seenSourceFiles.Add(resolvedPath))
+            {
+                result.InvalidPath++;
+                continue;
+            }
+            if (consumedSourceFiles.Contains(resolvedPath))
+            {
+                result.ConsumedAlready++;
+                continue;
+            }
+
+            if (!File.Exists(resolvedPath))
+            {
+                result.MissingFile++;
+                continue;
+            }
+
+            var originalName = Path.GetFileName(resolvedPath);
+            if (string.IsNullOrWhiteSpace(originalName) || existingSet.Contains(originalName))
+            {
+                result.DuplicateName++;
+                continue;
+            }
+
+            var extension = Path.GetExtension(originalName);
+            if (!IsSupportedImageExtension(extension))
+            {
+                result.NonImage++;
+                continue;
+            }
+
+            try
+            {
+                var storedName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+                var destination = Path.Combine(uploadFolder, storedName);
+                File.Copy(resolvedPath, destination, overwrite: false);
+
+                db.BugScreenshots.Add(new BugScreenshot
+                {
+                    BugReportId = bugId,
+                    FileName = storedName,
+                    OriginalFileName = originalName
+                });
+
+                existingSet.Add(originalName);
+                consumedSourceFiles.Add(resolvedPath);
+                imported++;
+            }
+            catch (Exception ex)
+            {
+                result.CopyError++;
+                _logger.LogWarning(
+                    ex,
+                    "Failed to import bug screenshot '{Path}' for bug {BugId}.",
+                    resolvedPath,
+                    bugId);
+            }
+        }
+
+        result.Imported = imported;
+        return result;
     }
 
     private async Task MarkProjectFailedAsync(int projectId, string message)
@@ -249,6 +414,213 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
         if (text.Length <= 500)
             return text;
         return text[..500].Trim();
+    }
+
+    private string ResolvePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+
+        var expanded = Environment.ExpandEnvironmentVariables(path.Trim());
+        if (Path.IsPathRooted(expanded))
+            return expanded;
+
+        try
+        {
+            return Path.GetFullPath(Path.Combine(_environment.ContentRootPath, expanded));
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private ScreenshotSourceFiles GetConfiguredScreenshotFiles()
+    {
+        var folders = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_openClawSettings.FeatureScreenshotImportDirectory))
+            folders.Add(_openClawSettings.FeatureScreenshotImportDirectory.Trim());
+
+        if (_openClawSettings.FeatureScreenshotImportDirectories is not null)
+        {
+            folders.AddRange(_openClawSettings.FeatureScreenshotImportDirectories
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path.Trim()));
+        }
+
+        folders.AddRange(GetAutoOpenClawScreenshotFolders());
+
+        var uniqueFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resolvedFolders = new List<string>();
+        foreach (var folder in folders)
+        {
+            var resolved = ResolvePath(folder);
+            if (!string.IsNullOrWhiteSpace(resolved) && uniqueFolders.Add(resolved))
+                resolvedFolders.Add(resolved);
+        }
+
+        if (resolvedFolders.Count == 0)
+        {
+            return new ScreenshotSourceFiles
+            {
+                Files = [],
+                SourceFolderCount = uniqueFolders.Count,
+                ExistingFolderCount = 0
+            };
+        }
+
+        var lookbackMinutes = Math.Clamp(_openClawSettings.FeatureScreenshotImportLookbackMinutes, 1, 24 * 60);
+        var minWriteTime = DateTime.UtcNow.AddMinutes(-lookbackMinutes);
+        var existingFolders = resolvedFolders.Where(Directory.Exists).ToList();
+        var files = existingFolders
+            .SelectMany(folder =>
+            {
+                try
+                {
+                    return Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories);
+                }
+                catch
+                {
+                    return [];
+                }
+            })
+            .Where(path => IsSupportedImageExtension(Path.GetExtension(path)))
+            .Select(path => new FileInfo(path))
+            .Where(file => file.Exists && file.LastWriteTimeUtc >= minWriteTime)
+            .OrderByDescending(file => file.LastWriteTimeUtc)
+            .Select(file => file.FullName)
+            .ToList();
+
+        return new ScreenshotSourceFiles
+        {
+            Files = files,
+            SourceFolderCount = uniqueFolders.Count,
+            ExistingFolderCount = existingFolders.Count
+        };
+    }
+
+    private List<string> GetCandidateScreenshotPaths(string? agentResponseText)
+    {
+        if (string.IsNullOrWhiteSpace(agentResponseText))
+            return [];
+
+        var files = new List<string>();
+
+        var markerPattern = @"SCREENSHOT_PATHS?\s*:\s*(.+)";
+        var markerMatch = Regex.Match(agentResponseText, markerPattern, RegexOptions.IgnoreCase);
+        if (markerMatch.Success)
+        {
+            var payload = markerMatch.Groups[1].Value;
+            var tokens = payload
+                .Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var normalized = token.Trim('"', '\'', '`', '*', '.', ',', ';', ')', ']', '}');
+                if (string.IsNullOrWhiteSpace(normalized))
+                    continue;
+
+                var resolved = ResolvePath(normalized);
+                if (!string.IsNullOrWhiteSpace(resolved))
+                    files.Add(resolved);
+            }
+        }
+
+        var pathPattern = @"(?:[A-Za-z]:\\|\\\\)[^\r\n]*?\.(?:png|jpg|jpeg|webp|gif|bmp)";
+        var matches = Regex.Matches(agentResponseText, pathPattern, RegexOptions.IgnoreCase);
+        foreach (Match match in matches)
+        {
+            var raw = match.Value.Trim();
+            var normalized = raw.Trim('"', '\'', '`', '*', '.', ',', ';', ')', ']', '}');
+            var resolved = ResolvePath(normalized);
+            if (!string.IsNullOrWhiteSpace(resolved))
+                files.Add(resolved);
+        }
+
+        return files;
+    }
+
+    private static IEnumerable<string> GetAutoOpenClawScreenshotFolders()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userProfile))
+            return [];
+
+        var openClawRoot = Path.Combine(userProfile, ".openclaw");
+        if (!Directory.Exists(openClawRoot))
+            return [];
+
+        var discovered = new List<string>();
+        var mediaBrowserFolder = Path.Combine(openClawRoot, "media", "browser");
+        if (Directory.Exists(mediaBrowserFolder))
+            discovered.Add(mediaBrowserFolder);
+
+        try
+        {
+            discovered.AddRange(Directory
+                .EnumerateDirectories(openClawRoot, "Fix Screenshot", SearchOption.AllDirectories)
+                .ToList());
+            return discovered;
+        }
+        catch
+        {
+            return discovered;
+        }
+    }
+
+    private static bool IsSupportedImageExtension(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return false;
+
+        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildScreenshotDebugSummary(
+        int findingsWithExplicitPaths,
+        int explicitPathCount,
+        ScreenshotImportDiagnostics diagnostics)
+    {
+        return $"[shotdbg fldr:{diagnostics.ExistingFolderCount}/{diagnostics.SourceFolderCount} pool:{diagnostics.FallbackPoolCount} exp:{findingsWithExplicitPaths}/{explicitPathCount} cand:{diagnostics.Candidates} imp:{diagnostics.Imported} miss:{diagnostics.MissingFile} dup:{diagnostics.DuplicateName + diagnostics.ConsumedAlready} inv:{diagnostics.InvalidPath} nonimg:{diagnostics.NonImage} err:{diagnostics.CopyError}]";
+    }
+
+    private sealed class ScreenshotSourceFiles
+    {
+        public List<string> Files { get; init; } = [];
+        public int SourceFolderCount { get; init; }
+        public int ExistingFolderCount { get; init; }
+    }
+
+    private sealed class ScreenshotImportResult
+    {
+        public int Candidates { get; set; }
+        public int Imported { get; set; }
+        public int InvalidPath { get; set; }
+        public int ConsumedAlready { get; set; }
+        public int MissingFile { get; set; }
+        public int DuplicateName { get; set; }
+        public int NonImage { get; set; }
+        public int CopyError { get; set; }
+    }
+
+    private sealed class ScreenshotImportDiagnostics
+    {
+        public int SourceFolderCount { get; set; }
+        public int ExistingFolderCount { get; set; }
+        public int FallbackPoolCount { get; set; }
+        public int Candidates { get; set; }
+        public int Imported { get; set; }
+        public int InvalidPath { get; set; }
+        public int ConsumedAlready { get; set; }
+        public int MissingFile { get; set; }
+        public int DuplicateName { get; set; }
+        public int NonImage { get; set; }
+        public int CopyError { get; set; }
     }
 
     private static bool HasActiveProAccess(ApplicationUser user)

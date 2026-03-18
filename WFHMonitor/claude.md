@@ -47,6 +47,7 @@
 4. Add XML documentation comments for public methods ONLY when explicitly requested
 5. Use dependency injection for all services
 6. Use SOLID principles code
+7. Please produce minimal code changes
 
 ### Security Requirements
 1. Never bypass authentication or authorization checks
@@ -74,7 +75,7 @@
 9. Create/Update sql file after every changes that required db script to run
 
 ### UI/UX Standards
-1. Maintain Netflix-style card design with water theme
+1. Use skills.md for reference ui
 2. Use Bootstrap Icons consistently
 3. Display success/error messages using TempData
 4. Ensure responsive design works on mobile devices

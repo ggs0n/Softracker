@@ -21,9 +21,21 @@
                     @Html.AntiForgeryToken()
                     <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
-                    <h6 class="fw-bold mb-3"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
+                    <h6 class="fw-bold mb-3" data-onboarding-id="github-integration-section"><i class="bi bi-github me-2 text-primary"></i>GitHub Integration</h6>
 
                     <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Connected GitHub Repositories</label>
+                            <div class="input-group">
+                                <select id="connectedGitHubRepo" class="form-select">
+                                    <option value="">Loading connected repositories...</option>
+                                </select>
+                                <button type="button" id="applyConnectedGitHubRepo" class="btn btn-outline-dark" disabled>
+                                    <i class="bi bi-check2-square me-1"></i>Use Repo
+                                </button>
+                            </div>
+                            <div id="connectedGitHubRepoStatus" class="form-text">Select a repository to auto-fill project details.</div>
+                        </div>
                         <div class="col-12">
                             <label asp-for="GitHubRepoUrl" class="form-label fw-semibold">GitHub Repo URL</label>
                             <div class="input-group">
@@ -142,18 +154,6 @@
             </div>
         </div>
     </div>
-
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header bg-light">
-                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>About Project Numbers</h6>
-            </div>
-            <div class="card-body small text-muted">
-                <p>Project numbers are auto-generated in the format <strong>PRJ-YYYY-XXXX</strong>.</p>
-                <p class="mb-0">The number is assigned once you submit the form.</p>
-            </div>
-        </div>
-    </div>
 </div>
 
 @section Scripts {
@@ -166,6 +166,8 @@
             Model.ImportedFeatures.Select(f => new { name = f.Name, description = f.Description, isAutoDetected = f.IsAutoDetected })
         ));
         var importUrl = '@Url.Action("ImportGitHubRepo", "ChangeRequest")';
+        var repositoryCatalogUrl = '@Url.Action("GetGitHubRepositories", "ChangeRequest")';
+        var connectedRepositories = [];
         var picIndex = 0;
 
         function addPicRow(empId, role) {
@@ -214,6 +216,125 @@
                 .text(message);
         }
 
+        function setConnectedRepoStatus(message, type) {
+            var cssClass = type === 'error' ? 'text-danger'
+                : type === 'success' ? 'text-success'
+                : 'text-muted';
+
+            $('#connectedGitHubRepoStatus')
+                .removeClass('text-danger text-success text-muted')
+                .addClass(cssClass)
+                .text(message);
+        }
+
+        function humanizeRepoName(value) {
+            return (value || '')
+                .replace(/[-_.]+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+        }
+
+        function fillRepoFields(repo) {
+            if (!repo) return;
+
+            if (repo.ownerLogin) $('#GitHubRepoOwner').val(repo.ownerLogin);
+            if (repo.name) $('#GitHubRepoName').val(repo.name);
+            if (repo.htmlUrl) $('#GitHubRepoUrl').val(repo.htmlUrl);
+            if (repo.defaultBranch) $('#GitHubBranch').val(repo.defaultBranch);
+
+            var existingTitle = ($('#Title').val() || '').toString().trim();
+            if (!existingTitle && repo.name) {
+                $('#Title').val(humanizeRepoName(repo.name));
+            }
+        }
+
+        function renderConnectedRepositories() {
+            var $select = $('#connectedGitHubRepo');
+            $select.empty();
+
+            if (!connectedRepositories.length) {
+                $('<option>', { value: '', text: 'No repositories found' }).appendTo($select);
+                $('#applyConnectedGitHubRepo').prop('disabled', true);
+                return;
+            }
+
+            $('<option>', { value: '', text: '-- Select repository --' }).appendTo($select);
+
+            connectedRepositories.forEach((repo, index) => {
+                var label = repo.fullName || `${repo.ownerLogin}/${repo.name}`;
+                if (repo.defaultBranch) label += ` [${repo.defaultBranch}]`;
+                if (repo.isPrivate) label += ' (private)';
+                $('<option>', { value: String(index), text: label }).appendTo($select);
+            });
+
+            $('#applyConnectedGitHubRepo').prop('disabled', false);
+        }
+
+        function trySelectExistingRepository() {
+            var currentUrl = ($('#GitHubRepoUrl').val() || '').toString().trim().toLowerCase();
+            var currentOwner = ($('#GitHubRepoOwner').val() || '').toString().trim().toLowerCase();
+            var currentName = ($('#GitHubRepoName').val() || '').toString().trim().toLowerCase();
+
+            var selectedIndex = connectedRepositories.findIndex(repo => {
+                var repoUrl = (repo.htmlUrl || '').toLowerCase();
+                var repoOwner = (repo.ownerLogin || '').toLowerCase();
+                var repoName = (repo.name || '').toLowerCase();
+
+                if (currentUrl && repoUrl && repoUrl === currentUrl) return true;
+                return currentOwner && currentName && repoOwner === currentOwner && repoName === currentName;
+            });
+
+            if (selectedIndex >= 0) {
+                $('#connectedGitHubRepo').val(String(selectedIndex));
+            }
+        }
+
+        async function loadConnectedRepositories() {
+            $('#applyConnectedGitHubRepo').prop('disabled', true);
+            setConnectedRepoStatus('Loading connected repositories...', 'info');
+
+            try {
+                var response = await fetch(repositoryCatalogUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    cache: 'no-store'
+                });
+
+                var payload = await response.json().catch(() => null);
+                if (!response.ok) {
+                    throw new Error(payload?.message || 'Unable to load connected repositories.');
+                }
+
+                connectedRepositories = (payload?.repositories || []).map(repo => ({
+                    name: (repo.name || '').toString().trim(),
+                    fullName: (repo.fullName || '').toString().trim(),
+                    ownerLogin: (repo.ownerLogin || '').toString().trim(),
+                    htmlUrl: (repo.htmlUrl || '').toString().trim(),
+                    defaultBranch: (repo.defaultBranch || '').toString().trim(),
+                    isPrivate: !!repo.isPrivate
+                })).filter(repo => repo.name && repo.ownerLogin && repo.htmlUrl);
+
+                renderConnectedRepositories();
+                trySelectExistingRepository();
+
+                if (connectedRepositories.length) {
+                    setConnectedRepoStatus(`Loaded ${connectedRepositories.length} repositories. Select one and click Use Repo.`, 'info');
+                } else {
+                    setConnectedRepoStatus('No repositories returned for the connected account.', 'info');
+                }
+            } catch (error) {
+                connectedRepositories = [];
+                renderConnectedRepositories();
+                var message = error && error.message
+                    ? error.message
+                    : 'Unable to load connected repositories.';
+                setConnectedRepoStatus(message, 'error');
+            }
+        }
+
         function renderImportedFeatures() {
             var $preview = $('#importedFeaturesPreview');
             var $inputs = $('#importedFeaturesInputs');
@@ -250,32 +371,17 @@
             });
         }
 
-        $('#addPic').click(function() { addPicRow('', ''); });
-
-        $(document).on('click', '.remove-pic', function() {
-            $(this).closest('.pic-row').remove();
-            reindexPics();
-        });
-
-        $(document).on('click', '.remove-imported-feature', function() {
-            var index = Number($(this).data('index'));
-            if (Number.isNaN(index) || index < 0 || index >= importedFeatures.length) return;
-
-            importedFeatures.splice(index, 1);
-            renderImportedFeatures();
-        });
-
-        $('#importFromGitHub').on('click', async function() {
+        async function importCurrentRepository() {
             var repoUrl = ($('#GitHubRepoUrl').val() || '').toString().trim();
             var branch = ($('#GitHubBranch').val() || '').toString().trim();
             var token = $('#crForm input[name="__RequestVerificationToken"]').val();
 
             if (!repoUrl) {
                 setImportStatus('Enter a GitHub repository URL first.', 'error');
-                return;
+                return false;
             }
 
-            var $button = $(this);
+            var $button = $('#importFromGitHub');
             $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Importing...');
             setImportStatus('Importing repository metadata and features...', 'info');
 
@@ -309,6 +415,7 @@
                 if (payload.timelineStart) $('#TimelineStart').val(payload.timelineStart);
                 if (payload.timelineEnd) $('#TimelineEnd').val(payload.timelineEnd);
                 if (payload.figmaLink) $('#FigmaLink').val(payload.figmaLink);
+
                 importedFeatures = (payload.features || []).map(feature => ({
                     name: (feature.name || '').trim(),
                     description: (feature.description || '').trim(),
@@ -317,13 +424,62 @@
 
                 renderImportedFeatures();
                 setImportStatus(`Import successful. ${importedFeatures.length} feature(s) prepared for checklist.`, 'success');
+                return true;
             } catch (error) {
-                setImportStatus(error.message || 'Unable to import this repository.', 'error');
+                var message = error && error.message
+                    ? error.message
+                    : 'Unable to import this repository.';
+                setImportStatus(message, 'error');
+                return false;
             } finally {
                 $button.prop('disabled', false).html('<i class="bi bi-download me-1"></i>Import Repo');
             }
+        }
+
+        $('#addPic').click(function() { addPicRow('', ''); });
+
+        $(document).on('click', '.remove-pic', function() {
+            $(this).closest('.pic-row').remove();
+            reindexPics();
+        });
+
+        $(document).on('click', '.remove-imported-feature', function() {
+            var index = Number($(this).data('index'));
+            if (Number.isNaN(index) || index < 0 || index >= importedFeatures.length) return;
+
+            importedFeatures.splice(index, 1);
+            renderImportedFeatures();
+        });
+
+        $('#importFromGitHub').on('click', async function() {
+            await importCurrentRepository();
+        });
+
+        $('#connectedGitHubRepo').on('change', function() {
+            var selectedIndex = Number($(this).val());
+            if (Number.isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= connectedRepositories.length) {
+                setConnectedRepoStatus('Select a repository to auto-fill project details.', 'info');
+                return;
+            }
+
+            var selectedRepo = connectedRepositories[selectedIndex];
+            setConnectedRepoStatus(`Ready to use ${selectedRepo.fullName}. Click Use Repo.`, 'info');
+        });
+
+        $('#applyConnectedGitHubRepo').on('click', async function() {
+            var selectedIndex = Number($('#connectedGitHubRepo').val());
+            if (Number.isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= connectedRepositories.length) {
+                setConnectedRepoStatus('Choose a repository first.', 'error');
+                return;
+            }
+
+            var repo = connectedRepositories[selectedIndex];
+            fillRepoFields(repo);
+            setConnectedRepoStatus(`Selected ${repo.fullName}. Importing metadata...`, 'success');
+            await importCurrentRepository();
         });
 
         renderImportedFeatures();
+        loadConnectedRepositories();
     </script>
 }

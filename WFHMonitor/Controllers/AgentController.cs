@@ -46,9 +46,11 @@ public class AgentController : Controller
     {
         var currentUser = await _userManager.GetUserAsync(User);
         var isAdmin = User.IsInRole("Admin");
+        var currentUserId = currentUser?.Id ?? string.Empty;
+        var currentCompanyName = NormalizeCompanyName(currentUser?.CompanyName);
         var viewerTeamId = currentUser?.OrgTeamId;
 
-        var orgTeams = await _db.OrgTeams
+        var orgTeams = await ApplyTeamCompanyScope(_db.OrgTeams, currentCompanyName)
             .AsNoTracking()
             .ToDictionaryAsync(t => t.Id, t => t.Name);
 
@@ -58,6 +60,7 @@ public class AgentController : Controller
             .FirstOrDefaultAsync(p => p.Id == 1);
 
         var agentUsers = (await _userManager.GetUsersInRoleAsync("Agent"))
+            .Where(u => IsCompanyVisibleToViewer(u.CompanyName, currentCompanyName, currentUserId, u.Id))
             .Where(u => IsVisibleToViewer(u.OrgTeamId, isAdmin, viewerTeamId))
             .OrderBy(u => u.FullName)
             .ToList();
@@ -69,6 +72,9 @@ public class AgentController : Controller
             var users = await _userManager.GetUsersInRoleAsync(role);
             foreach (var user in users)
             {
+                if (!IsCompanyVisibleToViewer(user.CompanyName, currentCompanyName, currentUserId, user.Id))
+                    continue;
+
                 if (!IsVisibleToViewer(user.OrgTeamId, isAdmin, viewerTeamId))
                     continue;
 
@@ -83,10 +89,25 @@ public class AgentController : Controller
             .Select(a => a.Id)
             .ToList();
 
+        var visibleProjectsQuery = _db.ChangeRequests
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(currentCompanyName))
+            visibleProjectsQuery = visibleProjectsQuery.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == currentCompanyName);
+        else if (!string.IsNullOrWhiteSpace(currentUserId))
+            visibleProjectsQuery = visibleProjectsQuery.Where(c => c.CreatedById == currentUserId);
+
+        var visibleProjectIds = await visibleProjectsQuery
+            .Select(c => c.Id)
+            .ToListAsync();
+
         var activeBugStatuses = new[] { BugAgentStatus.Queued, BugAgentStatus.InProgress, BugAgentStatus.Blocked };
         var activeBugAssignments = await _db.BugReports
             .AsNoTracking()
             .Where(b =>
+                b.ChangeRequestId.HasValue &&
+                visibleProjectIds.Contains(b.ChangeRequestId.Value) &&
                 b.AssigneeType == BugAssigneeType.Agent &&
                 b.AssignedDeveloperId != null &&
                 visibleAgentIds.Contains(b.AssignedDeveloperId) &&
@@ -104,6 +125,7 @@ public class AgentController : Controller
         var activeFeatureAssignments = await _db.ProjectFeatures
             .AsNoTracking()
             .Where(f =>
+                visibleProjectIds.Contains(f.ChangeRequestId) &&
                 f.AssignedDeveloperId != null &&
                 visibleAgentIds.Contains(f.AssignedDeveloperId) &&
                 f.Status != CrStatus.Done &&
@@ -183,14 +205,17 @@ public class AgentController : Controller
             })
             .ToList();
 
-        var visibleTeamCount = await _db.OrgTeams.CountAsync();
+        var visibleTeamCount = orgTeams.Count;
+        var visibleProfileCeo = profile?.CeoUser != null
+            && IsCompanyVisibleToViewer(profile.CeoUser.CompanyName, currentCompanyName, currentUserId, profile.CeoUser.Id);
         var vm = new AgentDashboardViewModel
         {
-            CeoName = profile?.CeoUser?.FullName
-                ?? (string.IsNullOrWhiteSpace(currentUser?.FullName) ? "CEO" : currentUser!.FullName),
-            CeoEmail = profile?.CeoUser?.Email
-                ?? currentUser?.Email
-                ?? string.Empty,
+            CeoName = visibleProfileCeo
+                ? (profile!.CeoUser!.FullName ?? (string.IsNullOrWhiteSpace(currentUser?.FullName) ? "CEO" : currentUser!.FullName))
+                : (string.IsNullOrWhiteSpace(currentUser?.FullName) ? "CEO" : currentUser!.FullName),
+            CeoEmail = visibleProfileCeo
+                ? (profile!.CeoUser!.Email ?? currentUser?.Email ?? string.Empty)
+                : (currentUser?.Email ?? string.Empty),
             TeamCount = visibleTeamCount,
             AgentCount = agents.Count,
             EmployeeCount = employees.Count,
@@ -231,6 +256,30 @@ public class AgentController : Controller
 
         var clean = value.Trim();
         return clean.Length <= maxLength ? clean : $"{clean[..maxLength].Trim()}...";
+    }
+
+    private static IQueryable<OrgTeam> ApplyTeamCompanyScope(IQueryable<OrgTeam> query, string? companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return query.Where(t => t.CompanyName == null || t.CompanyName == string.Empty);
+
+        return query.Where(t => t.CompanyName == companyName);
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static bool IsCompanyVisibleToViewer(string? targetCompanyName, string? viewerCompanyName, string? viewerUserId, string? targetUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(viewerCompanyName))
+            return string.Equals(NormalizeCompanyName(targetCompanyName), viewerCompanyName, StringComparison.OrdinalIgnoreCase);
+
+        return !string.IsNullOrWhiteSpace(viewerUserId) &&
+               !string.IsNullOrWhiteSpace(targetUserId) &&
+               string.Equals(viewerUserId, targetUserId, StringComparison.Ordinal);
     }
 
     private sealed class AgentTaskAssignment

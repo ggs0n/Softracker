@@ -26,14 +26,16 @@ public interface IOpenClawBugScanService
 public sealed record OpenClawBugScanResult(
     bool Succeeded,
     string Error,
-    IReadOnlyList<OpenClawBugFinding> Findings);
+    IReadOnlyList<OpenClawBugFinding> Findings,
+    string AgentResponseText);
 
 public sealed record OpenClawBugFinding(
     string Title,
     string Description,
     string Workflow,
     string StepsToReproduce,
-    string ModuleImpacted);
+    string ModuleImpacted,
+    IReadOnlyList<string> ScreenshotPaths);
 
 public sealed record OpenClawBugFixResult(
     bool Succeeded,

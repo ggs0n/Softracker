@@ -796,6 +796,36 @@ public class ChangeRequestController : Controller
         }
     }
 
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetGitHubRepositories()
+    {
+        try
+        {
+            var repos = await _gitHub.GetCurrentUserRepositoriesAsync(300);
+            return Json(new
+            {
+                repositories = repos.Select(r => new
+                {
+                    name = r.Name,
+                    fullName = r.FullName,
+                    ownerLogin = r.OwnerLogin,
+                    htmlUrl = r.HtmlUrl,
+                    defaultBranch = r.DefaultBranch,
+                    isPrivate = r.IsPrivate,
+                    description = r.Description
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            var safeMessage = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Unable to load repositories from GitHub right now."
+                : ex.Message;
+            return BadRequest(new { message = safeMessage });
+        }
+    }
+
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Edit(int id)
     {
@@ -1364,11 +1394,14 @@ public class ChangeRequestController : Controller
 
     private async Task<List<ChangeRequest>> GetVisibleProjectsAsync(IQueryable<ChangeRequest> query)
     {
-        if (User.IsInRole("Admin"))
-            return await query.ToListAsync();
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
 
+        var companyName = await GetCurrentCompanyNameAsync();
         var userTeamId = await GetCurrentOrgTeamIdAsync();
-        return await ApplyOrgTeamVisibility(query, userTeamId).ToListAsync();
+        var isAdmin = User.IsInRole("Admin");
+        return await ApplyProjectVisibility(query, userId, companyName, userTeamId, isAdmin).ToListAsync();
     }
 
     private async Task<(bool IsReached, int FreeLimit)> HasReachedFreeProjectLimitAsync(string userId)
@@ -1468,9 +1501,10 @@ public class ChangeRequestController : Controller
 
     private async Task<List<SelectListItem>> GetEmployeeOptions()
     {
-        var employees = await _userManager.GetUsersInRoleAsync("Employee");
-        var developers = await _userManager.GetUsersInRoleAsync("Developer");
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var companyName = await GetCurrentCompanyNameAsync();
+        var employees = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Employee"), companyName);
+        var developers = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Developer"), companyName);
+        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
 
         return employees.Select(e => new SelectListItem($"{e.FullName} (Employee)", e.Id))
             .Concat(developers.Select(e => new SelectListItem($"{e.FullName} (Developer)", e.Id)))
@@ -1482,11 +1516,14 @@ public class ChangeRequestController : Controller
     private async Task<List<SelectListItem>> GetProjectOptionsAsync()
     {
         var query = _db.ChangeRequests.AsQueryable();
-        if (!User.IsInRole("Admin"))
-        {
-            var userTeamId = await GetCurrentOrgTeamIdAsync();
-            query = ApplyOrgTeamVisibility(query, userTeamId);
-        }
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
+
+        var companyName = await GetCurrentCompanyNameAsync();
+        var userTeamId = await GetCurrentOrgTeamIdAsync();
+        var isAdmin = User.IsInRole("Admin");
+        query = ApplyProjectVisibility(query, userId, companyName, userTeamId, isAdmin);
 
         return await query
             .OrderByDescending(c => c.CreatedAt)
@@ -1502,9 +1539,15 @@ public class ChangeRequestController : Controller
         if (!User.IsInRole("Developer"))
             return [];
 
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
+
+        var companyName = await GetCurrentCompanyNameAsync();
         var userTeamId = await GetCurrentOrgTeamIdAsync();
-        return await _db.ChangeRequests
-            .Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == userTeamId)
+        var query = ApplyProjectVisibility(_db.ChangeRequests.AsQueryable(), userId, companyName, userTeamId, isAdmin: false);
+
+        return await query
             .OrderByDescending(c => c.CreatedAt)
             .Select(c => new SelectListItem($"{c.CrNumber} - {c.Title}", c.Id.ToString()))
             .ToListAsync();
@@ -1513,7 +1556,7 @@ public class ChangeRequestController : Controller
     private async Task<bool> CanEditFeatureProjectAsync(int changeRequestId)
     {
         if (User.IsInRole("Admin"))
-            return await _db.ChangeRequests.AnyAsync(c => c.Id == changeRequestId);
+            return await CanViewProjectAsync(changeRequestId);
 
         if (!User.IsInRole("Developer"))
             return false;
@@ -1527,8 +1570,27 @@ public class ChangeRequestController : Controller
         return user?.OrgTeamId;
     }
 
-    private static IQueryable<ChangeRequest> ApplyOrgTeamVisibility(IQueryable<ChangeRequest> query, int? userTeamId)
+    private async Task<string?> GetCurrentCompanyNameAsync()
     {
+        var user = await _userManager.GetUserAsync(User);
+        return NormalizeCompanyName(user?.CompanyName);
+    }
+
+    private static IQueryable<ChangeRequest> ApplyProjectVisibility(
+        IQueryable<ChangeRequest> query,
+        string userId,
+        string? companyName,
+        int? userTeamId,
+        bool isAdmin)
+    {
+        if (!string.IsNullOrWhiteSpace(companyName))
+            query = query.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == companyName);
+        else
+            query = query.Where(c => c.CreatedById == userId);
+
+        if (isAdmin)
+            return query;
+
         if (userTeamId.HasValue)
             return query.Where(c => !c.OrgTeamId.HasValue || c.OrgTeamId == userTeamId.Value);
 
@@ -1537,18 +1599,22 @@ public class ChangeRequestController : Controller
 
     private async Task<bool> CanViewProjectAsync(int changeRequestId)
     {
-        if (User.IsInRole("Admin"))
-            return await _db.ChangeRequests.AnyAsync(c => c.Id == changeRequestId);
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
 
+        var companyName = await GetCurrentCompanyNameAsync();
         var userTeamId = await GetCurrentOrgTeamIdAsync();
-        var query = ApplyOrgTeamVisibility(_db.ChangeRequests.AsQueryable(), userTeamId);
+        var isAdmin = User.IsInRole("Admin");
+        var query = ApplyProjectVisibility(_db.ChangeRequests.AsQueryable(), userId, companyName, userTeamId, isAdmin);
         return await query.AnyAsync(c => c.Id == changeRequestId);
     }
 
     private async Task<List<SelectListItem>> GetDeveloperOptionsAsync()
     {
-        var developers = await _userManager.GetUsersInRoleAsync("Developer");
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var companyName = await GetCurrentCompanyNameAsync();
+        var developers = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Developer"), companyName);
+        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
 
         var usersById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
         var rolesByUser = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -1590,11 +1656,28 @@ public class ChangeRequestController : Controller
 
     private async Task<List<SelectListItem>> GetAgentUserOptionsAsync()
     {
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
+        var companyName = await GetCurrentCompanyNameAsync();
+        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
         return agents
             .OrderBy(a => a.FullName)
             .Select(a => new SelectListItem(a.FullName, a.Id))
             .ToList();
+    }
+
+    private static List<ApplicationUser> FilterUsersByCompany(IEnumerable<ApplicationUser> users, string? companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return users.ToList();
+
+        return users
+            .Where(u => string.Equals(NormalizeCompanyName(u.CompanyName), companyName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static string? NormalizeCompanyName(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
     private async Task<bool> IsFeatureAssigneeValidAsync(ApplicationUser assignedUser)

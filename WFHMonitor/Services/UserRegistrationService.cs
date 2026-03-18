@@ -18,6 +18,7 @@ public class UserRegistrationService : IUserRegistrationService
     {
         model.Email = (model.Email ?? string.Empty).Trim();
         model.FullName = string.IsNullOrWhiteSpace(model.FullName) ? "User" : model.FullName.Trim();
+        model.CompanyName = string.IsNullOrWhiteSpace(model.CompanyName) ? null : model.CompanyName.Trim();
         model.Password = string.IsNullOrWhiteSpace(model.Password) ? "1" : model.Password;
         model.ConfirmPassword = string.IsNullOrWhiteSpace(model.ConfirmPassword) ? model.Password : model.ConfirmPassword;
         model.Role = string.IsNullOrWhiteSpace(model.Role) ? "Employee" : model.Role;
@@ -30,6 +31,7 @@ public class UserRegistrationService : IUserRegistrationService
             UserName = model.Email,
             Email = model.Email,
             FullName = model.FullName,
+            CompanyName = model.CompanyName,
             EmailConfirmed = true
         };
 
