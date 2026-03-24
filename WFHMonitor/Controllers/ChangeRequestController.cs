@@ -95,6 +95,7 @@ public class ChangeRequestController : Controller
             .Include(c => c.CreatedBy)
             .Include(c => c.Pics).ThenInclude(p => p.Employee)
             .Include(c => c.Features)
+            .AsSplitQuery()
             .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
@@ -108,6 +109,7 @@ public class ChangeRequestController : Controller
         var query = _db.ChangeRequests
             .Include(c => c.Features.OrderBy(f => f.Name))
                 .ThenInclude(f => f.AssignedDeveloper)
+            .AsSplitQuery()
             .OrderByDescending(c => c.CreatedAt)
             .AsNoTracking();
 
@@ -573,6 +575,7 @@ public class ChangeRequestController : Controller
             .Include(c => c.Features.OrderBy(f => f.Name))
                 .ThenInclude(f => f.AssignedDeveloper)
             .Include(c => c.RepositoryFeatures.OrderBy(f => f.Name))
+            .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
