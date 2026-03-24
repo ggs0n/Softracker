@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using WFHMonitor.Data;
@@ -60,6 +61,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
 
         var bug = await db.BugReports
+            .Include(b => b.ChangeRequest)
             .FirstOrDefaultAsync(b => b.Id == item.BugId, cancellationToken);
         if (bug == null)
             return;
@@ -120,13 +122,20 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         var generatedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'");
         var fixBlock = $"[OpenClaw Fix Plan - {item.FixAgentId} - {generatedAt}]\n{fixResult.FixPlan.Trim()}";
         bug.Workflow = AppendTextWithLimit(bug.Workflow, fixBlock, 4000);
+        var resolvedPullRequestUrl = ResolvePullRequestUrl(fixResult, bug.ChangeRequest?.GitHubRepoUrl);
+        if (!string.IsNullOrWhiteSpace(resolvedPullRequestUrl))
+            bug.PullRequestUrl = resolvedPullRequestUrl;
+
         bug.AgentStatus = BugAgentStatus.PrRaised;
         bug.UpdatedAt = DateTime.UtcNow;
 
         db.BugActivities.Add(new BugActivity
         {
             BugReportId = bug.Id,
-            Action = TrimActivityText($"OpenClaw fix completed ({item.FixAgentId})"),
+            Action = TrimActivityText(
+                string.IsNullOrWhiteSpace(resolvedPullRequestUrl)
+                    ? $"OpenClaw fix completed ({item.FixAgentId})"
+                    : $"OpenClaw fix completed ({item.FixAgentId}) with PR link"),
             OldStatus = bug.Status,
             NewStatus = bug.Status,
             OldAssignedDeveloperId = bug.AssignedDeveloperId,
@@ -159,6 +168,61 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
     {
         var text = (value ?? string.Empty).Trim();
         return text.Length <= 200 ? text : text[..200].Trim();
+    }
+
+    private static string? ResolvePullRequestUrl(OpenClawBugFixResult fixResult, string? repositoryUrl)
+    {
+        var direct = NormalizePullRequestUrl(fixResult.PullRequestUrl);
+        if (!string.IsNullOrWhiteSpace(direct))
+            return direct;
+
+        var prNumber = ExtractPullRequestNumber(fixResult.FixPlan);
+        var repoBase = NormalizeRepositoryUrl(repositoryUrl);
+        if (!prNumber.HasValue || string.IsNullOrWhiteSpace(repoBase))
+            return null;
+
+        return NormalizePullRequestUrl($"{repoBase}/pull/{prNumber.Value}");
+    }
+
+    private static string? NormalizePullRequestUrl(string? value)
+    {
+        var trimmed = (value ?? string.Empty)
+            .Trim()
+            .TrimEnd('.', ',', ';', ':', ')', ']', '}');
+
+        if (string.IsNullOrWhiteSpace(trimmed) ||
+            trimmed.Length > 500 ||
+            !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            return null;
+        }
+
+        return trimmed;
+    }
+
+    private static int? ExtractPullRequestNumber(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var match = Regex.Match(text, @"\b(?:pr|pull\s*request)\s*#?\s*(\d+)\b", RegexOptions.IgnoreCase);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var number))
+            return null;
+
+        return number;
+    }
+
+    private static string? NormalizeRepositoryUrl(string? value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        if (trimmed.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4];
+
+        trimmed = trimmed.TrimEnd('/');
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out _) ? trimmed : null;
     }
 
     private async Task NotifyAdminsPrRaisedAsync(

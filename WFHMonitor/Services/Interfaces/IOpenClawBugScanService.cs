@@ -65,7 +65,8 @@ public sealed record OpenClawBugFinding(
 public sealed record OpenClawBugFixResult(
     bool Succeeded,
     string Error,
-    string FixPlan);
+    string FixPlan,
+    string? PullRequestUrl);
 
 public sealed record OpenClawFeatureImplementResult(
     bool Succeeded,
