@@ -96,6 +96,18 @@ public static class DbInitializer
                 ALTER TABLE [ChangeRequests] ADD [BugScanLastMessage] nvarchar(500) NULL;
             IF COL_LENGTH('ChangeRequests', 'BugScanLastRunAt') IS NULL
                 ALTER TABLE [ChangeRequests] ADD [BugScanLastRunAt] datetime2 NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthScore') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthScore] int NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthLabel') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthLabel] nvarchar(40) NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthSummary') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthSummary] nvarchar(1500) NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthFactorsJson') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthFactorsJson] nvarchar(1200) NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthComplexity') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthComplexity] nvarchar(30) NULL;
+            IF COL_LENGTH('ChangeRequests', 'ProjectHealthAnalyzedAt') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [ProjectHealthAnalyzedAt] datetime2 NULL;
             IF COL_LENGTH('ProjectFeatures', 'Status') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [Status] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_Status] DEFAULT 'Draft';
             IF COL_LENGTH('ProjectFeatures', 'Priority') IS NULL

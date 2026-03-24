@@ -118,6 +118,22 @@ public class ChangeRequest
 
     public DateTime? BugScanLastRunAt { get; set; }
 
+    public int? ProjectHealthScore { get; set; }
+
+    [MaxLength(40)]
+    public string? ProjectHealthLabel { get; set; }
+
+    [MaxLength(1500)]
+    public string? ProjectHealthSummary { get; set; }
+
+    [MaxLength(1200)]
+    public string? ProjectHealthFactorsJson { get; set; }
+
+    [MaxLength(30)]
+    public string? ProjectHealthComplexity { get; set; }
+
+    public DateTime? ProjectHealthAnalyzedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

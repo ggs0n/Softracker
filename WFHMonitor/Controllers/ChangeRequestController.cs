@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
@@ -39,6 +40,7 @@ public class ChangeRequestController : Controller
     private readonly IProjectBugScanQueueService _projectBugScanQueueService;
     private readonly IFeatureAgentQueueService _featureAgentQueueService;
     private readonly INotificationService _notificationService;
+    private readonly IOpenClawBugScanService _openClawBugScanService;
     private readonly OpenClawSettings _openClawSettings;
     private readonly ISystemSettingsService _systemSettingsService;
     private readonly IWebHostEnvironment env;
@@ -50,6 +52,7 @@ public class ChangeRequestController : Controller
         IProjectBugScanQueueService projectBugScanQueueService,
         IFeatureAgentQueueService featureAgentQueueService,
         INotificationService notificationService,
+        IOpenClawBugScanService openClawBugScanService,
         ISystemSettingsService systemSettingsService,
         Microsoft.Extensions.Options.IOptions<OpenClawSettings> openClawSettings,
         IWebHostEnvironment env)
@@ -60,6 +63,7 @@ public class ChangeRequestController : Controller
         _projectBugScanQueueService = projectBugScanQueueService;
         _featureAgentQueueService = featureAgentQueueService;
         _notificationService = notificationService;
+        _openClawBugScanService = openClawBugScanService;
         _systemSettingsService = systemSettingsService;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
         this.env = env;
@@ -555,13 +559,23 @@ public class ChangeRequestController : Controller
 
         if (TryResolveGitHubConfig(projectForSync, out var syncOwner, out var syncRepo, out var syncBranch))
         {
-            try
+            // Keep details page snappy: only auto-sync GitHub data for fresh projects with missing repository insights.
+            var hasRepositorySignals = await _db.RepositoryFeatures
+                .AsNoTracking()
+                .AnyAsync(f => f.ChangeRequestId == projectForSync.Id);
+            var shouldAutoSync = !hasRepositorySignals &&
+                string.IsNullOrWhiteSpace(projectForSync.TechnologyStack);
+
+            if (shouldAutoSync)
             {
-                await RefreshProjectFromGitHubAsync(projectForSync, syncOwner, syncRepo, syncBranch);
-            }
-            catch (Exception ex)
-            {
-                ViewBag.SyncWarning = ex.Message;
+                try
+                {
+                    await RefreshProjectFromGitHubAsync(projectForSync, syncOwner, syncRepo, syncBranch);
+                }
+                catch (Exception ex)
+                {
+                    ViewBag.SyncWarning = ex.Message;
+                }
             }
         }
 
@@ -577,12 +591,13 @@ public class ChangeRequestController : Controller
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
 
-        ViewBag.LinkedBugs = await _db.BugReports
+        var linkedBugs = await _db.BugReports
             .Include(b => b.AssignedDeveloper)
             .Where(b => b.ChangeRequestId == id)
             .OrderByDescending(b => b.CreatedAt)
             .AsNoTracking()
             .ToListAsync();
+        ViewBag.LinkedBugs = linkedBugs;
 
         var owner = cr.GitHubRepoOwner;
         var repo = cr.GitHubRepoName;
@@ -606,13 +621,59 @@ public class ChangeRequestController : Controller
         ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
         ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
 
+        var totalBugCount = linkedBugs.Count;
+        var openBugCount = linkedBugs.Count(b => b.Status != BugStatus.Complete);
+        var featureCount = cr.Features.Count;
+        var repositoryFeatureCount = cr.RepositoryFeatures.Count;
+        var timelineDays = CalculateTimelineDays(cr);
+        var complexityScore = CalculateComplexityScore(cr, totalBugCount, featureCount, repositoryFeatureCount, timelineDays);
+
+        var fallbackHealth = BuildFallbackProjectHealth(
+            cr,
+            totalBugCount,
+            openBugCount,
+            featureCount,
+            repositoryFeatureCount,
+            complexityScore,
+            timelineDays);
+
+        var canUseOpenClawHealth = planSettings.EnableOpenClawAgents &&
+            currentUser is not null &&
+            HasOpenClawAccess(currentUser, planSettings);
+        ViewBag.CanUseOpenClawHealth = canUseOpenClawHealth;
+        ViewBag.HealthOpenClawAgentId = cr.BugScanAgentId;
+
+        if (cr.ProjectHealthScore.HasValue && !string.IsNullOrWhiteSpace(cr.ProjectHealthLabel))
+        {
+            fallbackHealth = new ProjectHealthViewModel
+            {
+                Score = Math.Clamp(cr.ProjectHealthScore.Value, 0, 100),
+                Label = cr.ProjectHealthLabel!,
+                Summary = string.IsNullOrWhiteSpace(cr.ProjectHealthSummary)
+                    ? fallbackHealth.Summary
+                    : cr.ProjectHealthSummary!,
+                Complexity = string.IsNullOrWhiteSpace(cr.ProjectHealthComplexity)
+                    ? fallbackHealth.Complexity
+                    : cr.ProjectHealthComplexity!,
+                Factors = DeserializeHealthFactors(cr.ProjectHealthFactorsJson),
+                AnalyzedAtUtc = cr.ProjectHealthAnalyzedAt,
+                UsedOpenClaw = true
+            };
+        }
+        else if (canUseOpenClawHealth)
+        {
+            fallbackHealth.Summary = "Health score shown from live signals. Click Analyze to run OpenClaw and enrich insights.";
+        }
+
+        ViewBag.ProjectHealth = fallbackHealth;
+
         if (!string.IsNullOrWhiteSpace(owner) &&
             !string.IsNullOrWhiteSpace(repo) &&
             !string.IsNullOrWhiteSpace(branch))
         {
             try
             {
-                ViewBag.Commits = await _gitHub.GetCommitsAsync(owner, repo, branch);
+                ViewBag.Commits = await _gitHub.GetCommitsAsync(owner, repo, branch, 6);
             }
             catch (Exception ex)
             {
@@ -895,6 +956,12 @@ public class ChangeRequestController : Controller
         cr.GitHubRepoUrl = model.GitHubRepoUrl;
         cr.GitHubBranch = model.GitHubBranch;
         cr.TechnologyStack = model.TechnologyStack;
+        cr.ProjectHealthScore = null;
+        cr.ProjectHealthLabel = null;
+        cr.ProjectHealthSummary = null;
+        cr.ProjectHealthFactorsJson = null;
+        cr.ProjectHealthComplexity = null;
+        cr.ProjectHealthAnalyzedAt = null;
         cr.UpdatedAt = DateTime.UtcNow;
 
         _db.ChangeRequestPics.RemoveRange(cr.Pics);
@@ -1225,6 +1292,98 @@ public class ChangeRequestController : Controller
         }
 
         TempData["Success"] = $"Find Bugs queued with '{selectedScanAgentId}'. Tracking started.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Tester,Developer")]
+    public async Task<IActionResult> AnalyzeHealth(int id, string? scanAgentId)
+    {
+        var project = await _db.ChangeRequests
+            .Include(c => c.Features)
+            .Include(c => c.RepositoryFeatures)
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (project == null) return NotFound();
+        if (!await CanViewProjectAsync(project.Id))
+            return Forbid();
+
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var currentUser = await _userManager.FindByIdAsync(userId);
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (!planSettings.EnableOpenClawAgents)
+        {
+            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        {
+            TempData["Error"] = "Project Health analysis (OpenClaw) is available for Pro plan only.";
+            return RedirectToAction("Index", "Payment");
+        }
+
+        var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var selectedScanAgentId = string.IsNullOrWhiteSpace(scanAgentId)
+            ? configuredScanAgentIds.FirstOrDefault() ?? "main"
+            : scanAgentId.Trim();
+        if (configuredScanAgentIds.Count > 0 &&
+            !configuredScanAgentIds.Any(a => a.Equals(selectedScanAgentId, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = "Selected OpenClaw scan agent is not allowed by configuration.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var bugs = await _db.BugReports
+            .Where(b => b.ChangeRequestId == id)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var totalBugCount = bugs.Count;
+        var openBugCount = bugs.Count(b => b.Status != BugStatus.Complete);
+        var featureCount = project.Features.Count;
+        var repositoryFeatureCount = project.RepositoryFeatures.Count;
+        var timelineDays = CalculateTimelineDays(project);
+        var complexityScore = CalculateComplexityScore(project, totalBugCount, featureCount, repositoryFeatureCount, timelineDays);
+
+        try
+        {
+            var healthResult = await _openClawBugScanService.AnalyzeProjectHealthAsync(
+                project,
+                totalBugCount,
+                openBugCount,
+                featureCount,
+                repositoryFeatureCount,
+                timelineDays,
+                complexityScore,
+                selectedScanAgentId,
+                HttpContext.RequestAborted);
+
+            if (!healthResult.Succeeded)
+            {
+                TempData["Error"] = $"Project Health analysis failed: {healthResult.Error}";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            project.ProjectHealthScore = healthResult.Score;
+            project.ProjectHealthLabel = healthResult.Label;
+            project.ProjectHealthSummary = healthResult.Summary;
+            project.ProjectHealthComplexity = healthResult.Complexity;
+            project.ProjectHealthFactorsJson = SerializeHealthFactors(healthResult.Factors);
+            project.ProjectHealthAnalyzedAt = DateTime.UtcNow;
+            project.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = $"Project Health analyzed with '{selectedScanAgentId}'.";
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"Project Health analysis failed: {ex.Message}";
+        }
+
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -1757,6 +1916,144 @@ public class ChangeRequestController : Controller
         return RedirectToAction(nameof(FeatureDetails), new { featureId });
     }
 
+    private static int CalculateTimelineDays(ChangeRequest project)
+    {
+        if (!project.TimelineStart.HasValue || !project.TimelineEnd.HasValue)
+            return 0;
+
+        var start = project.TimelineStart.Value.Date;
+        var end = project.TimelineEnd.Value.Date;
+        if (end < start)
+            return 0;
+
+        return (end - start).Days + 1;
+    }
+
+    private static int CalculateComplexityScore(
+        ChangeRequest project,
+        int totalBugs,
+        int featureCount,
+        int repositoryFeatureCount,
+        int timelineDays)
+    {
+        var techCount = string.IsNullOrWhiteSpace(project.TechnologyStack)
+            ? 0
+            : project.TechnologyStack
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Length;
+
+        var score = 0;
+        score += Math.Min(35, featureCount * 3);
+        score += Math.Min(20, repositoryFeatureCount * 2);
+        score += Math.Min(25, totalBugs);
+        score += Math.Min(10, techCount * 2);
+        if (timelineDays > 0)
+            score += timelineDays switch
+            {
+                < 14 => 12,
+                < 30 => 8,
+                < 60 => 5,
+                _ => 2
+            };
+
+        return Math.Clamp(score, 0, 100);
+    }
+
+    private static ProjectHealthViewModel BuildFallbackProjectHealth(
+        ChangeRequest project,
+        int totalBugs,
+        int openBugs,
+        int featureCount,
+        int repositoryFeatureCount,
+        int complexityScore,
+        int timelineDays)
+    {
+        var bugPenalty = Math.Min(45, (openBugs * 4) + (Math.Max(0, totalBugs - openBugs) * 1));
+        var complexityPenalty = Math.Min(25, complexityScore / 4);
+        var timelinePenalty = timelineDays switch
+        {
+            <= 0 => 8,
+            < 14 => 20,
+            < 30 => 12,
+            < 60 => 8,
+            _ => 4
+        };
+        var featurePenalty = featureCount <= 0 && repositoryFeatureCount <= 0 ? 12 : 0;
+
+        var score = Math.Clamp(100 - bugPenalty - complexityPenalty - timelinePenalty - featurePenalty, 0, 100);
+        var label = score switch
+        {
+            >= 85 => "Excellent",
+            >= 70 => "Good",
+            >= 45 => "At Risk",
+            _ => "Critical"
+        };
+        var complexity = complexityScore switch
+        {
+            >= 70 => "High",
+            >= 40 => "Medium",
+            _ => "Low"
+        };
+
+        var factors = new List<string>();
+        factors.Add(openBugs > 0 ? $"{openBugs} open bug(s) are impacting delivery confidence." : "No open bugs currently reported.");
+        factors.Add(featureCount > 0 ? $"{featureCount} tracked feature(s) in delivery scope." : "No tracked features yet.");
+        factors.Add(repositoryFeatureCount > 0 ? $"{repositoryFeatureCount} repository-detected feature(s) increase scope complexity." : "No repository feature map found.");
+        factors.Add(timelineDays > 0 ? $"Timeline spans {timelineDays} day(s)." : "Timeline dates are incomplete.");
+        factors.Add($"Estimated project complexity: {complexity}.");
+
+        return new ProjectHealthViewModel
+        {
+            Score = score,
+            Label = label,
+            Summary = $"Health estimated from bugs, timeline, features, and complexity signals.",
+            Complexity = complexity,
+            Factors = factors,
+            AnalyzedAtUtc = project.ProjectHealthAnalyzedAt,
+            UsedOpenClaw = false
+        };
+    }
+
+    private static string? SerializeHealthFactors(IReadOnlyList<string> factors)
+    {
+        if (factors.Count == 0)
+            return null;
+
+        var cleaned = factors
+            .Select(f => f?.Trim())
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToList();
+
+        return cleaned.Count == 0 ? null : JsonSerializer.Serialize(cleaned);
+    }
+
+    private static List<string> DeserializeHealthFactors(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return [];
+
+        try
+        {
+            var values = JsonSerializer.Deserialize<List<string>>(raw);
+            if (values == null)
+                return [];
+
+            return values
+                .Select(v => v?.Trim())
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .Cast<string>()
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     private List<SelectListItem> GetOpenClawScanAgentOptions()
     {
         var configured = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
@@ -1959,6 +2256,12 @@ public class ChangeRequestController : Controller
             project.Title = HumanizeRepoName(repoInfo.Name);
 
         await SyncRepositoryFeaturesAsync(project.Id, detectedFeatures);
+        project.ProjectHealthScore = null;
+        project.ProjectHealthLabel = null;
+        project.ProjectHealthSummary = null;
+        project.ProjectHealthFactorsJson = null;
+        project.ProjectHealthComplexity = null;
+        project.ProjectHealthAnalyzedAt = null;
         project.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
     }

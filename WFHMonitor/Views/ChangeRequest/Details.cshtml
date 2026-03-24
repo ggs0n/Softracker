@@ -7,6 +7,7 @@
     var linkedBugs = ViewBag.LinkedBugs as IList<WFHMonitor.Models.BugReport> ?? new List<WFHMonitor.Models.BugReport>();
     var openClawScanAgentOptions = ViewBag.OpenClawScanAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+    var projectHealth = ViewBag.ProjectHealth as WFHMonitor.ViewModels.ProjectHealthViewModel;
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
     var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
     var isBugScanQueued = Model.BugScanStatus == WFHMonitor.Models.ProjectBugScanStatus.Queued;
@@ -113,6 +114,15 @@
     .pd-commit-sha:hover{background:var(--accent);color:#fff}
     .pd-commit-msg{font-size:.8rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .pd-commit-meta{font-size:.7rem;color:#a1a1aa;margin-top:1px}
+
+    /* Project health */
+    .pd-health-score{font-size:2rem;font-weight:800;line-height:1;color:var(--text-primary)}
+    .pd-health-label{font-size:.74rem;font-weight:700;border-radius:999px;padding:3px 10px;display:inline-flex;align-items:center;gap:6px;border:1px solid transparent}
+    .pd-health-label.good{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+    .pd-health-label.warn{background:#fef3c7;color:#b45309;border-color:#fde68a}
+    .pd-health-label.bad{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+    .pd-health-factor{font-size:.74rem;color:#52525b;padding:5px 0;border-bottom:1px dashed var(--border)}
+    .pd-health-factor:last-child{border-bottom:none}
 
     /* Upload area */
     .pd-upload-area{border:1px dashed #d1d5db;border-radius:10px;padding:14px 16px;background:#fafbfc}
@@ -527,10 +537,131 @@
                 </div>
             </div>
 
+            @* GitHub Commits *@
+            <div class="pd-section">
+                <div class="pd-section-head">
+                    <div class="pd-section-left">
+                        <div class="pd-section-icon" style="background:#f3f4f6;color:#374151"><i class="bi bi-git"></i></div>
+                        <div class="pd-section-label">
+                            GitHub Commits
+                            @if (!string.IsNullOrEmpty(resolvedRepoBranch))
+                            {
+                                <span style="font-family:Consolas,monospace;font-size:.66rem;font-weight:500;color:#a1a1aa;margin-left:6px">@resolvedRepoBranch</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="pd-section-body-flush">
+                    @if (string.IsNullOrEmpty(resolvedRepoOwner) || string.IsNullOrEmpty(resolvedRepoName) || string.IsNullOrEmpty(resolvedRepoBranch))
+                    {
+                        <div style="padding:14px 20px"><span class="pd-empty">No GitHub branch linked.</span></div>
+                    }
+                    else if (ViewBag.CommitError != null)
+                    {
+                        <div style="padding:14px 20px">
+                            <div class="pd-alert" style="margin-bottom:0">
+                                <i class="bi bi-exclamation-triangle"></i> @ViewBag.CommitError
+                            </div>
+                        </div>
+                    }
+                    else if (ViewBag.Commits == null || ((IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits).Count == 0)
+                    {
+                        <div style="padding:14px 20px"><span class="pd-empty">No commits found on this branch.</span></div>
+                    }
+                    else
+                    {
+                        @foreach (var commit in (IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits)
+                        {
+                            <div class="pd-commit">
+                                <a href="@commit.Url" target="_blank" class="pd-commit-sha">@commit.Sha</a>
+                                <div style="flex:1;overflow:hidden">
+                                    <div class="pd-commit-msg" title="@commit.Message">@commit.Message</div>
+                                    <div class="pd-commit-meta">@commit.AuthorName &middot; @commit.Date.ToString("MMM dd, yyyy HH:mm")</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
         </div>
 
         @* ═══ Right Column ═══ *@
         <div>
+
+            @* Project Health *@
+            <div class="pd-section">
+                <div class="pd-section-head">
+                    <div class="pd-section-left">
+                        <div class="pd-section-icon" style="background:#ecfeff;color:#0e7490"><i class="bi bi-heart-pulse"></i></div>
+                        <div class="pd-section-label">Project Health</div>
+                    </div>
+                    @if (isOpenClawEnabled && hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                    {
+                        <form asp-action="AnalyzeHealth" method="post" style="display:flex;align-items:center;gap:6px">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <select name="scanAgentId" class="pd-scan-select">
+                                @foreach (var option in openClawScanAgentOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.Value == (ViewBag.HealthOpenClawAgentId as string) ? "selected" : null)">
+                                        @option.Text
+                                    </option>
+                                }
+                            </select>
+                            <button type="submit" class="pd-scan-btn" title="Analyze with OpenClaw">
+                                <i class="bi bi-cpu"></i> Analyze
+                            </button>
+                        </form>
+                    }
+                </div>
+                <div class="pd-section-body">
+                    @{
+                        var health = projectHealth ?? new WFHMonitor.ViewModels.ProjectHealthViewModel();
+                        var healthLabelLower = (health.Label ?? string.Empty).ToLowerInvariant();
+                        var healthClass = healthLabelLower.Contains("critical")
+                            ? "bad"
+                            : healthLabelLower.Contains("risk")
+                                ? "warn"
+                                : "good";
+                    }
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">
+                        <div class="pd-health-score">@health.Score%</div>
+                        <span class="pd-health-label @healthClass">@health.Label</span>
+                    </div>
+                    <div style="font-size:.68rem;color:#a1a1aa;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Health Score (Percentage)</div>
+                    <div style="font-size:.78rem;color:#52525b;margin-bottom:8px">
+                        @(string.IsNullOrWhiteSpace(health.Summary) ? "Health analysis is not available yet." : health.Summary)
+                    </div>
+                    <div class="pd-sblock" style="padding:9px 12px;margin-bottom:8px">
+                        <div class="pd-stitle"><i class="bi bi-diagram-3"></i> Complexity</div>
+                        <div style="font-size:.82rem;font-weight:700;color:var(--text-primary)">@(string.IsNullOrWhiteSpace(health.Complexity) ? "Medium" : health.Complexity)</div>
+                    </div>
+                    @if (health.Factors.Any())
+                    {
+                        foreach (var factor in health.Factors.Take(5))
+                        {
+                            <div class="pd-health-factor">@factor</div>
+                        }
+                    }
+                    @if (!string.IsNullOrWhiteSpace(health.Error))
+                    {
+                        <div style="font-size:.72rem;color:#b45309;margin-top:8px">
+                            <i class="bi bi-exclamation-triangle"></i> OpenClaw health analysis fallback used: @health.Error
+                        </div>
+                    }
+                    @if (health.AnalyzedAtUtc.HasValue)
+                    {
+                        <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">
+                            Updated @health.AnalyzedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")
+                            @if (health.UsedOpenClaw)
+                            {
+                                <span>&middot; OpenClaw analyzed</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
 
             @* Links & Technology *@
             <div class="pd-section">
@@ -705,53 +836,6 @@
                     else
                     {
                         <span class="pd-empty">No PIC assigned.</span>
-                    }
-                </div>
-            </div>
-
-            @* GitHub Commits *@
-            <div class="pd-section">
-                <div class="pd-section-head">
-                    <div class="pd-section-left">
-                        <div class="pd-section-icon" style="background:#f3f4f6;color:#374151"><i class="bi bi-git"></i></div>
-                        <div class="pd-section-label">
-                            GitHub Commits
-                            @if (!string.IsNullOrEmpty(resolvedRepoBranch))
-                            {
-                                <span style="font-family:Consolas,monospace;font-size:.66rem;font-weight:500;color:#a1a1aa;margin-left:6px">@resolvedRepoBranch</span>
-                            }
-                        </div>
-                    </div>
-                </div>
-                <div class="pd-section-body-flush">
-                    @if (string.IsNullOrEmpty(resolvedRepoOwner) || string.IsNullOrEmpty(resolvedRepoName) || string.IsNullOrEmpty(resolvedRepoBranch))
-                    {
-                        <div style="padding:14px 20px"><span class="pd-empty">No GitHub branch linked.</span></div>
-                    }
-                    else if (ViewBag.CommitError != null)
-                    {
-                        <div style="padding:14px 20px">
-                            <div class="pd-alert" style="margin-bottom:0">
-                                <i class="bi bi-exclamation-triangle"></i> @ViewBag.CommitError
-                            </div>
-                        </div>
-                    }
-                    else if (ViewBag.Commits == null || ((IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits).Count == 0)
-                    {
-                        <div style="padding:14px 20px"><span class="pd-empty">No commits found on this branch.</span></div>
-                    }
-                    else
-                    {
-                        @foreach (var commit in (IList<WFHMonitor.Services.GitHubCommit>)ViewBag.Commits)
-                        {
-                            <div class="pd-commit">
-                                <a href="@commit.Url" target="_blank" class="pd-commit-sha">@commit.Sha</a>
-                                <div style="flex:1;overflow:hidden">
-                                    <div class="pd-commit-msg" title="@commit.Message">@commit.Message</div>
-                                    <div class="pd-commit-meta">@commit.AuthorName &middot; @commit.Date.ToString("MMM dd, yyyy HH:mm")</div>
-                                </div>
-                            </div>
-                        }
                     }
                 </div>
             </div>

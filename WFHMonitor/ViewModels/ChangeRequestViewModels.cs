@@ -140,3 +140,15 @@ public class CreateProjectFeatureViewModel
     public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ProjectOptions { get; set; } = new();
     public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> DeveloperOptions { get; set; } = new();
 }
+
+public class ProjectHealthViewModel
+{
+    public int Score { get; set; }
+    public string Label { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Complexity { get; set; } = "Medium";
+    public List<string> Factors { get; set; } = new();
+    public DateTime? AnalyzedAtUtc { get; set; }
+    public bool UsedOpenClaw { get; set; }
+    public string? Error { get; set; }
+}

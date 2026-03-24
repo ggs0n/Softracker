@@ -515,44 +515,11 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" style="padding:20px">
-                <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Select a project to generate test cases from its existing bugs, or run an OpenClaw scan to find new issues.</p>
-
-                @* Generate from existing bugs *@
-                <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px"><i class="bi bi-bug me-1" style="color:#ef4444"></i> Generate from existing bugs</div>
-                    <form asp-action="GenerateFromBugs" method="post" class="d-flex gap-2">
-                        @Html.AntiForgeryToken()
-                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
-                            <option value="">Select project...</option>
-                            @foreach (var p in Model.Projects)
-                            {
-                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
-                            }
-                        </select>
-                        <button type="submit" class="btn btn-sm" style="background:#ef4444;color:#fff;font-weight:600;white-space:nowrap">Generate</button>
-                    </form>
-                </div>
-
-                @* Scan with OpenClaw *@
-                <div style="background:#f0fdf4;border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:16px;margin-bottom:14px">
-                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px"><i class="bi bi-cpu me-1" style="color:var(--accent)"></i> Scan with OpenClaw agent</div>
-                    <form asp-action="ScanAndGenerate" method="post" class="d-flex gap-2">
-                        @Html.AntiForgeryToken()
-                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
-                            <option value="">Select project...</option>
-                            @foreach (var p in Model.Projects)
-                            {
-                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
-                            }
-                        </select>
-                        <button type="submit" class="btn btn-sm" style="background:var(--accent);color:#fff;font-weight:600;white-space:nowrap">Scan & Generate</button>
-                    </form>
-                </div>
-
+                <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Select a project to auto-generate module-level test cases from project modules, codebase, and repository URL context.</p>
                 @* Auto Generate module-level test cases *@
                 <div style="background:#eff6ff;border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:16px">
                     <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:4px"><i class="bi bi-lightning-charge-fill me-1" style="color:#3b82f6"></i> Auto Generate Test Cases</div>
-                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px">OpenClaw analyses the project and generates module-level test cases covering all major areas.</div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px">OpenClaw analyzes project modules using repository/code context and generates module-level test cases.</div>
                     <form asp-action="AutoGenerate" method="post" class="d-flex gap-2">
                         @Html.AntiForgeryToken()
                         <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>

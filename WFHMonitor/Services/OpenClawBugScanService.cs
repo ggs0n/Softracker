@@ -94,6 +94,21 @@ public class OpenClawSettings
     public string TestCaseGenPromptAdditionalInstructions { get; set; } = string.Empty;
     public List<string> TestCaseGenPromptAdditionalInstructionLines { get; set; } = [];
 
+    // Project health analysis prompt.
+    public string ProjectHealthSystemRole { get; set; } = "You are a senior engineering manager analyzing software project delivery health.";
+    public string ProjectHealthOutputFormat { get; set; } = "Return only JSON, no markdown and no extra text.";
+    public string ProjectHealthSchema { get; set; } = "{\"score\":0,\"label\":\"Good\",\"summary\":\"...\",\"complexity\":\"Medium\",\"factors\":[\"...\"]}";
+    public string ProjectHealthInstruction { get; set; } = "Analyze project health using bugs, timeline, features, and complexity inputs. Return an overall score from 0 to 100.";
+    public string ProjectHealthFocus { get; set; } = "Be practical and prioritize delivery risk, quality risk, and timeline risk.";
+    public List<string> ProjectHealthRules { get; set; } =
+    [
+        "score must be an integer from 0 to 100.",
+        "label must be one of: Excellent, Good, At Risk, Critical.",
+        "complexity must be one of: Low, Medium, High.",
+        "summary must be concise and action-oriented (max 280 chars).",
+        "factors must contain 3 to 5 short bullet-style risks or drivers."
+    ];
+
     // Feature implement prompt — uses {featureNumber}, {featureTitle}, {featureStatus},
     // {featurePriority}, {featureStage}, {featureDescription}, {featureModule}, {featureLinkedBugs},
     // {featureTimeline}, {projectNumber}, {projectTitle}, {description}, {techStack},
@@ -442,6 +457,103 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
 
         return new OpenClawTestCaseGenResult(true, string.Empty, testCases, stdout);
+    }
+
+    public async Task<OpenClawProjectHealthResult> AnalyzeProjectHealthAsync(
+        ChangeRequest project,
+        int totalBugs,
+        int openBugs,
+        int featureCount,
+        int repositoryFeatureCount,
+        int timelineDays,
+        int complexityScore,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
+            ? "openclaw"
+            : _settings.CliPath.Trim();
+        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var timeoutSeconds = Math.Clamp(NormalizeTimeout(_settings.TimeoutSeconds), 20, 90);
+        var prompt = BuildProjectHealthPrompt(
+            project,
+            totalBugs,
+            openBugs,
+            featureCount,
+            repositoryFeatureCount,
+            timelineDays,
+            complexityScore,
+            _settings);
+
+        var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
+        if (string.IsNullOrWhiteSpace(resolvedCliPath))
+        {
+            var recommendedPath = GetRecommendedWindowsCliPath();
+            var hint = string.IsNullOrWhiteSpace(recommendedPath)
+                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
+                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
+            return FailedProjectHealth($"OpenClaw failed: CLI not found. {hint}");
+        }
+
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            if (!process.Start())
+                return FailedProjectHealth("OpenClaw failed: unable to start process.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start OpenClaw project health process from path {CliPath}", resolvedCliPath);
+            return FailedProjectHealth($"OpenClaw failed: cannot start '{resolvedCliPath}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds + 15));
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            return FailedProjectHealth($"OpenClaw project health analysis timed out after {timeoutSeconds} seconds.");
+        }
+
+        var stdout = (await stdoutTask).Trim();
+        var stderr = (await stderrTask).Trim();
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("OpenClaw project health exited with code {ExitCode}. stderr: {StdErr}",
+                process.ExitCode, TrimTo(stderr, 400));
+            var errorDetails = !string.IsNullOrWhiteSpace(stderr) ? TrimTo(stderr, 220) : "Non-zero exit code.";
+            return FailedProjectHealth($"OpenClaw failed: {errorDetails}");
+        }
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            return FailedProjectHealth("OpenClaw failed: empty output.");
+
+        string? agentText = null;
+        if (TryParseOpenClawResponse(stdout, out var envelopeText, out _))
+            agentText = envelopeText;
+        else
+            agentText = stdout;
+
+        if (string.IsNullOrWhiteSpace(agentText))
+            return FailedProjectHealth("OpenClaw failed: empty health response.");
+
+        var parsed = ParseProjectHealth(agentText, complexityScore);
+        if (!parsed.Succeeded)
+            return parsed with { AgentResponseText = stdout };
+
+        return parsed with { AgentResponseText = stdout };
     }
 
     public async Task<OpenClawBugFixResult> FixBugAsync(
@@ -1023,6 +1135,42 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return Math.Clamp(configuredLimit, 1, HardMaxFindings);
     }
 
+    private static string NormalizeHealthLabel(string? raw, int score)
+    {
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            if (raw.Equals("Excellent", StringComparison.OrdinalIgnoreCase)) return "Excellent";
+            if (raw.Equals("Good", StringComparison.OrdinalIgnoreCase)) return "Good";
+            if (raw.Equals("At Risk", StringComparison.OrdinalIgnoreCase) || raw.Equals("AtRisk", StringComparison.OrdinalIgnoreCase)) return "At Risk";
+            if (raw.Equals("Critical", StringComparison.OrdinalIgnoreCase)) return "Critical";
+        }
+
+        return score switch
+        {
+            >= 85 => "Excellent",
+            >= 70 => "Good",
+            >= 45 => "At Risk",
+            _ => "Critical"
+        };
+    }
+
+    private static string NormalizeComplexity(string? raw, int complexityScore)
+    {
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            if (raw.Equals("Low", StringComparison.OrdinalIgnoreCase)) return "Low";
+            if (raw.Equals("Medium", StringComparison.OrdinalIgnoreCase)) return "Medium";
+            if (raw.Equals("High", StringComparison.OrdinalIgnoreCase)) return "High";
+        }
+
+        return complexityScore switch
+        {
+            >= 70 => "High",
+            >= 40 => "Medium",
+            _ => "Low"
+        };
+    }
+
     private static void TryKill(Process process)
     {
         try
@@ -1267,6 +1415,69 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
+    private static OpenClawProjectHealthResult ParseProjectHealth(string agentText, int complexityScore)
+    {
+        var cleaned = StripCodeFence(agentText);
+        if (!TryParseJsonDocument(cleaned, out var json))
+            return FailedProjectHealth("OpenClaw returned non-JSON health output.");
+
+        using (json)
+        {
+            var root = json.RootElement;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("projectHealth", out var wrapped) &&
+                wrapped.ValueKind == JsonValueKind.Object)
+            {
+                root = wrapped;
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+                return FailedProjectHealth("OpenClaw health output schema is invalid.");
+
+            var rawScore = root.TryGetProperty("score", out var scoreEl) && scoreEl.ValueKind == JsonValueKind.Number && scoreEl.TryGetInt32(out var s)
+                ? s
+                : 50;
+            var score = Math.Clamp(rawScore, 0, 100);
+
+            var label = NormalizeHealthLabel(TrimTo(ReadString(root, "label"), 40), score);
+            var summary = TrimTo(ReadString(root, "summary"), 280);
+            if (string.IsNullOrWhiteSpace(summary))
+                summary = "Health analysis completed.";
+
+            var complexity = NormalizeComplexity(
+                TrimTo(ReadString(root, "complexity"), 30),
+                complexityScore);
+
+            var factors = new List<string>();
+            if (root.TryGetProperty("factors", out var factorsEl) && factorsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in factorsEl.EnumerateArray())
+                {
+                    if (item.ValueKind is not JsonValueKind.String)
+                        continue;
+
+                    var factor = TrimTo(item.GetString(), 120);
+                    if (string.IsNullOrWhiteSpace(factor) || factors.Contains(factor, StringComparer.OrdinalIgnoreCase))
+                        continue;
+
+                    factors.Add(factor);
+                    if (factors.Count >= 5)
+                        break;
+                }
+            }
+
+            return new OpenClawProjectHealthResult(
+                true,
+                string.Empty,
+                score,
+                label,
+                summary,
+                complexity,
+                factors,
+                string.Empty);
+        }
+    }
+
     private static List<OpenClawBugFinding> ParseFindingsFromRawCandidates(string raw, int maxFindings)
     {
         var candidates = new List<string>();
@@ -1296,6 +1507,72 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
 
         return [];
+    }
+
+    private static string BuildProjectHealthPrompt(
+        ChangeRequest project,
+        int totalBugs,
+        int openBugs,
+        int featureCount,
+        int repositoryFeatureCount,
+        int timelineDays,
+        int complexityScore,
+        OpenClawSettings settings)
+    {
+        var features = project.Features
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(12)
+            .ToList();
+
+        var repositoryFeatures = project.RepositoryFeatures
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(12)
+            .ToList();
+
+        var description = TrimTo(project.Description, 1200);
+        var tech = TrimTo(project.TechnologyStack, 400);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(settings.ProjectHealthSystemRole);
+        sb.AppendLine(settings.ProjectHealthOutputFormat);
+        sb.AppendLine("Schema:");
+        sb.AppendLine(settings.ProjectHealthSchema);
+        sb.AppendLine();
+        sb.AppendLine(settings.ProjectHealthInstruction);
+        sb.AppendLine(settings.ProjectHealthFocus);
+        sb.AppendLine();
+        sb.AppendLine($"Project Number: {project.CrNumber}");
+        sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+        sb.AppendLine($"Project Stage: {project.Stage}");
+        sb.AppendLine($"Project Status: {project.Status}");
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.AppendLine($"Description: {description}");
+        if (!string.IsNullOrWhiteSpace(tech))
+            sb.AppendLine($"Technology Stack: {tech}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubRepoUrl))
+            sb.AppendLine($"Repository URL: {TrimTo(project.GitHubRepoUrl, 500)}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubBranch))
+            sb.AppendLine($"Repository Branch: {TrimTo(project.GitHubBranch, 100)}");
+        if (features.Count > 0)
+            sb.AppendLine($"Project Features: {string.Join(", ", features)}");
+        if (repositoryFeatures.Count > 0)
+            sb.AppendLine($"Repository Features: {string.Join(", ", repositoryFeatures)}");
+        sb.AppendLine($"Metrics - Total Bugs: {Math.Max(0, totalBugs)}");
+        sb.AppendLine($"Metrics - Open Bugs: {Math.Max(0, openBugs)}");
+        sb.AppendLine($"Metrics - Feature Count: {Math.Max(0, featureCount)}");
+        sb.AppendLine($"Metrics - Repository Feature Count: {Math.Max(0, repositoryFeatureCount)}");
+        sb.AppendLine($"Metrics - Timeline Days: {Math.Max(0, timelineDays)}");
+        sb.AppendLine($"Metrics - Complexity Score (0-100): {Math.Clamp(complexityScore, 0, 100)}");
+
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        foreach (var rule in settings.ProjectHealthRules)
+            sb.AppendLine($"- {rule}");
+
+        var raw = TrimTo(sb.ToString(), 5000);
+        return Regex.Replace(raw, @"\s+", " ").Trim();
     }
 
     private static string BuildPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
@@ -1433,11 +1710,19 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             sb.AppendLine($"Description: {description}");
         if (!string.IsNullOrWhiteSpace(tech))
             sb.AppendLine($"Technology Stack: {tech}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubRepoUrl))
+            sb.AppendLine($"Repository URL: {TrimTo(project.GitHubRepoUrl, 500)}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubBranch))
+            sb.AppendLine($"Repository Branch: {TrimTo(project.GitHubBranch, 100)}");
         if (features.Count > 0)
             sb.AppendLine($"Project Features: {string.Join(", ", features)}");
         if (repositoryFeatures.Count > 0)
             sb.AppendLine($"Repository Features: {string.Join(", ", repositoryFeatures)}");
 
+        sb.AppendLine();
+        sb.AppendLine("Generation Basis:");
+        sb.AppendLine("- Use project modules, repository context, and major workflows.");
+        sb.AppendLine("- Do NOT derive test cases from existing bugs or linked bug titles.");
         sb.AppendLine();
         sb.AppendLine("Rules:");
         foreach (var rule in settings.TestCaseGenRules)
@@ -1933,4 +2218,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
     private static OpenClawTestCaseGenResult FailedTestCaseGen(string error) =>
         new(false, error, [], string.Empty);
+
+    private static OpenClawProjectHealthResult FailedProjectHealth(string error) =>
+        new(false, error, 0, string.Empty, string.Empty, "Medium", [], string.Empty);
 }

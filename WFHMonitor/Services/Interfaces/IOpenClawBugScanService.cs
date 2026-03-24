@@ -32,6 +32,17 @@ public interface IOpenClawBugScanService
         ChangeRequest project,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default);
+
+    Task<OpenClawProjectHealthResult> AnalyzeProjectHealthAsync(
+        ChangeRequest project,
+        int totalBugs,
+        int openBugs,
+        int featureCount,
+        int repositoryFeatureCount,
+        int timelineDays,
+        int complexityScore,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record OpenClawTestCaseGenResult(
@@ -72,3 +83,13 @@ public sealed record OpenClawFeatureImplementResult(
     bool Succeeded,
     string Error,
     string ImplementationPlan);
+
+public sealed record OpenClawProjectHealthResult(
+    bool Succeeded,
+    string Error,
+    int Score,
+    string Label,
+    string Summary,
+    string Complexity,
+    IReadOnlyList<string> Factors,
+    string AgentResponseText);
