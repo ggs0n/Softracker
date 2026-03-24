@@ -125,6 +125,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(c => c.CrNumber).IsUnique();
             e.HasIndex(c => c.Status);
             e.HasIndex(c => c.BugScanStatus);
+            e.Property(c => c.RowVersion).IsRowVersion();
 
             e.HasOne(c => c.CreatedBy)
              .WithMany()

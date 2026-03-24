@@ -121,6 +121,9 @@ public class ChangeRequest
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
     [ForeignKey(nameof(CreatedBy))]
     public string CreatedById { get; set; } = string.Empty;
     public ApplicationUser? CreatedBy { get; set; }

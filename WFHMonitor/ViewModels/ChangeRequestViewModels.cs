@@ -6,6 +6,7 @@ namespace WFHMonitor.ViewModels;
 public class ChangeRequestFormViewModel
 {
     public int Id { get; set; }
+    public string? RowVersion { get; set; }
 
     [Required, MaxLength(300)]
     public string Title { get; set; } = string.Empty;
