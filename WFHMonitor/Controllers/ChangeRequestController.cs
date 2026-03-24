@@ -941,6 +941,12 @@ public class ChangeRequestController : Controller
                 DeleteFeatureScreenshotFile(shot.FileName, env);
         }
 
+        var linkedTestCases = await _db.TestCases
+            .Where(t => t.ChangeRequestId == id)
+            .ToListAsync();
+        if (linkedTestCases.Count != 0)
+            _db.TestCases.RemoveRange(linkedTestCases);
+
         _db.ChangeRequests.Remove(cr);
         await _db.SaveChangesAsync();
         TempData["Success"] = "Project deleted.";
