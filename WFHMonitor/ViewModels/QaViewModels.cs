@@ -25,6 +25,12 @@ public class QaIndexViewModel
     public int? FilterProjectId { get; set; }
 }
 
+public class QaTestCaseDetailsViewModel
+{
+    public TestCase TestCase { get; set; } = new();
+    public List<BugReport> RelatedBugs { get; set; } = new();
+}
+
 public class ModuleCoverage
 {
     public string Module { get; set; } = string.Empty;

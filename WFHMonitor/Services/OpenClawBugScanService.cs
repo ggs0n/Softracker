@@ -12,6 +12,7 @@ namespace WFHMonitor.Services;
 public class OpenClawSettings
 {
     public string CliPath { get; set; } = "openclaw";
+    public string GatewayUrl { get; set; } = string.Empty;
     public string BugScanAgentId { get; set; } = "main";
     public List<string> BugScanAgentIds { get; set; } = [];
     public string BugFixAgentId { get; set; } = string.Empty;
@@ -155,7 +156,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return Failed($"OpenClaw scan failed: OpenClaw CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
 
         using var process = new Process { StartInfo = startInfo };
 
@@ -272,7 +273,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return Failed($"OpenClaw scan failed: OpenClaw CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -380,7 +381,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return FailedTestCaseGen($"OpenClaw failed: CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -468,7 +469,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return FailedFix($"OpenClaw fix failed: OpenClaw CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -556,7 +557,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             return FailedFeature($"OpenClaw feature run failed: OpenClaw CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -875,7 +876,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         string resolvedCliPath,
         string agentId,
         string prompt,
-        int timeoutSeconds)
+        int timeoutSeconds,
+        string? configuredGatewayUrl = null)
     {
         var args = new[]
         {
@@ -911,6 +913,14 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         foreach (var arg in args)
             startInfo.ArgumentList.Add(arg);
+
+        var gatewayUrl = configuredGatewayUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(gatewayUrl))
+        {
+            // Keep both names to support different OpenClaw CLI env conventions.
+            startInfo.Environment["OPENCLAW_GATEWAY_URL"] = gatewayUrl;
+            startInfo.Environment["OPENCLAW_BASE_URL"] = gatewayUrl;
+        }
 
         return startInfo;
     }
@@ -1051,6 +1061,12 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 return true;
             }
 
+            if (TryExtractPayloadText(root, out var directPayloadText))
+            {
+                responseText = directPayloadText;
+                return true;
+            }
+
             var status = root.TryGetProperty("status", out var statusElement)
                 ? statusElement.GetString()
                 : null;
@@ -1067,32 +1083,43 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             }
 
             if (!root.TryGetProperty("result", out var resultElement) ||
-                !resultElement.TryGetProperty("payloads", out var payloadsElement) ||
-                payloadsElement.ValueKind != JsonValueKind.Array)
+                !TryExtractPayloadText(resultElement, out var payloadText))
             {
                 responseText = string.Empty;
                 return true;
             }
 
-            var sb = new StringBuilder();
-            foreach (var payload in payloadsElement.EnumerateArray())
-            {
-                if (!payload.TryGetProperty("text", out var textElement))
-                    continue;
-
-                var text = textElement.GetString();
-                if (string.IsNullOrWhiteSpace(text))
-                    continue;
-
-                if (sb.Length > 0)
-                    sb.AppendLine();
-
-                sb.Append(text.Trim());
-            }
-
-            responseText = sb.ToString().Trim();
+            responseText = payloadText;
             return true;
         }
+    }
+
+    private static bool TryExtractPayloadText(JsonElement container, out string payloadText)
+    {
+        payloadText = string.Empty;
+
+        if (!container.TryGetProperty("payloads", out var payloadsElement) ||
+            payloadsElement.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var sb = new StringBuilder();
+        foreach (var payload in payloadsElement.EnumerateArray())
+        {
+            if (!payload.TryGetProperty("text", out var textElement))
+                continue;
+
+            var text = textElement.GetString();
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            if (sb.Length > 0)
+                sb.AppendLine();
+
+            sb.Append(text.Trim());
+        }
+
+        payloadText = sb.ToString().Trim();
+        return true;
     }
 
     private static List<OpenClawBugFinding> ParseFindings(string agentText, int maxFindings)
@@ -1137,6 +1164,13 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 var workflow = TrimTo(ReadString(findingElement, "workflow"), 4000);
                 var steps = TrimTo(ReadString(findingElement, "stepsToReproduce"), 4000);
                 var module = TrimTo(ReadString(findingElement, "moduleImpacted"), 200);
+                var severity = NormalizeSeverityLabel(ReadFirstString(
+                    findingElement,
+                    "severity",
+                    "severityLevel",
+                    "riskLevel",
+                    "risk",
+                    "priority"));
                 var screenshotPaths = ParseScreenshotPaths(findingElement, description, workflow, steps);
 
                 if (string.IsNullOrWhiteSpace(description))
@@ -1147,6 +1181,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                     steps = "1. Open the impacted flow.\n2. Execute the scenario.\n3. Validate expected behavior.";
                 if (string.IsNullOrWhiteSpace(module))
                     module = "General";
+                if (string.IsNullOrWhiteSpace(severity))
+                    severity = "Medium";
 
                 results.Add(new OpenClawBugFinding(
                     title,
@@ -1154,6 +1190,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                     workflow,
                     steps,
                     module,
+                    severity,
                     screenshotPaths));
 
                 if (results.Count >= maxFindings)
@@ -1573,6 +1610,49 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return propertyElement.ValueKind == JsonValueKind.String
             ? propertyElement.GetString() ?? string.Empty
             : propertyElement.ToString();
+    }
+
+    private static string ReadFirstString(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var value = ReadString(element, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return string.Empty;
+    }
+
+    private static string NormalizeSeverityLabel(string? value)
+    {
+        var raw = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+
+        var normalized = raw.ToLowerInvariant();
+        var mapped = normalized switch
+        {
+            "critical" or "sev0" or "p0" or "blocker" or "showstopper" => "Critical",
+            "high" or "sev1" or "p1" or "major" => "High",
+            "medium" or "sev2" or "p2" or "normal" or "moderate" => "Medium",
+            "low" or "sev3" or "p3" or "minor" or "trivial" or "cosmetic" => "Low",
+            _ => string.Empty
+        };
+
+        if (!string.IsNullOrWhiteSpace(mapped))
+            return mapped;
+
+        if (normalized.Contains("critical") || normalized.Contains("blocker"))
+            return "Critical";
+        if (normalized.Contains("high"))
+            return "High";
+        if (normalized.Contains("low"))
+            return "Low";
+        if (normalized.Contains("medium"))
+            return "Medium";
+
+        return string.Empty;
     }
 
     private static bool TryParseJsonDocument(string value, out JsonDocument document)

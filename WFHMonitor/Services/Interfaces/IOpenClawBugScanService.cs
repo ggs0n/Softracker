@@ -59,6 +59,7 @@ public sealed record OpenClawBugFinding(
     string Workflow,
     string StepsToReproduce,
     string ModuleImpacted,
+    string Severity,
     IReadOnlyList<string> ScreenshotPaths);
 
 public sealed record OpenClawBugFixResult(

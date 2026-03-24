@@ -186,11 +186,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<BugReport>(e =>
         {
             e.HasIndex(b => b.Status);
+            e.HasIndex(b => b.Severity);
             e.HasIndex(b => b.AssignedDeveloperId);
             e.HasIndex(b => b.ChangeRequestId);
             e.HasIndex(b => b.AssigneeType);
             e.HasIndex(b => b.AgentStatus);
             e.HasIndex(b => b.BugNumber).IsUnique();
+
+            e.Property(b => b.Severity)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(BugSeverity.Medium);
 
             e.HasOne(b => b.CreatedBy)
              .WithMany()

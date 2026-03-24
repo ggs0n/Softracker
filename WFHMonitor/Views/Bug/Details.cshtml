@@ -28,7 +28,11 @@
     var statusClsMap = new Dictionary<string, string> {
         {"New","bd-st-new"}, {"Testing","bd-st-testing"}, {"Complete","bd-st-complete"}
     };
+    var severityClsMap = new Dictionary<string, string> {
+        {"Low","bd-sev-low"}, {"Medium","bd-sev-medium"}, {"High","bd-sev-high"}, {"Critical","bd-sev-critical"}
+    };
     var stKey = Model.Status.ToString();
+    var sevKey = Model.Severity.ToString();
 }
 
 <style>
@@ -45,6 +49,10 @@
     .bd-st-new{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3)}
     .bd-st-testing{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)}
     .bd-st-complete{background:rgba(16,185,129,.15);color:#6ee7b7;border-color:rgba(16,185,129,.3)}
+    .bd-sev-low{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+    .bd-sev-medium{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+    .bd-sev-high{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+    .bd-sev-critical{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
     .bd-hero-date{font-size:.74rem;color:#71717a}
     .bd-hero-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
     .bd-btn-edit{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:8px 18px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s ease;text-decoration:none}
@@ -154,6 +162,7 @@
                 <div class="bd-hero-title">@Model.Title</div>
                 <div class="bd-hero-meta">
                     <span class="bd-pill @(statusClsMap.ContainsKey(stKey) ? statusClsMap[stKey] : "")">@Model.Status</span>
+                    <span class="bd-pill @(severityClsMap.ContainsKey(sevKey) ? severityClsMap[sevKey] : "bd-sev-medium")">@Model.Severity</span>
                     <span class="bd-hero-date">Created @Model.CreatedAt.ToString("MMM dd, yyyy") by @Model.CreatedBy?.FullName</span>
                 </div>
             </div>
@@ -444,6 +453,10 @@
                     <div class="bd-sblock">
                         <div class="bd-stitle">Module Impacted</div>
                         <div class="bd-svalue">@(string.IsNullOrEmpty(Model.ModuleImpacted) ? "Not specified" : Model.ModuleImpacted)</div>
+                    </div>
+                    <div class="bd-sblock">
+                        <div class="bd-stitle">Severity</div>
+                        <div class="bd-svalue">@Model.Severity</div>
                     </div>
                     <div class="bd-sblock">
                         <div class="bd-stitle">Pull Request</div>

@@ -79,7 +79,7 @@
 9. Create/Update sql file after every changes that required db script to run
 
 ### UI/UX Standards
-1. Use skills.md for reference ui
+1. Use SkillTree\Design\UI\SKILL.md for reference ui
 2. Use Bootstrap Icons consistently
 3. Display success/error messages using TempData
 4. Ensure responsive design works on mobile devices

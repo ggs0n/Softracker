@@ -25,6 +25,9 @@
     var statusClsMap = new Dictionary<string, string> {
         {"New","bl-st-new"}, {"Testing","bl-st-testing"}, {"Complete","bl-st-complete"}
     };
+    var severityClsMap = new Dictionary<string, string> {
+        {"Low","bl-sev-low"}, {"Medium","bl-sev-medium"}, {"High","bl-sev-high"}, {"Critical","bl-sev-critical"}
+    };
 }
 
 <style>
@@ -71,6 +74,10 @@
     .bl-st-new{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
     .bl-st-testing{background:#e5edff;color:#1d4ed8;border-color:#bfdbfe}
     .bl-st-complete{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+    .bl-sev-low{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+    .bl-sev-medium{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+    .bl-sev-high{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+    .bl-sev-critical{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
 
     /* Project tone chips */
     .bl-proj-chip{font-weight:700;border-width:1px;border-style:solid;border-radius:999px;padding:3px 10px;font-size:.72rem;letter-spacing:.02em}
@@ -163,6 +170,7 @@
                             <th>Title</th>
                             <th>PR Link</th>
                             <th>Project</th>
+                            <th>Severity</th>
                             <th>Status</th>
                             <th>Assigned</th>
                             <th>Created</th>
@@ -176,6 +184,7 @@
                             var projectText = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber : bug.ChangeRequestReferenceText;
                             var projectToneClass = projectToneClasses[ResolveProjectToneIndex(projectText ?? string.Empty)];
                             var stKey = bug.Status.ToString();
+                            var sevKey = bug.Severity.ToString();
 
                             <tr>
                                 <td><span class="bl-bug-num">@bug.BugNumber</span></td>
@@ -209,6 +218,7 @@
                                         <span style="font-size:.78rem;color:#a1a1aa">—</span>
                                     }
                                 </td>
+                                <td><span class="bl-pill @(severityClsMap.ContainsKey(sevKey) ? severityClsMap[sevKey] : "bl-sev-medium")">@bug.Severity</span></td>
                                 <td><span class="bl-pill @(statusClsMap.ContainsKey(stKey) ? statusClsMap[stKey] : "")">@bug.Status</span></td>
                                 <td>
                                     @if (bug.AssigneeType == WFHMonitor.Models.BugAssigneeType.Agent)

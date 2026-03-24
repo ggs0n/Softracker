@@ -144,6 +144,7 @@ public class BugService : IBugService
             StepsToReproduce = bug.StepsToReproduce,
             ModuleImpacted = bug.ModuleImpacted,
             PullRequestUrl = bug.PullRequestUrl,
+            Severity = bug.Severity,
             Status = bug.Status,
             AssigneeType = bug.AssigneeType,
             AgentStatus = bug.AgentStatus,
@@ -170,6 +171,7 @@ public class BugService : IBugService
             StepsToReproduce = model.StepsToReproduce,
             ModuleImpacted = model.ModuleImpacted,
             PullRequestUrl = NormalizePullRequestUrl(model.PullRequestUrl),
+            Severity = model.Severity,
             Status = model.Status,
             AssigneeType = model.AssigneeType,
             AgentStatus = BugAgentStatus.None,
@@ -229,6 +231,7 @@ public class BugService : IBugService
         bug.StepsToReproduce = model.StepsToReproduce;
         bug.ModuleImpacted = model.ModuleImpacted;
         bug.PullRequestUrl = NormalizePullRequestUrl(model.PullRequestUrl);
+        bug.Severity = model.Severity;
         bug.Status = model.Status;
         bug.AssigneeType = model.AssigneeType;
         bug.AgentStatus = model.AssigneeType == BugAssigneeType.Agent

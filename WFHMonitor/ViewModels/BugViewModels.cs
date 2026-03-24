@@ -29,6 +29,9 @@ public class BugFormViewModel
     [Display(Name = "PR Link")]
     public string? PullRequestUrl { get; set; }
 
+    [Display(Name = "Severity")]
+    public BugSeverity Severity { get; set; } = BugSeverity.Medium;
+
     public BugStatus Status { get; set; } = BugStatus.New;
     public BugAssigneeType AssigneeType { get; set; } = BugAssigneeType.Developer;
     public BugAgentStatus AgentStatus { get; set; } = BugAgentStatus.None;

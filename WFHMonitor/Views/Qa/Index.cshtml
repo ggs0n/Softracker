@@ -255,7 +255,7 @@
                                             <span class="qa-tc-num">@tc.TestNumber</span>
                                         </td>
                                         <td>
-                                            <div class="qa-table-link">@tc.Name</div>
+                                            <a asp-action="Details" asp-route-id="@tc.Id" class="qa-table-link">@tc.Name</a>
                                             <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
                                                 <span class="qa-cat @catCls">@tc.Category</span>
                                                 @if (!string.IsNullOrEmpty(tc.Module))

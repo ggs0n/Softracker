@@ -10,6 +10,14 @@ public enum BugStatus
     Complete
 }
 
+public enum BugSeverity
+{
+    Low,
+    Medium,
+    High,
+    Critical
+}
+
 public enum BugAssigneeType
 {
     Developer,
@@ -50,6 +58,8 @@ public class BugReport
 
     [MaxLength(500)]
     public string? PullRequestUrl { get; set; }
+
+    public BugSeverity Severity { get; set; } = BugSeverity.Medium;
 
     public BugStatus Status { get; set; } = BugStatus.New;
     public BugAssigneeType AssigneeType { get; set; } = BugAssigneeType.Developer;

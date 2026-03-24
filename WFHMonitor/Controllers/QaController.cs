@@ -16,18 +16,18 @@ public class QaController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ISystemSettingsService _settingsService;
-    private readonly IOpenClawBugScanService _openClawService;
+    private readonly IQaOpenClawQueueService _qaOpenClawQueueService;
 
     public QaController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         ISystemSettingsService settingsService,
-        IOpenClawBugScanService openClawService)
+        IQaOpenClawQueueService qaOpenClawQueueService)
     {
         _db = db;
         _userManager = userManager;
         _settingsService = settingsService;
-        _openClawService = openClawService;
+        _qaOpenClawQueueService = qaOpenClawQueueService;
     }
 
     public async Task<IActionResult> Index(string? category, string? status, int? projectId)
@@ -98,6 +98,64 @@ public class QaController : Controller
             FilterCategory = category,
             FilterStatus = status,
             FilterProjectId = projectId
+        };
+
+        return View(vm);
+    }
+
+    public async Task<IActionResult> Details(int id)
+    {
+        if (!await _settingsService.CanViewModuleAsync(User, AppModuleKeys.QaTesting))
+            return Forbid();
+
+        var currentUser = await _userManager.GetUserAsync(User);
+        var companyName = currentUser?.CompanyName?.Trim();
+
+        var projectsQuery = _db.ChangeRequests.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(companyName))
+            projectsQuery = projectsQuery.Where(c => c.CreatedBy != null && c.CreatedBy.CompanyName == companyName);
+        else if (currentUser != null)
+            projectsQuery = projectsQuery.Where(c => c.CreatedById == currentUser.Id);
+
+        var allowedProjectIds = await projectsQuery.Select(p => p.Id).ToListAsync();
+
+        var testCase = await _db.TestCases
+            .Include(t => t.ChangeRequest)
+            .Include(t => t.LinkedBug)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (testCase == null)
+            return NotFound();
+
+        if (testCase.ChangeRequestId.HasValue && !allowedProjectIds.Contains(testCase.ChangeRequestId.Value))
+            return Forbid();
+
+        var testNumber = testCase.TestNumber ?? string.Empty;
+        var module = testCase.Module ?? string.Empty;
+        var hasModule = !string.IsNullOrWhiteSpace(module);
+
+        var relatedBugs = await _db.BugReports
+            .Include(b => b.ChangeRequest)
+            .AsNoTracking()
+            .Where(b =>
+                (testCase.LinkedBugId.HasValue && b.Id == testCase.LinkedBugId.Value) ||
+                (!string.IsNullOrWhiteSpace(testNumber) &&
+                    ((b.ChangeRequestReferenceText != null && b.ChangeRequestReferenceText.Contains(testNumber)) ||
+                     (b.Description != null && b.Description.Contains(testNumber)) ||
+                     (b.StepsToReproduce != null && b.StepsToReproduce.Contains(testNumber)))) ||
+                (testCase.ChangeRequestId.HasValue &&
+                 b.ChangeRequestId == testCase.ChangeRequestId.Value &&
+                 hasModule &&
+                 b.ModuleImpacted != null &&
+                 b.ModuleImpacted == module))
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync();
+
+        var vm = new QaTestCaseDetailsViewModel
+        {
+            TestCase = testCase,
+            RelatedBugs = relatedBugs
         };
 
         return View(vm);
@@ -235,13 +293,14 @@ public class QaController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var testNumbers = await GenerateTestNumbersAsync(newBugs.Count);
         var created = 0;
-        foreach (var bug in newBugs)
+        for (var i = 0; i < newBugs.Count; i++)
         {
-            var testNumber = await GenerateTestNumberAsync();
+            var bug = newBugs[i];
             var tc = new TestCase
             {
-                TestNumber = testNumber,
+                TestNumber = testNumbers[i],
                 Name = bug.Title,
                 Description = !string.IsNullOrWhiteSpace(bug.StepsToReproduce)
                     ? $"Verify fix: {bug.Description}\n\nSteps: {bug.StepsToReproduce}"
@@ -270,57 +329,34 @@ public class QaController : Controller
         if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
             return Forbid();
 
-        var project = await _db.ChangeRequests.FindAsync(projectId);
-        if (project == null)
+        var projectExists = await _db.ChangeRequests
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == projectId);
+        if (!projectExists)
         {
             TempData["Error"] = "Project not found.";
             return RedirectToAction(nameof(Index));
         }
 
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
         try
         {
-            var result = await _openClawService.ScanProjectAsync(project, scanAgentId);
-            if (!result.Succeeded)
-            {
-                TempData["Error"] = $"Scan failed: {result.Error}";
-                return RedirectToAction(nameof(Index));
-            }
+            await _qaOpenClawQueueService.EnqueueAsync(
+                new QaOpenClawQueueItem(
+                    QaOpenClawQueueOperation.ScanAndGenerate,
+                    userId,
+                    ProjectId: projectId,
+                    ScanAgentId: scanAgentId),
+                HttpContext.RequestAborted);
 
-            if (result.Findings.Count == 0)
-            {
-                TempData["Info"] = "Scan completed but found no issues. No test cases generated.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var created = 0;
-
-            foreach (var finding in result.Findings)
-            {
-                var testNumber = await GenerateTestNumberAsync();
-                var tc = new TestCase
-                {
-                    TestNumber = testNumber,
-                    Name = finding.Title,
-                    Description = $"{finding.Description}\n\nWorkflow: {finding.Workflow}\n\nSteps to reproduce: {finding.StepsToReproduce}",
-                    Module = finding.ModuleImpacted,
-                    Status = TestCaseStatus.Pending,
-                    Category = TestCaseCategory.Regression,
-                    Environment = TestCaseEnvironment.Dev,
-                    ChangeRequestId = projectId,
-                    CreatedById = userId,
-                    IsAutoGenerated = true
-                };
-                _db.TestCases.Add(tc);
-                created++;
-            }
-
-            await _db.SaveChangesAsync();
-            TempData["Success"] = $"Scan found {result.Findings.Count} issue(s). {created} test case(s) generated.";
+            TempData["Success"] = "OpenClaw scan queued. Bugs will be added in the background.";
         }
         catch (Exception ex)
         {
-            TempData["Error"] = $"Scan error: {ex.Message}";
+            TempData["Error"] = $"Unable to queue scan: {ex.Message}";
         }
 
         return RedirectToAction(nameof(Index));
@@ -332,67 +368,34 @@ public class QaController : Controller
         if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
             return Forbid();
 
-        var project = await _db.ChangeRequests
-            .Include(c => c.Features)
-            .Include(c => c.RepositoryFeatures)
-            .FirstOrDefaultAsync(c => c.Id == projectId);
-
-        if (project == null)
+        var projectExists = await _db.ChangeRequests
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == projectId);
+        if (!projectExists)
         {
             TempData["Error"] = "Project not found.";
             return RedirectToAction(nameof(Index));
         }
 
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
         try
         {
-            var result = await _openClawService.GenerateTestCasesAsync(project, scanAgentId);
-            if (!result.Succeeded)
-            {
-                TempData["Error"] = $"Auto-generate failed: {result.Error}";
-                return RedirectToAction(nameof(Index));
-            }
+            await _qaOpenClawQueueService.EnqueueAsync(
+                new QaOpenClawQueueItem(
+                    QaOpenClawQueueOperation.AutoGenerate,
+                    userId,
+                    ProjectId: projectId,
+                    ScanAgentId: scanAgentId),
+                HttpContext.RequestAborted);
 
-            if (result.TestCases.Count == 0)
-            {
-                TempData["Info"] = "OpenClaw analysed the project but generated no test cases.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var created = 0;
-
-            foreach (var gen in result.TestCases)
-            {
-                var testNumber = await GenerateTestNumberAsync();
-
-                var category = Enum.TryParse<TestCaseCategory>(gen.Category, true, out var parsedCat)
-                    ? parsedCat : TestCaseCategory.Regression;
-                var environment = Enum.TryParse<TestCaseEnvironment>(gen.Environment, true, out var parsedEnv)
-                    ? parsedEnv : TestCaseEnvironment.Dev;
-
-                var tc = new TestCase
-                {
-                    TestNumber = testNumber,
-                    Name = gen.Name,
-                    Description = gen.Description,
-                    Module = gen.Module,
-                    Status = TestCaseStatus.Pending,
-                    Category = category,
-                    Environment = environment,
-                    ChangeRequestId = projectId,
-                    CreatedById = userId,
-                    IsAutoGenerated = true
-                };
-                _db.TestCases.Add(tc);
-                created++;
-            }
-
-            await _db.SaveChangesAsync();
-            TempData["Success"] = $"OpenClaw generated {created} module-level test case(s).";
+            TempData["Success"] = "OpenClaw auto-generate queued. Test cases will be created in the background.";
         }
         catch (Exception ex)
         {
-            TempData["Error"] = $"Auto-generate error: {ex.Message}";
+            TempData["Error"] = $"Unable to queue auto-generate: {ex.Message}";
         }
 
         return RedirectToAction(nameof(Index));
@@ -404,68 +407,30 @@ public class QaController : Controller
         if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
             return Forbid();
 
-        var tc = await _db.TestCases
-            .Include(t => t.ChangeRequest).ThenInclude(cr => cr!.Features)
-            .Include(t => t.ChangeRequest).ThenInclude(cr => cr!.RepositoryFeatures)
-            .FirstOrDefaultAsync(t => t.Id == id);
-        if (tc == null) return NotFound();
+        var testCaseExists = await _db.TestCases
+            .AsNoTracking()
+            .AnyAsync(t => t.Id == id);
+        if (!testCaseExists)
+            return NotFound();
 
-        if (tc.ChangeRequest == null)
-        {
-            TempData["Error"] = "Test case has no project linked — cannot scan.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var hasModule = !string.IsNullOrWhiteSpace(tc.Module);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
-            var result = hasModule
-                ? await _openClawService.ScanModuleAsync(tc.ChangeRequest, tc.Module!)
-                : await _openClawService.ScanProjectAsync(tc.ChangeRequest);
+            await _qaOpenClawQueueService.EnqueueAsync(
+                new QaOpenClawQueueItem(
+                    QaOpenClawQueueOperation.ScanModule,
+                    userId,
+                    TestCaseId: id),
+                HttpContext.RequestAborted);
 
-            if (!result.Succeeded)
-            {
-                TempData["Error"] = $"Scan failed: {result.Error}";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var scanLabel = hasModule ? $"Module \"{tc.Module}\"" : "Project";
-            if (result.Findings.Count == 0)
-            {
-                TempData["Info"] = $"{scanLabel} scan completed but found no issues.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var created = 0;
-
-            foreach (var finding in result.Findings)
-            {
-                var testNumber = await GenerateTestNumberAsync();
-                var newTc = new TestCase
-                {
-                    TestNumber = testNumber,
-                    Name = finding.Title,
-                    Description = $"{finding.Description}\n\nWorkflow: {finding.Workflow}\n\nSteps to reproduce: {finding.StepsToReproduce}",
-                    Module = finding.ModuleImpacted,
-                    Status = TestCaseStatus.Pending,
-                    Category = TestCaseCategory.Regression,
-                    Environment = tc.Environment,
-                    ChangeRequestId = tc.ChangeRequestId,
-                    CreatedById = userId,
-                    IsAutoGenerated = true
-                };
-                _db.TestCases.Add(newTc);
-                created++;
-            }
-
-            await _db.SaveChangesAsync();
-            TempData["Success"] = $"{scanLabel} scan found {result.Findings.Count} issue(s). {created} test case(s) generated.";
+            TempData["Success"] = "OpenClaw module scan queued. Bugs will be added in the background.";
         }
         catch (Exception ex)
         {
-            TempData["Error"] = $"Scan error: {ex.Message}";
+            TempData["Error"] = $"Unable to queue module scan: {ex.Message}";
         }
 
         return RedirectToAction(nameof(Index));
@@ -485,22 +450,52 @@ public class QaController : Controller
 
     private async Task<string> GenerateTestNumberAsync()
     {
+        var numbers = await GenerateTestNumbersAsync(1);
+        return numbers[0];
+    }
+
+    private async Task<List<string>> GenerateTestNumbersAsync(int count)
+    {
+        if (count <= 0)
+            return [];
+
         var year = DateTime.UtcNow.Year;
         var prefix = $"TC-{year}-";
-        var lastTc = await _db.TestCases
+        var existingNumbers = await _db.TestCases
             .Where(t => t.TestNumber.StartsWith(prefix))
-            .OrderByDescending(t => t.TestNumber)
             .Select(t => t.TestNumber)
-            .FirstOrDefaultAsync();
+            .ToListAsync();
 
-        var seq = 1;
-        if (lastTc != null)
+        var trackedNumbers = _db.ChangeTracker
+            .Entries<TestCase>()
+            .Where(e => e.State != EntityState.Deleted
+                && !string.IsNullOrWhiteSpace(e.Entity.TestNumber)
+                && e.Entity.TestNumber.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(e => e.Entity.TestNumber);
+
+        var maxSeq = existingNumbers
+            .Concat(trackedNumbers)
+            .Select(ParseTestNumberSequence)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        var numbers = new List<string>(count);
+        for (var i = 1; i <= count; i++)
         {
-            var parts = lastTc.Split('-');
-            if (parts.Length == 3 && int.TryParse(parts[2], out var lastSeq))
-                seq = lastSeq + 1;
+            numbers.Add($"{prefix}{maxSeq + i:D4}");
         }
 
-        return $"{prefix}{seq:D4}";
+        return numbers;
+    }
+
+    private static int ParseTestNumberSequence(string? testNumber)
+    {
+        if (string.IsNullOrWhiteSpace(testNumber))
+            return 0;
+
+        var parts = testNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 3 && int.TryParse(parts[2], out var seq)
+            ? seq
+            : 0;
     }
 }

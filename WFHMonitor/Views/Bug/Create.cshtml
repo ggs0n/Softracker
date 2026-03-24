@@ -122,9 +122,16 @@
                         <select asp-for="Status" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugStatus>()" class="nb-select"></select>
                     </div>
                     <div>
+                        <label asp-for="Severity" class="nb-label">Severity</label>
+                        <select asp-for="Severity" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugSeverity>()" class="nb-select"></select>
+                    </div>
+                </div>
+                <div class="nb-row" style="margin-bottom:16px">
+                    <div>
                         <label asp-for="AssigneeType" class="nb-label">Assign To</label>
                         <select asp-for="AssigneeType" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.BugAssigneeType>()" class="nb-select" id="assigneeType"></select>
                     </div>
+                    <div></div>
                 </div>
                 <div class="nb-row">
                     <div id="developerAssignGroup">

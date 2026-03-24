@@ -1,0 +1,477 @@
+@model WFHMonitor.ViewModels.QaTestCaseDetailsViewModel
+@{
+    ViewData["Title"] = $"QA Test Case - {Model.TestCase.TestNumber}";
+}
+
+<style>
+    .qd-shell {
+        --qd-bg: #f7f8fa;
+        --qd-surface: #ffffff;
+        --qd-border: #e5e7eb;
+        --qd-text: #111827;
+        --qd-muted: #6b7280;
+        --qd-accent: #10b981;
+        --qd-accent-soft: rgba(16, 185, 129, .14);
+        --qd-shadow: 0 14px 35px rgba(16, 24, 40, .06);
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 26px 16px 34px;
+        color: var(--qd-text);
+    }
+
+    .qd-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .qd-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: #059669;
+        background: rgba(16, 185, 129, .12);
+        border: 1px solid rgba(16, 185, 129, .24);
+        padding: 4px 10px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+    }
+
+    .qd-title {
+        font-size: 1.75rem;
+        line-height: 1.1;
+        letter-spacing: -.02em;
+        font-weight: 800;
+        margin: 0 0 6px;
+        text-wrap: balance;
+    }
+
+    .qd-subtitle {
+        margin: 0;
+        color: var(--qd-muted);
+        font-size: .86rem;
+    }
+
+    .qd-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #111827;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: .78rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all .2s ease;
+        white-space: nowrap;
+    }
+
+    .qd-back:hover {
+        border-color: #9ca3af;
+        background: #f9fafb;
+        color: #111827;
+        transform: translateY(-1px);
+    }
+
+    .qd-hero {
+        position: relative;
+        background:
+            radial-gradient(circle at top right, rgba(16, 185, 129, .12), transparent 48%),
+            linear-gradient(180deg, #ffffff, #f8fafc);
+        border: 1px solid var(--qd-border);
+        border-radius: 16px;
+        box-shadow: var(--qd-shadow);
+        padding: 18px;
+        margin-bottom: 18px;
+        overflow: hidden;
+    }
+
+    .qd-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: radial-gradient(rgba(17, 24, 39, .05) 1px, transparent 1px);
+        background-size: 12px 12px;
+        opacity: .1;
+    }
+
+    .qd-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .qd-kpi {
+        background: var(--qd-surface);
+        border: 1px solid var(--qd-border);
+        border-radius: 12px;
+        padding: 10px 11px;
+    }
+
+    .qd-kpi-label {
+        display: block;
+        font-size: .64rem;
+        color: var(--qd-muted);
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+
+    .qd-kpi-value {
+        font-size: .78rem;
+        font-weight: 700;
+        color: var(--qd-text);
+    }
+
+    .qd-desc {
+        position: relative;
+        z-index: 1;
+        background: #ffffffcc;
+        border: 1px solid var(--qd-border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: .84rem;
+        color: #1f2937;
+        line-height: 1.55;
+        white-space: pre-wrap;
+    }
+
+    .qd-section {
+        background: #fff;
+        border: 1px solid var(--qd-border);
+        border-radius: 16px;
+        box-shadow: var(--qd-shadow);
+        overflow: hidden;
+    }
+
+    .qd-section-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--qd-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: linear-gradient(180deg, #fbfcfd, #f7f9fb);
+    }
+
+    .qd-section-title {
+        margin: 0;
+        font-size: .95rem;
+        font-weight: 800;
+        letter-spacing: -.01em;
+    }
+
+    .qd-section-sub {
+        margin: 2px 0 0;
+        color: var(--qd-muted);
+        font-size: .73rem;
+    }
+
+    .qd-count {
+        font-size: .68rem;
+        font-weight: 700;
+        border-radius: 999px;
+        background: var(--qd-accent-soft);
+        color: #047857;
+        border: 1px solid rgba(16, 185, 129, .25);
+        padding: 3px 10px;
+    }
+
+    .qd-empty {
+        padding: 32px 18px;
+        text-align: center;
+        color: var(--qd-muted);
+        font-size: .84rem;
+    }
+
+    .qd-bugs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 14px;
+        background: var(--qd-bg);
+    }
+
+    .qd-bug {
+        background: #fff;
+        border: 1px solid var(--qd-border);
+        border-radius: 14px;
+        padding: 12px 12px 10px;
+        display: grid;
+        gap: 8px;
+        transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+
+    .qd-bug:hover {
+        border-color: rgba(16, 185, 129, .45);
+        box-shadow: 0 8px 20px rgba(16, 24, 40, .08);
+        transform: translateY(-1px);
+    }
+
+    .qd-bug-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .qd-bug-num {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: .72rem;
+        font-weight: 700;
+        color: #0f766e;
+        background: rgba(15, 118, 110, .08);
+        border: 1px solid rgba(15, 118, 110, .2);
+        padding: 2px 8px;
+        border-radius: 999px;
+    }
+
+    .qd-bug-status {
+        font-size: .66rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 2px 8px;
+        border: 1px solid transparent;
+    }
+
+    .qd-st-new {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fecaca;
+    }
+
+    .qd-st-testing {
+        color: #92400e;
+        background: #fef3c7;
+        border-color: #fde68a;
+    }
+
+    .qd-st-complete {
+        color: #065f46;
+        background: #d1fae5;
+        border-color: #a7f3d0;
+    }
+
+    .qd-bug-title {
+        margin: 0;
+        font-size: .88rem;
+        font-weight: 700;
+        line-height: 1.32;
+        color: #0f172a;
+        text-wrap: balance;
+    }
+
+    .qd-bug-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .qd-chip {
+        font-size: .64rem;
+        font-weight: 700;
+        letter-spacing: .02em;
+        color: #475569;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 999px;
+        padding: 2px 8px;
+    }
+
+    .qd-bug-desc {
+        margin: 0;
+        font-size: .76rem;
+        line-height: 1.45;
+        color: #64748b;
+    }
+
+    .qd-bug-actions {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .qd-open {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid rgba(16, 185, 129, .35);
+        background: #ecfdf5;
+        color: #047857;
+        border-radius: 9px;
+        padding: 6px 10px;
+        font-size: .72rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all .2s ease;
+    }
+
+    .qd-open:hover {
+        color: #065f46;
+        border-color: rgba(16, 185, 129, .55);
+        background: #d1fae5;
+        transform: translateY(-1px);
+    }
+
+    @@media (max-width: 1040px) {
+        .qd-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 820px) {
+        .qd-top {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .qd-back {
+            width: fit-content;
+        }
+
+        .qd-bugs {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .qd-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+
+<div class="qd-shell">
+    <header class="qd-top">
+        <div>
+            <div class="qd-kicker"><i class="bi bi-bezier2"></i> QA Test Case</div>
+            <h1 class="qd-title">@Model.TestCase.TestNumber - @Model.TestCase.Name</h1>
+            <p class="qd-subtitle">Track context and investigate every bug connected to this test case.</p>
+        </div>
+        <a asp-action="Index" class="qd-back">
+            <i class="bi bi-arrow-left"></i> Back to QA
+        </a>
+    </header>
+
+    <section class="qd-hero">
+        <div class="qd-grid">
+            <article class="qd-kpi">
+                <span class="qd-kpi-label">Status</span>
+                <span class="qd-kpi-value">@Model.TestCase.Status</span>
+            </article>
+            <article class="qd-kpi">
+                <span class="qd-kpi-label">Category</span>
+                <span class="qd-kpi-value">@Model.TestCase.Category</span>
+            </article>
+            <article class="qd-kpi">
+                <span class="qd-kpi-label">Environment</span>
+                <span class="qd-kpi-value">@Model.TestCase.Environment</span>
+            </article>
+            <article class="qd-kpi">
+                <span class="qd-kpi-label">Module</span>
+                <span class="qd-kpi-value">@(string.IsNullOrWhiteSpace(Model.TestCase.Module) ? "-" : Model.TestCase.Module)</span>
+            </article>
+            <article class="qd-kpi">
+                <span class="qd-kpi-label">Project</span>
+                <span class="qd-kpi-value">
+                    @if (Model.TestCase.ChangeRequest != null)
+                    {
+                        @Model.TestCase.ChangeRequest.CrNumber
+                    }
+                    else
+                    {
+                        @("-")
+                    }
+                </span>
+            </article>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.TestCase.Description))
+        {
+            <div class="qd-desc">@Model.TestCase.Description</div>
+        }
+    </section>
+
+    <section class="qd-section">
+        <div class="qd-section-head">
+            <div>
+                <h2 class="qd-section-title"><i class="bi bi-bug"></i> Related bugs</h2>
+                <p class="qd-section-sub">Bugs linked by test case reference, project, module, or explicit relation.</p>
+            </div>
+            <span class="qd-count">@Model.RelatedBugs.Count found</span>
+        </div>
+
+        @if (Model.RelatedBugs.Count == 0)
+        {
+            <div class="qd-empty">
+                <i class="bi bi-search"></i>
+                No related bugs found for this test case yet.
+            </div>
+        }
+        else
+        {
+            <div class="qd-bugs">
+                @foreach (var bug in Model.RelatedBugs)
+                {
+                    var statusClass = bug.Status switch
+                    {
+                        WFHMonitor.Models.BugStatus.New => "qd-st-new",
+                        WFHMonitor.Models.BugStatus.Testing => "qd-st-testing",
+                        _ => "qd-st-complete"
+                    };
+
+                    var projectChip = !string.IsNullOrWhiteSpace(bug.ChangeRequest?.CrNumber)
+                        ? bug.ChangeRequest!.CrNumber
+                        : bug.ChangeRequestReferenceText;
+
+                    var preview = string.IsNullOrWhiteSpace(bug.Description)
+                        ? string.Empty
+                        : (bug.Description!.Length > 150 ? bug.Description[..150].Trim() + "..." : bug.Description);
+
+                    <article class="qd-bug">
+                        <div class="qd-bug-top">
+                            <span class="qd-bug-num">@bug.BugNumber</span>
+                            <span class="qd-bug-status @statusClass">@bug.Status</span>
+                        </div>
+
+                        <h3 class="qd-bug-title">@bug.Title</h3>
+
+                        <div class="qd-bug-meta">
+                            @if (!string.IsNullOrWhiteSpace(bug.ModuleImpacted))
+                            {
+                                <span class="qd-chip">Module: @bug.ModuleImpacted</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(projectChip))
+                            {
+                                <span class="qd-chip">Project: @projectChip</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(preview))
+                        {
+                            <p class="qd-bug-desc">@preview</p>
+                        }
+
+                        <div class="qd-bug-actions">
+                            <a asp-controller="Bug" asp-action="Details" asp-route-id="@bug.Id" class="qd-open">
+                                Open bug <i class="bi bi-arrow-up-right"></i>
+                            </a>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>

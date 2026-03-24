@@ -194,6 +194,13 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
                 Workflow = finding.Workflow,
                 StepsToReproduce = finding.StepsToReproduce,
                 ModuleImpacted = finding.ModuleImpacted,
+                Severity = BugSeverityResolver.Resolve(
+                    finding.Severity,
+                    finding.Title,
+                    finding.Description,
+                    finding.Workflow,
+                    finding.StepsToReproduce,
+                    finding.ModuleImpacted),
                 Status = BugStatus.New,
                 AssigneeType = BugAssigneeType.Agent,
                 AgentStatus = BugAgentStatus.Queued,

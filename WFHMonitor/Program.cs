@@ -62,6 +62,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FeatureAgentQueueS
 builder.Services.AddSingleton<ProjectBugScanQueueService>();
 builder.Services.AddSingleton<IProjectBugScanQueueService>(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
+builder.Services.AddSingleton<QaOpenClawQueueService>();
+builder.Services.AddSingleton<IQaOpenClawQueueService>(sp => sp.GetRequiredService<QaOpenClawQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<QaOpenClawQueueService>());
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
