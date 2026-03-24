@@ -47,6 +47,7 @@ public class AdminController : Controller
         foreach (var role in teamRoles)
         {
             var users = (await _userManager.GetUsersInRoleAsync(role))
+                .Where(u => u.IsActive)
                 .Where(u => IsCompanyVisibleToAdmin(u.CompanyName, currentCompanyName, currentAdminId, u.Id))
                 .ToList();
             foreach (var user in users)
@@ -505,6 +506,7 @@ public class AdminController : Controller
         {
             var users = await _userManager.GetUsersInRoleAsync(role);
             items.AddRange(users
+                .Where(user => user.IsActive)
                 .Where(user => IsCompanyVisibleToAdmin(user.CompanyName, currentCompanyName, currentAdminId, user.Id))
                 .Select(user => new EmployeeListItem { Employee = user, Role = role }));
         }
