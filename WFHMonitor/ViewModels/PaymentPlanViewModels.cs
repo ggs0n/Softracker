@@ -10,6 +10,8 @@ public class PaymentPlansViewModel
     public DateTime? ProSubscriptionEndsAt { get; set; }
     public bool IsProCancelAtPeriodEnd { get; set; }
     public bool IsStripeBillingConfigured { get; set; }
+    public bool HasPendingStripeCheckout { get; set; }
+    public string? PendingStripeCheckoutUrl { get; set; }
 
     public int CurrentProjectCount { get; set; }
     public int CurrentBugCount { get; set; }
@@ -22,7 +24,7 @@ public class PaymentPlansViewModel
 
     public bool HasProAccess => IsProSubscriptionActive &&
                                 (!ProSubscriptionEndsAt.HasValue || ProSubscriptionEndsAt.Value > DateTime.UtcNow);
-    public bool RequiresProPayment => CurrentPlan == SubscriptionPlan.Pro && !HasProAccess;
+    public bool RequiresProPayment => (CurrentPlan == SubscriptionPlan.Pro || HasPendingStripeCheckout) && !HasProAccess;
     public bool CanStartProCheckout => RequiresProPayment && IsStripeBillingConfigured;
     public bool CanCancelProPlan => HasProAccess && CurrentPlan == SubscriptionPlan.Pro;
     public bool IsFreeProjectLimitReached => CurrentProjectCount >= FreeProjectLimit;

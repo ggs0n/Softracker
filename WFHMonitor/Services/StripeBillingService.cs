@@ -30,14 +30,14 @@ public class StripeBillingService : IStripeBillingService
         !string.IsNullOrWhiteSpace(_settings.SecretKey) &&
         (!string.IsNullOrWhiteSpace(_settings.ProPriceId) || _settings.ProUnitAmount > 0);
 
-    public async Task<(bool Succeeded, string CheckoutUrl, string Error)> CreateProCheckoutSessionAsync(
+    public async Task<(bool Succeeded, string CheckoutUrl, string SessionId, string Error)> CreateProCheckoutSessionAsync(
         ApplicationUser user,
         string successUrl,
         string cancelUrl,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
-            return (false, string.Empty, "Stripe billing is not configured.");
+            return (false, string.Empty, string.Empty, "Stripe billing is not configured.");
 
         var payload = new List<KeyValuePair<string, string>>
         {
@@ -72,17 +72,20 @@ public class StripeBillingService : IStripeBillingService
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
-            return (false, string.Empty, ParseStripeError(content, response.ReasonPhrase));
+            return (false, string.Empty, string.Empty, ParseStripeError(content, response.ReasonPhrase));
 
         using var doc = JsonDocument.Parse(content);
         var url = doc.RootElement.TryGetProperty("url", out var urlElement)
             ? urlElement.GetString()
             : null;
+        var sessionId = doc.RootElement.TryGetProperty("id", out var idElement)
+            ? idElement.GetString()
+            : null;
 
-        if (string.IsNullOrWhiteSpace(url))
-            return (false, string.Empty, "Stripe did not return a checkout URL.");
+        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(sessionId))
+            return (false, string.Empty, string.Empty, "Stripe did not return a valid checkout session.");
 
-        return (true, url, string.Empty);
+        return (true, url, sessionId, string.Empty);
     }
 
     public async Task<(bool Succeeded, StripeCheckoutSessionInfo? Session, string Error)> GetCheckoutSessionAsync(

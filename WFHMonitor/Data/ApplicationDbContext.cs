@@ -67,6 +67,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(u => u.LastProcessedStripeCheckoutSessionId)
                 .HasMaxLength(200);
 
+            e.Property(u => u.PendingStripeCheckoutSessionId)
+                .HasMaxLength(200);
+
+            e.Property(u => u.PendingStripeCheckoutUrl)
+                .HasMaxLength(1000);
+
+            e.Property(u => u.PendingStripeCheckoutCreatedAt);
+
             e.HasOne(u => u.OrgTeam)
                 .WithMany()
                 .HasForeignKey(u => u.OrgTeamId)

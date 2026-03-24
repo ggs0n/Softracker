@@ -185,7 +185,7 @@
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="returnUrl" value="@returnUrl" />
                         <button type="submit" class="dp-btn-primary" @(Model.CanStartProCheckout ? null : "disabled")>
-                            <i class="bi bi-credit-card"></i> Pay with Stripe
+                            <i class="bi bi-credit-card"></i> @(Model.HasPendingStripeCheckout ? "Resume Stripe Checkout" : "Pay with Stripe")
                         </button>
                     </form>
                 }
@@ -219,7 +219,14 @@
                 <div class="plan-pay-note">
                     @if (Model.CanStartProCheckout)
                     {
-                        <span>Complete Stripe payment to unlock unlimited projects, bugs, and features.</span>
+                        if (Model.HasPendingStripeCheckout && !string.IsNullOrWhiteSpace(Model.PendingStripeCheckoutUrl))
+                        {
+                            <span>Payment is still in progress. Resume the same Stripe checkout to avoid duplicate payment attempts.</span>
+                        }
+                        else
+                        {
+                            <span>Complete Stripe payment to unlock unlimited projects, bugs, and features.</span>
+                        }
                     }
                     else
                     {

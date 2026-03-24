@@ -29,6 +29,9 @@ public class ApplicationUser : IdentityUser
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
     public string? LastProcessedStripeCheckoutSessionId { get; set; }
+    public string? PendingStripeCheckoutSessionId { get; set; }
+    public string? PendingStripeCheckoutUrl { get; set; }
+    public DateTime? PendingStripeCheckoutCreatedAt { get; set; }
     public OrganizationTeam OrganizationTeam { get; set; } = OrganizationTeam.Unassigned;
     public int? OrgTeamId { get; set; }
     public OrgTeam? OrgTeam { get; set; }

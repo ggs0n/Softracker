@@ -40,6 +40,7 @@ public class PaymentController : Controller
             return Forbid();
 
         await EnsureSubscriptionWindowAsync(user);
+        await ReconcilePendingCheckoutAsync(user);
 
         var proSettings = await _systemSettingsService.GetProVersionSettingsAsync();
 
@@ -51,6 +52,8 @@ public class PaymentController : Controller
             ProSubscriptionEndsAt = ResolveProEndDate(user),
             IsProCancelAtPeriodEnd = user.IsProCancelAtPeriodEnd,
             IsStripeBillingConfigured = _stripeBillingService.IsConfigured,
+            HasPendingStripeCheckout = !string.IsNullOrWhiteSpace(user.PendingStripeCheckoutSessionId),
+            PendingStripeCheckoutUrl = user.PendingStripeCheckoutUrl,
             CurrentProjectCount = await _db.ChangeRequests.CountAsync(c => c.CreatedById == userId),
             CurrentBugCount = await _db.BugReports.CountAsync(b => b.CreatedById == userId),
             CurrentFeatureCount = await _db.ChangeRequests
@@ -176,12 +179,31 @@ public class PaymentController : Controller
         var successUrl = $"{baseUrl}{successPath}?session_id={{CHECKOUT_SESSION_ID}}";
         var cancelUrl = $"{baseUrl}{cancelPath}";
 
+        if (!string.IsNullOrWhiteSpace(user.PendingStripeCheckoutSessionId) &&
+            !string.IsNullOrWhiteSpace(user.PendingStripeCheckoutUrl))
+        {
+            TempData["Info"] = "Resuming your in-progress Stripe checkout.";
+            return Redirect(user.PendingStripeCheckoutUrl);
+        }
+
         var checkout = await _stripeBillingService.CreateProCheckoutSessionAsync(user, successUrl, cancelUrl);
-        if (!checkout.Succeeded || string.IsNullOrWhiteSpace(checkout.CheckoutUrl))
+        if (!checkout.Succeeded || string.IsNullOrWhiteSpace(checkout.CheckoutUrl) || string.IsNullOrWhiteSpace(checkout.SessionId))
         {
             TempData["Error"] = string.IsNullOrWhiteSpace(checkout.Error)
                 ? "Unable to start Stripe checkout."
                 : checkout.Error;
+            return RedirectToAction(nameof(Index));
+        }
+
+        user.SubscriptionPlan = SubscriptionPlan.Pro;
+        user.PendingStripeCheckoutSessionId = checkout.SessionId;
+        user.PendingStripeCheckoutUrl = checkout.CheckoutUrl;
+        user.PendingStripeCheckoutCreatedAt = DateTime.UtcNow;
+
+        var update = await _userManager.UpdateAsync(user);
+        if (!update.Succeeded)
+        {
+            TempData["Error"] = update.Errors.FirstOrDefault()?.Description ?? "Unable to save pending checkout state.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -246,6 +268,9 @@ public class PaymentController : Controller
         user.LastProcessedStripeCheckoutSessionId = string.IsNullOrWhiteSpace(session.Id)
             ? normalizedSessionId
             : session.Id;
+        user.PendingStripeCheckoutSessionId = null;
+        user.PendingStripeCheckoutUrl = null;
+        user.PendingStripeCheckoutCreatedAt = null;
 
         var update = await _userManager.UpdateAsync(user);
         if (!update.Succeeded)
@@ -258,8 +283,17 @@ public class PaymentController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    public IActionResult Cancel()
+    public async Task<IActionResult> Cancel()
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user != null)
+        {
+            user.PendingStripeCheckoutSessionId = null;
+            user.PendingStripeCheckoutUrl = null;
+            user.PendingStripeCheckoutCreatedAt = null;
+            await _userManager.UpdateAsync(user);
+        }
+
         TempData["Info"] = "Stripe checkout was canceled. You can resume payment anytime.";
         return RedirectToAction(nameof(Index));
     }
@@ -324,6 +358,51 @@ public class PaymentController : Controller
 
         var endDate = ResolveProEndDate(user);
         return !endDate.HasValue || endDate.Value > DateTime.UtcNow;
+    }
+
+    private async Task ReconcilePendingCheckoutAsync(ApplicationUser user)
+    {
+        var pendingSessionId = user.PendingStripeCheckoutSessionId?.Trim();
+        if (string.IsNullOrWhiteSpace(pendingSessionId) || HasActiveProAccess(user))
+            return;
+
+        var stripeResult = await _stripeBillingService.GetCheckoutSessionAsync(pendingSessionId);
+        if (!stripeResult.Succeeded || stripeResult.Session == null)
+            return;
+
+        var session = stripeResult.Session;
+        var isComplete = string.Equals(session.Status, "complete", StringComparison.OrdinalIgnoreCase);
+        var isPaid = string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(session.PaymentStatus, "no_payment_required", StringComparison.OrdinalIgnoreCase);
+        var isOpen = string.Equals(session.Status, "open", StringComparison.OrdinalIgnoreCase);
+
+        if (isComplete && isPaid &&
+            string.Equals(session.ClientReferenceId, user.Id, StringComparison.Ordinal))
+        {
+            user.SubscriptionPlan = SubscriptionPlan.Pro;
+            user.IsProSubscriptionActive = true;
+            user.ProSubscribedAt ??= DateTime.UtcNow;
+            user.ProSubscriptionEndsAt = user.ProSubscribedAt.Value.AddMonths(1);
+            user.IsProCancelAtPeriodEnd = false;
+            user.StripeCustomerId = string.IsNullOrWhiteSpace(session.CustomerId) ? user.StripeCustomerId : session.CustomerId;
+            user.StripeSubscriptionId = string.IsNullOrWhiteSpace(session.SubscriptionId) ? user.StripeSubscriptionId : session.SubscriptionId;
+            user.LastProcessedStripeCheckoutSessionId = string.IsNullOrWhiteSpace(session.Id) ? pendingSessionId : session.Id;
+            user.PendingStripeCheckoutSessionId = null;
+            user.PendingStripeCheckoutUrl = null;
+            user.PendingStripeCheckoutCreatedAt = null;
+            await _userManager.UpdateAsync(user);
+            return;
+        }
+
+        if (!isOpen)
+        {
+            user.PendingStripeCheckoutSessionId = null;
+            user.PendingStripeCheckoutUrl = null;
+            user.PendingStripeCheckoutCreatedAt = null;
+            if (!HasActiveProAccess(user))
+                user.SubscriptionPlan = SubscriptionPlan.Free;
+            await _userManager.UpdateAsync(user);
+        }
     }
 
     private async Task EnsureSubscriptionWindowAsync(ApplicationUser user)
