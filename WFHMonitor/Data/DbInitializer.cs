@@ -96,6 +96,8 @@ public static class DbInitializer
                 ALTER TABLE [ChangeRequests] ADD [BugScanLastMessage] nvarchar(500) NULL;
             IF COL_LENGTH('ChangeRequests', 'BugScanLastRunAt') IS NULL
                 ALTER TABLE [ChangeRequests] ADD [BugScanLastRunAt] datetime2 NULL;
+            IF COL_LENGTH('ChangeRequests', 'RowVersion') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [RowVersion] rowversion NOT NULL;
             IF COL_LENGTH('ProjectFeatures', 'Status') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [Status] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_Status] DEFAULT 'Draft';
             IF COL_LENGTH('ProjectFeatures', 'Priority') IS NULL

@@ -20,6 +20,7 @@
                 <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="crForm">
                     @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="Id" />
+                    <input type="hidden" asp-for="RowVersion" />
                     <div asp-validation-summary="All" class="alert alert-danger small"></div>
 
                     <div class="mb-3">

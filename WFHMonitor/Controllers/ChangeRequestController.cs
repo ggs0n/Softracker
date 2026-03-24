@@ -852,6 +852,7 @@ public class ChangeRequestController : Controller
             GitHubRepoUrl = cr.GitHubRepoUrl,
             GitHubBranch = cr.GitHubBranch,
             TechnologyStack = cr.TechnologyStack,
+            RowVersion = Convert.ToBase64String(cr.RowVersion),
             Pics = cr.Pics.Select(p => new PicEntry { EmployeeId = p.EmployeeId, Role = p.Role }).ToList(),
             EmployeeOptions = await GetEmployeeOptions()
         };
@@ -874,6 +875,16 @@ public class ChangeRequestController : Controller
             .Include(c => c.Pics)
             .FirstOrDefaultAsync(c => c.Id == id);
         if (cr == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(model.RowVersion))
+        {
+            ModelState.AddModelError(string.Empty, "The project version is missing. Please reload and try again.");
+            model.EmployeeOptions = await GetEmployeeOptions();
+            return View(model);
+        }
+
+        var originalRowVersion = Convert.FromBase64String(model.RowVersion);
+        _db.Entry(cr).Property(nameof(ChangeRequest.RowVersion)).OriginalValue = originalRowVersion;
 
         var oldPicEmployeeIds = cr.Pics
             .Where(p => !string.IsNullOrWhiteSpace(p.EmployeeId))
@@ -912,7 +923,17 @@ public class ChangeRequestController : Controller
             });
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            ModelState.AddModelError(string.Empty, "This project was updated by another user. Reload the page and apply your changes again.");
+            model.EmployeeOptions = await GetEmployeeOptions();
+            return View(model);
+        }
+
         await NotifyDeveloperProjectAssignmentsAsync(cr, selectedPics, oldPicEmployeeIds);
         TempData["Success"] = "Project updated.";
         return RedirectToAction(nameof(Details), new { id = cr.Id });
