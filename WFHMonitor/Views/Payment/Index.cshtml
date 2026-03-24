@@ -104,6 +104,33 @@
     }
 </style>
 
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.js-stripe-checkout-form').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                if (form.dataset.submitted === 'true') {
+                    return false;
+                }
+
+                form.dataset.submitted = 'true';
+
+                const button = form.querySelector('.js-stripe-checkout-button');
+                const label = form.querySelector('.js-stripe-checkout-label');
+                if (button) {
+                    button.disabled = true;
+                    button.setAttribute('aria-disabled', 'true');
+                }
+
+                if (label) {
+                    label.textContent = 'Redirecting to Stripe...';
+                }
+
+                return true;
+            });
+        });
+    });
+</script>
+
 <div class="mod-header mb-4">
     <div class="mod-header-left">
         <h1 class="mod-title"><i class="bi bi-credit-card-2-front" style="color:#8b5cf6"></i> Subscription Plans</h1>
@@ -181,11 +208,11 @@
                 }
                 else if (Model.RequiresProPayment)
                 {
-                    <form asp-controller="Payment" asp-action="StartProCheckout" method="post" class="m-0">
+                    <form asp-controller="Payment" asp-action="StartProCheckout" method="post" class="m-0 js-stripe-checkout-form">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="returnUrl" value="@returnUrl" />
-                        <button type="submit" class="dp-btn-primary" @(Model.CanStartProCheckout ? null : "disabled")>
-                            <i class="bi bi-credit-card"></i> Pay with Stripe
+                        <button type="submit" class="dp-btn-primary js-stripe-checkout-button" data-default-label="Pay with Stripe" @(Model.CanStartProCheckout ? null : "disabled")>
+                            <i class="bi bi-credit-card"></i> <span class="js-stripe-checkout-label">Pay with Stripe</span>
                         </button>
                     </form>
                 }
