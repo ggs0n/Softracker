@@ -339,31 +339,101 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* -- Digital Clock (topbar) -- */
+/* -- Analog Clock (topbar) -- */
 .st-clock {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-mono);
+  gap: 12px;
   user-select: none;
 }
 
-.st-clock-time {
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.04em;
-  background: var(--accent-bg);
+.st-analog-clock {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fdf9 100%);
   border: 1px solid var(--accent-border);
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 4px rgba(16,185,129,0.08), var(--shadow-sm);
+  flex-shrink: 0;
 }
+
+.st-analog-clock-center {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--text-primary);
+  z-index: 5;
+}
+
+.st-analog-hand {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  transform-origin: bottom center;
+  border-radius: 999px;
+  transition: transform 0.15s linear;
+}
+
+.st-analog-hour {
+  width: 4px;
+  height: 12px;
+  background: var(--text-primary);
+  z-index: 3;
+}
+
+.st-analog-minute {
+  width: 3px;
+  height: 17px;
+  background: var(--text-secondary);
+  z-index: 2;
+}
+
+.st-analog-second {
+  width: 2px;
+  height: 19px;
+  background: var(--accent);
+  z-index: 4;
+}
+
+.st-clock-marker {
+  position: absolute;
+  background: rgba(24,24,27,0.45);
+  border-radius: 999px;
+}
+
+.st-clock-marker-12,
+.st-clock-marker-6 {
+  width: 2px;
+  height: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.st-clock-marker-12 { top: 4px; }
+.st-clock-marker-6 { bottom: 4px; }
+
+.st-clock-marker-3,
+.st-clock-marker-9 {
+  width: 6px;
+  height: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.st-clock-marker-3 { right: 4px; }
+.st-clock-marker-9 { left: 4px; }
 
 .st-clock-date {
   font-size: 0.74rem;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.02em;
+  line-height: 1.35;
 }
 
 @media (max-width: 768px) {
