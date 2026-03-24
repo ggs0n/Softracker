@@ -5,6 +5,8 @@ namespace WFHMonitor.Services.Interfaces;
 public interface IStripeBillingService
 {
     bool IsConfigured { get; }
+    string ProPriceDisplay { get; }
+    string ProPricePeriodDisplay { get; }
 
     Task<(bool Succeeded, string CheckoutUrl, string Error)> CreateProCheckoutSessionAsync(
         ApplicationUser user,

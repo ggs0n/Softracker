@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -29,6 +30,14 @@ public class StripeBillingService : IStripeBillingService
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_settings.SecretKey) &&
         (!string.IsNullOrWhiteSpace(_settings.ProPriceId) || _settings.ProUnitAmount > 0);
+
+    public string ProPriceDisplay => !string.IsNullOrWhiteSpace(_settings.ProPriceId)
+        ? "Stripe-configured price"
+        : string.Format(CultureInfo.InvariantCulture, "${0:0.##}", _settings.ProUnitAmount / 100m);
+
+    public string ProPricePeriodDisplay => !string.IsNullOrWhiteSpace(_settings.ProPriceId)
+        ? "per user / billing cycle"
+        : "per user / month";
 
     public async Task<(bool Succeeded, string CheckoutUrl, string Error)> CreateProCheckoutSessionAsync(
         ApplicationUser user,

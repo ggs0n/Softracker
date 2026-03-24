@@ -166,8 +166,8 @@
     <div class="plan-card" style="--pc-color:#8b5cf6">
         <div class="plan-body">
             <div class="plan-name"><i class="bi bi-gem"></i> Pro</div>
-            <div class="plan-price">$29</div>
-            <div class="plan-period">per user / month</div>
+            <div class="plan-price">@Model.ProPriceDisplay</div>
+            <div class="plan-period">@Model.ProPricePeriodDisplay</div>
             <ul class="plan-list">
                 <li><i class="bi bi-check-circle-fill"></i> Unlimited change requests</li>
                 <li><i class="bi bi-check-circle-fill"></i> Unlimited bug reports</li>
@@ -219,7 +219,7 @@
                 <div class="plan-pay-note">
                     @if (Model.CanStartProCheckout)
                     {
-                        <span>Complete Stripe payment to unlock unlimited projects, bugs, and features.</span>
+                        <span>Complete Stripe payment for @Model.ProPriceDisplay to unlock unlimited projects, bugs, and features.</span>
                     }
                     else
                     {

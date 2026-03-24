@@ -10,6 +10,8 @@ public class PaymentPlansViewModel
     public DateTime? ProSubscriptionEndsAt { get; set; }
     public bool IsProCancelAtPeriodEnd { get; set; }
     public bool IsStripeBillingConfigured { get; set; }
+    public string ProPriceDisplay { get; set; } = "$29";
+    public string ProPricePeriodDisplay { get; set; } = "per user / month";
 
     public int CurrentProjectCount { get; set; }
     public int CurrentBugCount { get; set; }

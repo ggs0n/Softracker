@@ -51,6 +51,8 @@ public class PaymentController : Controller
             ProSubscriptionEndsAt = ResolveProEndDate(user),
             IsProCancelAtPeriodEnd = user.IsProCancelAtPeriodEnd,
             IsStripeBillingConfigured = _stripeBillingService.IsConfigured,
+            ProPriceDisplay = _stripeBillingService.ProPriceDisplay,
+            ProPricePeriodDisplay = _stripeBillingService.ProPricePeriodDisplay,
             CurrentProjectCount = await _db.ChangeRequests.CountAsync(c => c.CreatedById == userId),
             CurrentBugCount = await _db.BugReports.CountAsync(b => b.CreatedById == userId),
             CurrentFeatureCount = await _db.ChangeRequests
