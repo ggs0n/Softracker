@@ -121,26 +121,20 @@ public class PaymentController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        user.SubscriptionPlan = SubscriptionPlan.Pro;
-        user.IsProCancelAtPeriodEnd = false;
-        if (!HasActiveProAccess(user))
+        if (plan == SubscriptionPlan.Pro && !HasActiveProAccess(user))
         {
-            user.IsProSubscriptionActive = false;
-            user.ProSubscribedAt = null;
-            user.ProSubscriptionEndsAt = null;
-        }
-        var result = await _userManager.UpdateAsync(user);
-
-        if (result.Succeeded)
-        {
-            if (plan == SubscriptionPlan.Pro && !HasActiveProAccess(user))
-                TempData["Info"] = "Pro plan selected. Complete Stripe payment to activate unlimited access.";
-            else
-                TempData["Success"] = $"Subscription updated to {plan}.";
+            TempData["Info"] = "Pro plan selected. Complete Stripe payment to activate unlimited access.";
         }
         else
         {
-            TempData["Error"] = result.Errors.FirstOrDefault()?.Description ?? "Unable to update your subscription plan.";
+            user.SubscriptionPlan = SubscriptionPlan.Pro;
+            user.IsProCancelAtPeriodEnd = false;
+            var result = await _userManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+                TempData["Success"] = $"Subscription updated to {plan}.";
+            else
+                TempData["Error"] = result.Errors.FirstOrDefault()?.Description ?? "Unable to update your subscription plan.";
         }
 
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
@@ -157,12 +151,6 @@ public class PaymentController : Controller
             return Forbid();
 
         await EnsureSubscriptionWindowAsync(user);
-
-        if (user.SubscriptionPlan != SubscriptionPlan.Pro)
-        {
-            TempData["Info"] = "Please choose the Pro plan first.";
-            return RedirectToAction(nameof(Index));
-        }
 
         if (HasActiveProAccess(user))
         {
@@ -258,8 +246,19 @@ public class PaymentController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    public IActionResult Cancel()
+    public async Task<IActionResult> Cancel()
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user != null && !HasActiveProAccess(user))
+        {
+            user.SubscriptionPlan = SubscriptionPlan.Free;
+            user.IsProSubscriptionActive = false;
+            user.IsProCancelAtPeriodEnd = false;
+            user.ProSubscribedAt = null;
+            user.ProSubscriptionEndsAt = null;
+            await _userManager.UpdateAsync(user);
+        }
+
         TempData["Info"] = "Stripe checkout was canceled. You can resume payment anytime.";
         return RedirectToAction(nameof(Index));
     }
