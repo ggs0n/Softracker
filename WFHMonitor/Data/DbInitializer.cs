@@ -370,6 +370,12 @@ public static class DbInitializer
                 ALTER TABLE [AspNetUsers] ADD [StripeSubscriptionId] nvarchar(100) NULL;
             IF COL_LENGTH('AspNetUsers', 'LastProcessedStripeCheckoutSessionId') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [LastProcessedStripeCheckoutSessionId] nvarchar(200) NULL;
+            IF COL_LENGTH('AspNetUsers', 'PendingStripeCheckoutSessionId') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [PendingStripeCheckoutSessionId] nvarchar(200) NULL;
+            IF COL_LENGTH('AspNetUsers', 'PendingStripeCheckoutUrl') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [PendingStripeCheckoutUrl] nvarchar(1000) NULL;
+            IF COL_LENGTH('AspNetUsers', 'PendingStripeCheckoutCreatedAt') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [PendingStripeCheckoutCreatedAt] datetime2 NULL;
             """);
 
         await db.Database.ExecuteSqlRawAsync("""

@@ -6,7 +6,7 @@ public interface IStripeBillingService
 {
     bool IsConfigured { get; }
 
-    Task<(bool Succeeded, string CheckoutUrl, string Error)> CreateProCheckoutSessionAsync(
+    Task<(bool Succeeded, string CheckoutUrl, string SessionId, string Error)> CreateProCheckoutSessionAsync(
         ApplicationUser user,
         string successUrl,
         string cancelUrl,
