@@ -150,7 +150,7 @@ public class AuthController : Controller
             Expires = DateTimeOffset.UtcNow.AddHours(2)
         });
 
-        TempData["Success"] = "Registration successful. Welcome to Softracker.";
+        TempData["Success"] = "Registration successful. Welcome to adib.";
         var defaultReturnUrl = Url.Action("Index", "Admin")!;
         return RedirectToAction(
             "Welcome",

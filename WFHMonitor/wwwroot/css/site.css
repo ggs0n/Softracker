@@ -1,5 +1,5 @@
 /* =====================================================================
-   SOFTRACKER — Premium Design System
+   ADIB - Premium Design System
    Stack: Bootstrap 5 + Vanilla CSS
    Font: Geist (sans) + Geist Mono (mono)
    Palette: Zinc/Slate neutrals, single Emerald accent
@@ -10,7 +10,7 @@
 
 /* -- CSS custom properties -- */
 :root {
-  /* neutrals — warm zinc tint */
+  /* neutrals - warm zinc tint */
   --bg-page: #f4f5f7;
   --bg-surface: #ffffff;
   --bg-dark: #18181b;
@@ -26,7 +26,7 @@
   --text-on-dark: #e4e4e7;
   --text-on-dark-muted: #71717a;
 
-  /* accent — emerald */
+  /* accent - emerald */
   --accent: #10b981;
   --accent-hover: #059669;
   --accent-bg: rgba(16,185,129,0.1);
@@ -48,7 +48,7 @@
   --radius-lg: 14px;
   --radius-xl: 20px;
 
-  /* shadows — zinc-tinted, never pure black */
+  /* shadows - zinc-tinted, never pure black */
   --shadow-sm: 0 1px 3px rgba(24,24,27,0.06);
   --shadow-md: 0 4px 16px rgba(24,24,27,0.08);
   --shadow-lg: 0 12px 40px rgba(24,24,27,0.1);

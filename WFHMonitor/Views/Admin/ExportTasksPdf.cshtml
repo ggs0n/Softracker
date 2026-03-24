@@ -114,11 +114,11 @@
     <div class="report-header">
         <div>
             <div class="report-title">Task Completion Report</div>
-            <div class="report-subtitle">@ViewBag.CompanyName — Last @ViewBag.ReportDays Days</div>
+            <div class="report-subtitle">@ViewBag.CompanyName - Last @ViewBag.ReportDays Days</div>
         </div>
         <div class="report-meta">
             <div>Generated: <strong>@((DateTime)ViewBag.GeneratedAt).ToString("MMM dd, yyyy HH:mm") UTC</strong></div>
-            <div>Period: <strong>@Model.Last()?.Date.ToString("MMM dd") — @Model.First()?.Date.ToString("MMM dd, yyyy")</strong></div>
+            <div>Period: <strong>@Model.Last()?.Date.ToString("MMM dd") - @Model.First()?.Date.ToString("MMM dd, yyyy")</strong></div>
         </div>
     </div>
 
@@ -204,7 +204,7 @@
     }
 
     <div class="report-footer">
-        Softracker — Task Completion Report — Generated automatically
+        adib - Task Completion Report - Generated automatically
     </div>
 </body>
 </html>

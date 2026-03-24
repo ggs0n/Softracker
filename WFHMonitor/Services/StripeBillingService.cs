@@ -12,7 +12,7 @@ public class StripeBillingSettings
     public string ProPriceId { get; set; } = string.Empty;
     public long ProUnitAmount { get; set; } = 2900;
     public string Currency { get; set; } = "usd";
-    public string ProductName { get; set; } = "Softracker Pro";
+    public string ProductName { get; set; } = "adib Pro";
 }
 
 public class StripeBillingService : IStripeBillingService

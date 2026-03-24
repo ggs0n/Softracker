@@ -368,7 +368,7 @@ public class AdminController : Controller
             .ToList();
 
         var totalItems = tasksDone.Count + bugsDone.Count + featuresDone.Count;
-        ViewBag.CompanyName = currentCompanyName ?? "Softracker";
+        ViewBag.CompanyName = currentCompanyName ?? "adib";
         ViewBag.ReportDays = reportDays;
         ViewBag.GeneratedAt = DateTime.UtcNow;
         ViewBag.TotalTasksDone = totalItems;

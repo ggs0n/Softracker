@@ -91,7 +91,7 @@ public class OnboardingService : IOnboardingService
             Key = OnboardingStepKeys.AddGitHubIntegration,
             Title = "Add GitHub Integration",
             Description = canUseGitHubOAuth
-                ? "Connect your GitHub account so Softracker can access repositories securely."
+                ? "Connect your GitHub account so adib can access repositories securely."
                 : "GitHub OAuth is not configured yet. Ask admin to add GitHubOAuth settings.",
             IsComplete = step2Complete,
             HasAccess = canUseGitHubOAuth,

@@ -227,10 +227,10 @@ public class CalendarController : Controller
         var sb = new StringBuilder();
         sb.AppendLine("BEGIN:VCALENDAR");
         sb.AppendLine("VERSION:2.0");
-        sb.AppendLine("PRODID:-//Softracker//Calendar//EN");
+        sb.AppendLine("PRODID:-//adib//Calendar//EN");
         sb.AppendLine("CALSCALE:GREGORIAN");
         sb.AppendLine("METHOD:PUBLISH");
-        sb.AppendLine("X-WR-CALNAME:Softracker Team Calendar");
+        sb.AppendLine("X-WR-CALNAME:adib Team Calendar");
 
         foreach (var calendarEvent in events)
             AppendIcsEvent(sb, calendarEvent);
@@ -238,7 +238,7 @@ public class CalendarController : Controller
         sb.AppendLine("END:VCALENDAR");
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        return File(bytes, "text/calendar; charset=utf-8", "softracker-calendar.ics");
+        return File(bytes, "text/calendar; charset=utf-8", "adib-calendar.ics");
     }
 
     [HttpGet]
@@ -254,7 +254,7 @@ public class CalendarController : Controller
         var sb = new StringBuilder();
         sb.AppendLine("BEGIN:VCALENDAR");
         sb.AppendLine("VERSION:2.0");
-        sb.AppendLine("PRODID:-//Softracker//Calendar//EN");
+        sb.AppendLine("PRODID:-//adib//Calendar//EN");
         sb.AppendLine("CALSCALE:GREGORIAN");
         sb.AppendLine("METHOD:PUBLISH");
         AppendIcsEvent(sb, calendarEvent);
@@ -267,7 +267,7 @@ public class CalendarController : Controller
             safeTitle = $"event-{calendarEvent.Id}";
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        return File(bytes, "text/calendar; charset=utf-8", $"softracker-{safeTitle}.ics");
+        return File(bytes, "text/calendar; charset=utf-8", $"adib-{safeTitle}.ics");
     }
 
     private static void AppendIcsEvent(StringBuilder sb, CalendarEvent calendarEvent)
@@ -291,7 +291,7 @@ public class CalendarController : Controller
                 : $"{description}\\nMeeting Link: {calendarEvent.MeetingLink}";
 
         sb.AppendLine("BEGIN:VEVENT");
-        sb.AppendLine($"UID:softracker-calendar-{calendarEvent.Id}@local");
+        sb.AppendLine($"UID:adib-calendar-{calendarEvent.Id}@local");
         sb.AppendLine($"DTSTAMP:{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}");
         sb.AppendLine($"DTSTART:{startUtc:yyyyMMdd'T'HHmmss'Z'}");
         sb.AppendLine($"DTEND:{endUtc:yyyyMMdd'T'HHmmss'Z'}");
