@@ -525,8 +525,19 @@ else
                     return;
                 }
 
+                const dropdown = window.bootstrap?.Dropdown?.getOrCreateInstance(bellButton);
+                const wasOpen = bellButton.getAttribute('aria-expanded') === 'true';
+                if (wasOpen && dropdown) {
+                    dropdown.hide();
+                }
+
                 const html = await response.text();
                 dropdownHost.innerHTML = html;
+
+                if (dropdown) {
+                    dropdown.dispose();
+                    window.bootstrap.Dropdown.getOrCreateInstance(bellButton);
+                }
 
                 const menu = dropdownHost.querySelector('.notification-menu');
                 const unreadRaw = menu ? menu.getAttribute('data-unread-count') : '0';
@@ -544,6 +555,10 @@ else
             } finally {
                 isRefreshing = false;
             }
+        }
+
+        if (window.bootstrap?.Dropdown) {
+            window.bootstrap.Dropdown.getOrCreateInstance(bellButton);
         }
 
         window.setInterval(refreshNotificationBell, 10000);
