@@ -7,6 +7,7 @@ public class QaIndexViewModel
     public List<TestCase> TestCases { get; set; } = new();
     public List<ChangeRequest> Projects { get; set; } = new();
     public List<BugReport> LinkedBugs { get; set; } = new();
+    public Dictionary<int, int> RelatedBugCounts { get; set; } = new();
 
     // Summary stats
     public int TotalCount { get; set; }

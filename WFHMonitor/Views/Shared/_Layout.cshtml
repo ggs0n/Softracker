@@ -221,8 +221,17 @@
     <div class="main-wrapper">
         <div class="main-topbar">
             <h1 class="page-title">@(ViewData["Title"] ?? "Softracker")</h1>
-            <div class="st-clock" id="stClock">
-                <span class="st-clock-time" id="stClockTime"></span>
+            <div class="st-clock" id="stClock" aria-label="Current local time">
+                <div class="st-analog-clock" id="stAnalogClock" role="img" aria-hidden="true">
+                    <span class="st-analog-clock-center"></span>
+                    <span class="st-analog-hand st-analog-hour" id="stClockHour"></span>
+                    <span class="st-analog-hand st-analog-minute" id="stClockMinute"></span>
+                    <span class="st-analog-hand st-analog-second" id="stClockSecond"></span>
+                    <span class="st-clock-marker st-clock-marker-12"></span>
+                    <span class="st-clock-marker st-clock-marker-3"></span>
+                    <span class="st-clock-marker st-clock-marker-6"></span>
+                    <span class="st-clock-marker st-clock-marker-9"></span>
+                </div>
                 <span class="st-clock-date" id="stClockDate"></span>
             </div>
             <div class="d-flex align-items-center gap-2">
@@ -374,16 +383,26 @@ else
 <script src="~/js/onboarding.js" asp-append-version="true"></script>
 <script>
     (function () {
-        var timeEl = document.getElementById('stClockTime');
+        var hourEl = document.getElementById('stClockHour');
+        var minuteEl = document.getElementById('stClockMinute');
+        var secondEl = document.getElementById('stClockSecond');
         var dateEl = document.getElementById('stClockDate');
-        if (!timeEl || !dateEl) return;
+        var clockEl = document.getElementById('stClock');
+        if (!hourEl || !minuteEl || !secondEl || !dateEl || !clockEl) return;
 
         function tick() {
             var now = new Date();
-            var h = String(now.getHours()).padStart(2, '0');
-            var m = String(now.getMinutes()).padStart(2, '0');
-            var s = String(now.getSeconds()).padStart(2, '0');
-            timeEl.textContent = h + ':' + m + ':' + s;
+            var hours = now.getHours() % 12;
+            var minutes = now.getMinutes();
+            var seconds = now.getSeconds();
+
+            var hourDeg = (hours * 30) + (minutes * 0.5) + (seconds * (0.5 / 60));
+            var minuteDeg = (minutes * 6) + (seconds * 0.1);
+            var secondDeg = seconds * 6;
+
+            hourEl.style.transform = 'translateX(-50%) rotate(' + hourDeg + 'deg)';
+            minuteEl.style.transform = 'translateX(-50%) rotate(' + minuteDeg + 'deg)';
+            secondEl.style.transform = 'translateX(-50%) rotate(' + secondDeg + 'deg)';
 
             var day = now.toLocaleDateString('en-US', { weekday: 'short' });
             var month = now.toLocaleDateString('en-US', { month: 'short' });
@@ -391,6 +410,9 @@ else
             var year = now.getFullYear();
             var tz = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
             dateEl.textContent = day + ', ' + month + ' ' + date + ' ' + year + ' · ' + tz;
+
+            var digitalTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            clockEl.setAttribute('aria-label', 'Current local time ' + digitalTime + ', ' + dateEl.textContent);
         }
 
         tick();
@@ -525,8 +547,19 @@ else
                     return;
                 }
 
+                const dropdown = window.bootstrap?.Dropdown?.getOrCreateInstance(bellButton);
+                const wasOpen = bellButton.getAttribute('aria-expanded') === 'true';
+                if (wasOpen && dropdown) {
+                    dropdown.hide();
+                }
+
                 const html = await response.text();
                 dropdownHost.innerHTML = html;
+
+                if (dropdown) {
+                    dropdown.dispose();
+                    window.bootstrap.Dropdown.getOrCreateInstance(bellButton);
+                }
 
                 const menu = dropdownHost.querySelector('.notification-menu');
                 const unreadRaw = menu ? menu.getAttribute('data-unread-count') : '0';
@@ -544,6 +577,10 @@ else
             } finally {
                 isRefreshing = false;
             }
+        }
+
+        if (window.bootstrap?.Dropdown) {
+            window.bootstrap.Dropdown.getOrCreateInstance(bellButton);
         }
 
         window.setInterval(refreshNotificationBell, 10000);

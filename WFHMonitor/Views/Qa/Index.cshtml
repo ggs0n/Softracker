@@ -65,6 +65,11 @@
     .qa-tab{padding:10px 16px;font-size:.78rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;text-decoration:none;transition:all .15s ease}
     .qa-tab:hover{color:var(--text-primary)}
     .qa-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
+    .qa-tabs-wrap{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);background:#fafbfc;padding-right:14px}
+    .qa-tabs-wrap .qa-tabs{border-bottom:none;flex:1}
+    .qa-project-filter{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .qa-project-label{font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}
+    .qa-project-select{min-width:220px;max-width:320px;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:6px 10px;font-size:.74rem;color:#1f2937}
 
     /* Table */
     .qa-table{width:100%;border-collapse:collapse;font-size:.82rem}
@@ -92,6 +97,9 @@
 
     /* Env pills */
     .qa-env{font-size:.62rem;font-weight:600;border-radius:4px;padding:2px 6px;background:#f1f5f9;color:#64748b}
+    .qa-module-cell{font-size:.74rem;color:var(--text-secondary);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .qa-bug-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:700;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+    .qa-bug-count.qa-bug-count-zero{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
 
     /* Coverage bars */
     .qa-cov-row{display:flex;align-items:center;gap:10px;padding:8px 0}
@@ -211,14 +219,28 @@
                 </div>
 
                 @* Category tabs *@
-                <div class="qa-tabs">
-                    <a asp-action="Index" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
-                       class="qa-tab @(string.IsNullOrEmpty(Model.FilterCategory) ? "active" : "")">All</a>
-                    @foreach (var cat in new[] { "Smoke", "Regression", "UAT" })
-                    {
-                        <a asp-action="Index" asp-route-category="@cat" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
-                           class="qa-tab @(Model.FilterCategory == cat ? "active" : "")">@cat</a>
-                    }
+                <div class="qa-tabs-wrap">
+                    <div class="qa-tabs">
+                        <a asp-action="Index" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                           class="qa-tab @(string.IsNullOrEmpty(Model.FilterCategory) ? "active" : "")">All</a>
+                        @foreach (var cat in new[] { "Smoke", "Regression", "UAT" })
+                        {
+                            <a asp-action="Index" asp-route-category="@cat" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                               class="qa-tab @(Model.FilterCategory == cat ? "active" : "")">@cat</a>
+                        }
+                    </div>
+                    <form method="get" asp-action="Index" class="qa-project-filter">
+                        <input type="hidden" name="category" value="@Model.FilterCategory" />
+                        <input type="hidden" name="status" value="@Model.FilterStatus" />
+                        <span class="qa-project-label">Project</span>
+                        <select name="projectId" class="qa-project-select" onchange="this.form.submit()">
+                            <option value="">All Projects</option>
+                            @foreach (var p in Model.Projects)
+                            {
+                                <option value="@p.Id" selected="@(Model.FilterProjectId == p.Id ? "selected" : null)">@p.CrNumber - @p.Title</option>
+                            }
+                        </select>
+                    </form>
                 </div>
 
                 @if (Model.TestCases.Any())
@@ -229,15 +251,18 @@
                                 <tr>
                                     <th></th>
                                     <th>Name</th>
+                                    <th>Module</th>
                                     <th>Project</th>
                                     <th>Env</th>
                                     <th>Status</th>
+                                    <th>Bugs</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var tc in Model.TestCases)
                                 {
+                                    var relatedBugCount = Model.RelatedBugCounts.TryGetValue(tc.Id, out var bugCount) ? bugCount : 0;
                                     var statusCls = tc.Status switch {
                                         WFHMonitor.Models.TestCaseStatus.Pass => "qa-st-pass",
                                         WFHMonitor.Models.TestCaseStatus.Fail => "qa-st-fail",
@@ -258,15 +283,14 @@
                                             <a asp-action="Details" asp-route-id="@tc.Id" class="qa-table-link">@tc.Name</a>
                                             <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
                                                 <span class="qa-cat @catCls">@tc.Category</span>
-                                                @if (!string.IsNullOrEmpty(tc.Module))
-                                                {
-                                                    <span style="font-size:.68rem;color:var(--text-muted)">@tc.Module</span>
-                                                }
                                                 @if (tc.IsAutoGenerated)
                                                 {
                                                     <span style="font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,.1);color:#8b5cf6">AUTO</span>
                                                 }
                                             </div>
+                                        </td>
+                                        <td>
+                                            <span class="qa-module-cell">@(string.IsNullOrWhiteSpace(tc.Module) ? "-" : tc.Module)</span>
                                         </td>
                                         <td>
                                             @if (tc.ChangeRequest != null)
@@ -285,6 +309,11 @@
                                         </td>
                                         <td>
                                             <span class="qa-pill @statusCls">@tc.Status</span>
+                                        </td>
+                                        <td>
+                                            <a asp-action="Details" asp-route-id="@tc.Id" class="qa-bug-count @(relatedBugCount == 0 ? "qa-bug-count-zero" : "")" title="View related bugs">
+                                                @relatedBugCount
+                                            </a>
                                         </td>
                                         <td>
                                             <div class="d-flex gap-1">

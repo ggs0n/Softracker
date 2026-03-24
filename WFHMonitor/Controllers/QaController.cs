@@ -71,6 +71,15 @@ public class QaController : Controller
             ? new List<BugReport>()
             : await _db.BugReports.AsNoTracking().Where(b => bugIds.Contains(b.Id)).ToListAsync();
 
+        var projectScopedBugs = await _db.BugReports
+            .AsNoTracking()
+            .Where(b => b.ChangeRequestId.HasValue && projectIds.Contains(b.ChangeRequestId.Value))
+            .ToListAsync();
+
+        var relatedBugCounts = testCases.ToDictionary(
+            tc => tc.Id,
+            tc => CountRelatedBugs(tc, projectScopedBugs));
+
         // Module coverage
         var moduleCoverages = testCases
             .Where(t => !string.IsNullOrWhiteSpace(t.Module))
@@ -89,6 +98,7 @@ public class QaController : Controller
             TestCases = testCases,
             Projects = projects,
             LinkedBugs = linkedBugs,
+            RelatedBugCounts = relatedBugCounts,
             TotalCount = testCases.Count,
             PassedCount = testCases.Count(t => t.Status == TestCaseStatus.Pass),
             FailedCount = testCases.Count(t => t.Status == TestCaseStatus.Fail),
@@ -135,22 +145,29 @@ public class QaController : Controller
         var module = testCase.Module ?? string.Empty;
         var hasModule = !string.IsNullOrWhiteSpace(module);
 
-        var relatedBugs = await _db.BugReports
-            .Include(b => b.ChangeRequest)
-            .AsNoTracking()
-            .Where(b =>
-                (testCase.LinkedBugId.HasValue && b.Id == testCase.LinkedBugId.Value) ||
-                (!string.IsNullOrWhiteSpace(testNumber) &&
-                    ((b.ChangeRequestReferenceText != null && b.ChangeRequestReferenceText.Contains(testNumber)) ||
-                     (b.Description != null && b.Description.Contains(testNumber)) ||
-                     (b.StepsToReproduce != null && b.StepsToReproduce.Contains(testNumber)))) ||
-                (testCase.ChangeRequestId.HasValue &&
-                 b.ChangeRequestId == testCase.ChangeRequestId.Value &&
-                 hasModule &&
-                 b.ModuleImpacted != null &&
-                 b.ModuleImpacted == module))
-            .OrderByDescending(b => b.CreatedAt)
-            .ToListAsync();
+        var relatedBugs = new List<BugReport>();
+        if (testCase.ChangeRequestId.HasValue)
+        {
+            var testCaseProjectId = testCase.ChangeRequestId.Value;
+
+            relatedBugs = await _db.BugReports
+                .Include(b => b.ChangeRequest)
+                .AsNoTracking()
+                .Where(b =>
+                    b.ChangeRequestId == testCaseProjectId &&
+                    (
+                        (testCase.LinkedBugId.HasValue && b.Id == testCase.LinkedBugId.Value) ||
+                        (!string.IsNullOrWhiteSpace(testNumber) &&
+                            ((b.ChangeRequestReferenceText != null && b.ChangeRequestReferenceText.Contains(testNumber)) ||
+                             (b.Description != null && b.Description.Contains(testNumber)) ||
+                             (b.StepsToReproduce != null && b.StepsToReproduce.Contains(testNumber)))) ||
+                        (hasModule &&
+                         b.ModuleImpacted != null &&
+                         b.ModuleImpacted == module)
+                    ))
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync();
+        }
 
         var vm = new QaTestCaseDetailsViewModel
         {
@@ -452,6 +469,53 @@ public class QaController : Controller
     {
         var numbers = await GenerateTestNumbersAsync(1);
         return numbers[0];
+    }
+
+    private static int CountRelatedBugs(TestCase testCase, IReadOnlyCollection<BugReport> bugs)
+    {
+        if (bugs.Count == 0 || !testCase.ChangeRequestId.HasValue)
+            return 0;
+
+        var testNumber = testCase.TestNumber?.Trim();
+        var module = testCase.Module?.Trim();
+        var hasModule = !string.IsNullOrWhiteSpace(module);
+        var testCaseProjectId = testCase.ChangeRequestId.Value;
+
+        return bugs.Count(b => IsRelatedBug(b, testCase, testCaseProjectId, testNumber, module, hasModule));
+    }
+
+    private static bool IsRelatedBug(BugReport bug, TestCase testCase, int testCaseProjectId, string? testNumber, string? module, bool hasModule)
+    {
+        if (bug.ChangeRequestId != testCaseProjectId)
+            return false;
+
+        if (testCase.LinkedBugId.HasValue && bug.Id == testCase.LinkedBugId.Value)
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(testNumber) &&
+            (ContainsIgnoreCase(bug.ChangeRequestReferenceText, testNumber) ||
+             ContainsIgnoreCase(bug.Description, testNumber) ||
+             ContainsIgnoreCase(bug.StepsToReproduce, testNumber)))
+        {
+            return true;
+        }
+
+        if (hasModule &&
+            !string.IsNullOrWhiteSpace(bug.ModuleImpacted) &&
+            string.Equals(bug.ModuleImpacted.Trim(), module, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsIgnoreCase(string? haystack, string? needle)
+    {
+        if (string.IsNullOrWhiteSpace(haystack) || string.IsNullOrWhiteSpace(needle))
+            return false;
+
+        return haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private async Task<List<string>> GenerateTestNumbersAsync(int count)

@@ -528,7 +528,11 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (string.IsNullOrWhiteSpace(fixPlan))
             return FailedFix("OpenClaw fix failed: empty fix response.");
 
-        return new OpenClawBugFixResult(true, string.Empty, TrimTo(fixPlan, 3500));
+        var pullRequestUrl = ExtractPullRequestUrl(fixPlan)
+            ?? ExtractPullRequestUrl(stdout)
+            ?? ExtractPullRequestUrl(stderr);
+        var normalizedFixPlan = TrimTo(fixPlan, 3500);
+        return new OpenClawBugFixResult(true, string.Empty, normalizedFixPlan, pullRequestUrl);
     }
 
     public async Task<OpenClawFeatureImplementResult> ImplementFeatureAsync(
@@ -1471,11 +1475,21 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             sb.AppendLine($"Module Impacted: {TrimTo(bug.ModuleImpacted, 200)}");
         if (!string.IsNullOrWhiteSpace(bug.ChangeRequestReferenceText))
             sb.AppendLine($"Project Reference: {TrimTo(bug.ChangeRequestReferenceText, 300)}");
+        if (bug.ChangeRequest is not null)
+        {
+            sb.AppendLine($"Project Number: {bug.ChangeRequest.CrNumber}");
+            sb.AppendLine($"Project Title: {TrimTo(bug.ChangeRequest.Title, 300)}");
+            if (!string.IsNullOrWhiteSpace(bug.ChangeRequest.GitHubRepoUrl))
+                sb.AppendLine($"Repository URL: {TrimTo(bug.ChangeRequest.GitHubRepoUrl, 500)}");
+            if (!string.IsNullOrWhiteSpace(bug.ChangeRequest.GitHubBranch))
+                sb.AppendLine($"Repository Branch: {TrimTo(bug.ChangeRequest.GitHubBranch, 100)}");
+        }
 
         sb.AppendLine();
         sb.AppendLine("Constraints:");
         foreach (var constraint in settings.BugFixConstraints)
             sb.AppendLine($"- {constraint}");
+        sb.AppendLine("- If you create a pull request, include the exact URL on its own line as: PR_URL: https://...");
         if (!string.IsNullOrWhiteSpace(additionalInstructions))
         {
             sb.AppendLine("- Follow additional project-specific instructions below.");
@@ -1485,6 +1499,71 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         var raw = TrimTo(sb.ToString(), 5000);
         return Regex.Replace(raw, @"\s+", " ").Trim();
+    }
+
+    private static string? ExtractPullRequestUrl(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var directLabelMatch = Regex.Match(
+            text,
+            @"\bPR_URL\s*:\s*(?<url>[^\s<>\]\)\}""'`]+)",
+            RegexOptions.IgnoreCase);
+        if (directLabelMatch.Success)
+        {
+            var labeledUrl = NormalizePossibleUrl(directLabelMatch.Groups["url"].Value);
+            if (!string.IsNullOrWhiteSpace(labeledUrl) && IsPullRequestUrl(labeledUrl))
+                return labeledUrl;
+        }
+
+        foreach (Match match in Regex.Matches(text, @"(?:https?://|www\.)[^\s<>\]\)\}""'`]+", RegexOptions.IgnoreCase))
+        {
+            var candidate = NormalizePossibleUrl(match.Value);
+            if (!string.IsNullOrWhiteSpace(candidate) && IsPullRequestUrl(candidate))
+                return candidate;
+        }
+
+        foreach (Match match in Regex.Matches(text, @"\bgithub\.com/[^\s<>\]\)\}""'`]+", RegexOptions.IgnoreCase))
+        {
+            var candidate = NormalizePossibleUrl(match.Value);
+            if (!string.IsNullOrWhiteSpace(candidate) && IsPullRequestUrl(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool IsPullRequestUrl(string candidate)
+    {
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+            return false;
+
+        var path = uri.AbsolutePath.ToLowerInvariant();
+        return path.Contains("/pull/") ||
+               path.Contains("/pulls/") ||
+               path.Contains("/pull-request/") ||
+               path.Contains("/pull-requests/") ||
+               path.Contains("/merge_requests/") ||
+               path.Contains("/merge-requests/");
+    }
+
+    private static string? NormalizePossibleUrl(string? value)
+    {
+        var trimmed = (value ?? string.Empty)
+            .Trim()
+            .TrimEnd('.', ',', ';', ':', ')', ']', '}');
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        if (trimmed.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+            trimmed = $"https://{trimmed}";
+        else if (trimmed.StartsWith("github.com/", StringComparison.OrdinalIgnoreCase))
+            trimmed = $"https://{trimmed}";
+
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out _)
+            ? trimmed
+            : null;
     }
 
     private static IReadOnlyList<string> ParseScreenshotPaths(
@@ -1847,7 +1926,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         new(false, error, [], string.Empty);
 
     private static OpenClawBugFixResult FailedFix(string error) =>
-        new(false, error, string.Empty);
+        new(false, error, string.Empty, null);
 
     private static OpenClawFeatureImplementResult FailedFeature(string error) =>
         new(false, error, string.Empty);
