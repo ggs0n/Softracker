@@ -121,27 +121,9 @@ public class PaymentController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        user.SubscriptionPlan = SubscriptionPlan.Pro;
-        user.IsProCancelAtPeriodEnd = false;
-        if (!HasActiveProAccess(user))
-        {
-            user.IsProSubscriptionActive = false;
-            user.ProSubscribedAt = null;
-            user.ProSubscriptionEndsAt = null;
-        }
-        var result = await _userManager.UpdateAsync(user);
-
-        if (result.Succeeded)
-        {
-            if (plan == SubscriptionPlan.Pro && !HasActiveProAccess(user))
-                TempData["Info"] = "Pro plan selected. Complete Stripe payment to activate unlimited access.";
-            else
-                TempData["Success"] = $"Subscription updated to {plan}.";
-        }
-        else
-        {
-            TempData["Error"] = result.Errors.FirstOrDefault()?.Description ?? "Unable to update your subscription plan.";
-        }
+        TempData["Info"] = _stripeBillingService.IsConfigured
+            ? "Complete Stripe payment to activate Pro. Your current plan remains unchanged until payment succeeds."
+            : "Stripe billing is not configured yet. Ask admin to set StripeBilling settings.";
 
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
             return LocalRedirect(returnUrl);
