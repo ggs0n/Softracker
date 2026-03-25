@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,16 +17,19 @@ public class AuthController : Controller
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IWebHostEnvironment _environment;
 
     public AuthController(UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         RoleManager<IdentityRole> roleManager,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenService jwtTokenService,
+        IWebHostEnvironment environment)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _roleManager = roleManager;
         _jwtTokenService = jwtTokenService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -245,4 +249,90 @@ public class AuthController : Controller
     }
 
     public IActionResult AccessDenied() => View();
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize]
+    public async Task<IActionResult> UpdateProfile(UserProfileUpdateViewModel model, string? returnUrl)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+            return RedirectToAction(nameof(Login));
+
+        var normalizedName = (model.FullName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            TempData["Error"] = "Name is required.";
+            return RedirectToSafeLocal(returnUrl);
+        }
+
+        if (normalizedName.Length > 100)
+        {
+            TempData["Error"] = "Name must be 100 characters or less.";
+            return RedirectToSafeLocal(returnUrl);
+        }
+
+        if (model.ProfilePhoto is { Length: > 0 })
+        {
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+            var extension = Path.GetExtension(model.ProfilePhoto.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                TempData["Error"] = "Only image files (jpg, jpeg, png, webp, gif) are allowed.";
+                return RedirectToSafeLocal(returnUrl);
+            }
+
+            if (model.ProfilePhoto.Length > 5 * 1024 * 1024)
+            {
+                TempData["Error"] = "Profile photo must be under 5 MB.";
+                return RedirectToSafeLocal(returnUrl);
+            }
+
+            var uploadDirectory = Path.Combine(_environment.WebRootPath, "uploads", "profiles");
+            Directory.CreateDirectory(uploadDirectory);
+
+            var profileFileName = $"{user.Id}_{Guid.NewGuid():N}{extension}";
+            var profileFilePath = Path.Combine(uploadDirectory, profileFileName);
+
+            await using (var stream = System.IO.File.Create(profileFilePath))
+            {
+                await model.ProfilePhoto.CopyToAsync(stream);
+            }
+
+            DeleteProfilePhotoIfExists(uploadDirectory, user.ProfilePhotoPath);
+            user.ProfilePhotoPath = profileFileName;
+        }
+
+        user.FullName = normalizedName;
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            TempData["Error"] = string.Join(" ", result.Errors.Select(e => e.Description));
+            return RedirectToSafeLocal(returnUrl);
+        }
+
+        TempData["Success"] = "Profile updated.";
+        return RedirectToSafeLocal(returnUrl);
+    }
+
+    private IActionResult RedirectToSafeLocal(string? returnUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
+
+        return RedirectToAction("Index", "ChangeRequest");
+    }
+
+    private static void DeleteProfilePhotoIfExists(string uploadDirectory, string? profilePhotoPath)
+    {
+        if (string.IsNullOrWhiteSpace(profilePhotoPath))
+            return;
+
+        var fileName = Path.GetFileName(profilePhotoPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            return;
+
+        var fullPath = Path.Combine(uploadDirectory, fileName);
+        if (System.IO.File.Exists(fullPath))
+            System.IO.File.Delete(fullPath);
+    }
 }

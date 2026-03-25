@@ -21,6 +21,8 @@ public class OpenClawSettings
     public List<string> FeatureImplementAgentIds { get; set; } = [];
     public string BugScanPromptAdditionalInstructions { get; set; } = string.Empty;
     public List<string> BugScanPromptAdditionalInstructionLines { get; set; } = [];
+    public string SecurityScanPromptAdditionalInstructions { get; set; } = string.Empty;
+    public List<string> SecurityScanPromptAdditionalInstructionLines { get; set; } = [];
     public string BugFixPromptAdditionalInstructions { get; set; } = string.Empty;
     public List<string> BugFixPromptAdditionalInstructionLines { get; set; } = [];
     public string FeatureImplementPromptAdditionalInstructions { get; set; } = string.Empty;
@@ -42,6 +44,19 @@ public class OpenClawSettings
     public List<string> BugScanRules { get; set; } =
     [
         "Every finding must include all schema fields.",
+        "Keep title under 120 characters.",
+        "Keep moduleImpacted short and specific.",
+        "If screenshot evidence exists, include absolute local image file paths in screenshotPaths.",
+        "If no screenshot exists for a finding, set screenshotPaths to an empty array."
+    ];
+
+    // Security scan â€” specific prompt for vulnerability-focused QA scans
+    public string SecurityScanInstruction { get; set; } = "Generate up to {findingsLimit} high-confidence security issues.";
+    public string SecurityScanFocus { get; set; } = "Focus on security flaws such as auth bypass, injection, insecure data exposure, broken access control, secrets leakage, and unsafe defaults.";
+    public List<string> SecurityScanRules { get; set; } =
+    [
+        "Every finding must include all schema fields.",
+        "Report only exploitable or high-confidence security findings.",
         "Keep title under 120 characters.",
         "Keep moduleImpacted short and specific.",
         "If screenshot evidence exists, include absolute local image file paths in screenshotPaths.",
@@ -148,7 +163,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
     public async Task<OpenClawBugScanResult> ScanProjectAsync(
         ChangeRequest project,
         string? scanAgentId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool useSecurityPrompt = false)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -158,8 +174,12 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var findingsLimit = MaxFindingsPerScan;
-        var additionalInstructions = ResolveAdditionalInstructions(_settings);
-        var prompt = BuildPrompt(project, findingsLimit, additionalInstructions, _settings);
+        var additionalInstructions = useSecurityPrompt
+            ? ResolveSecurityScanAdditionalInstructions(_settings)
+            : ResolveAdditionalInstructions(_settings);
+        var prompt = useSecurityPrompt
+            ? BuildSecurityPrompt(project, findingsLimit, additionalInstructions, _settings)
+            : BuildPrompt(project, findingsLimit, additionalInstructions, _settings);
 
         var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
         if (string.IsNullOrWhiteSpace(resolvedCliPath))
@@ -264,7 +284,8 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ChangeRequest project,
         string moduleName,
         string? scanAgentId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool useSecurityPrompt = false)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleName);
@@ -275,8 +296,12 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var findingsLimit = MaxFindingsPerScan;
-        var additionalInstructions = ResolveAdditionalInstructions(_settings);
-        var prompt = BuildModuleScanPrompt(project, moduleName.Trim(), findingsLimit, additionalInstructions, _settings);
+        var additionalInstructions = useSecurityPrompt
+            ? ResolveSecurityScanAdditionalInstructions(_settings)
+            : ResolveAdditionalInstructions(_settings);
+        var prompt = useSecurityPrompt
+            ? BuildSecurityModuleScanPrompt(project, moduleName.Trim(), findingsLimit, additionalInstructions, _settings)
+            : BuildModuleScanPrompt(project, moduleName.Trim(), findingsLimit, additionalInstructions, _settings);
 
         var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
         if (string.IsNullOrWhiteSpace(resolvedCliPath))
@@ -753,6 +778,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (settings.BugScanPromptAdditionalInstructionLines is not null)
         {
             instructions.AddRange(settings.BugScanPromptAdditionalInstructionLines
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => line.Trim()));
+        }
+
+        return string.Join("\n", instructions);
+    }
+
+    private static string ResolveSecurityScanAdditionalInstructions(OpenClawSettings settings)
+    {
+        var instructions = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(settings.SecurityScanPromptAdditionalInstructions))
+            instructions.Add(settings.SecurityScanPromptAdditionalInstructions.Trim());
+
+        if (settings.SecurityScanPromptAdditionalInstructionLines is not null)
+        {
+            instructions.AddRange(settings.SecurityScanPromptAdditionalInstructionLines
                 .Where(line => !string.IsNullOrWhiteSpace(line))
                 .Select(line => line.Trim()));
         }
@@ -1627,6 +1669,112 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         var raw = TrimTo(sb.ToString(), 5000);
         // openclaw.cmd can lose multi-line argument content on Windows; send one-line prompt.
+        var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
+        return singleLine;
+    }
+
+    private static string BuildSecurityPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+    {
+        var features = project.Features
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(10)
+            .ToList();
+
+        var repositoryFeatures = project.RepositoryFeatures
+            .Select(f => f.Name?.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(10)
+            .ToList();
+
+        var description = TrimTo(project.Description, 1200);
+        var tech = TrimTo(project.TechnologyStack, 400);
+        var securityRules = settings.SecurityScanRules is { Count: > 0 } ? settings.SecurityScanRules : settings.BugScanRules;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(settings.BugScanSystemRole);
+        sb.AppendLine(settings.BugScanOutputFormat);
+        sb.AppendLine("Schema:");
+        sb.AppendLine(settings.BugScanSchema);
+        sb.AppendLine();
+        sb.AppendLine(settings.SecurityScanInstruction.Replace("{findingsLimit}", findingsLimit.ToString()));
+        sb.AppendLine(settings.SecurityScanFocus);
+        sb.AppendLine(settings.BugScanFocus);
+        sb.AppendLine();
+        sb.AppendLine($"Project Number: {project.CrNumber}");
+        sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+        sb.AppendLine($"Project Stage: {project.Stage}");
+        sb.AppendLine($"Project Status: {project.Status}");
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.AppendLine($"Description: {description}");
+        if (!string.IsNullOrWhiteSpace(tech))
+            sb.AppendLine($"Technology Stack: {tech}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubRepoUrl))
+            sb.AppendLine($"Repository URL: {TrimTo(project.GitHubRepoUrl, 500)}");
+        if (!string.IsNullOrWhiteSpace(project.GitHubBranch))
+            sb.AppendLine($"Repository Branch: {TrimTo(project.GitHubBranch, 100)}");
+        if (features.Count > 0)
+            sb.AppendLine($"Project Features: {string.Join(", ", features)}");
+        if (repositoryFeatures.Count > 0)
+            sb.AppendLine($"Repository Scan Features: {string.Join(", ", repositoryFeatures)}");
+
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        foreach (var rule in securityRules)
+            sb.AppendLine($"- {rule}");
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            sb.AppendLine("- Follow additional project-specific instructions below.");
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(additionalInstructions);
+        }
+
+        var raw = TrimTo(sb.ToString(), 5000);
+        var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
+        return singleLine;
+    }
+
+    private static string BuildSecurityModuleScanPrompt(
+        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+    {
+        var description = TrimTo(project.Description, 1200);
+        var tech = TrimTo(project.TechnologyStack, 400);
+        var securityRules = settings.SecurityScanRules is { Count: > 0 } ? settings.SecurityScanRules : settings.BugScanRules;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(settings.BugScanSystemRole);
+        sb.AppendLine(settings.BugScanOutputFormat);
+        sb.AppendLine("Schema:");
+        sb.AppendLine(settings.BugScanSchema);
+        sb.AppendLine();
+        sb.AppendLine(settings.SecurityScanInstruction
+            .Replace("{findingsLimit}", findingsLimit.ToString())
+            .Replace("{moduleName}", moduleName));
+        sb.AppendLine(settings.SecurityScanFocus.Replace("{moduleName}", moduleName));
+        sb.AppendLine(settings.BugScanFocus);
+        sb.AppendLine();
+        sb.AppendLine($"Project Number: {project.CrNumber}");
+        sb.AppendLine($"Project Title: {TrimTo(project.Title, 300)}");
+        sb.AppendLine($"Project Stage: {project.Stage}");
+        sb.AppendLine($"Project Status: {project.Status}");
+        if (!string.IsNullOrWhiteSpace(description))
+            sb.AppendLine($"Description: {description}");
+        if (!string.IsNullOrWhiteSpace(tech))
+            sb.AppendLine($"Technology Stack: {tech}");
+        sb.AppendLine($"Target Module: {moduleName}");
+
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        foreach (var rule in securityRules)
+            sb.AppendLine($"- {rule.Replace("{moduleName}", moduleName)}");
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            sb.AppendLine("- Follow additional project-specific instructions below.");
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(additionalInstructions);
+        }
+
+        var raw = TrimTo(sb.ToString(), 5000);
         var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
         return singleLine;
     }

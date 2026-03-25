@@ -366,6 +366,8 @@ public static class DbInitializer
                 ALTER TABLE [AspNetUsers] ADD [SubscriptionPlan] nvarchar(20) NOT NULL CONSTRAINT [DF_AspNetUsers_SubscriptionPlan] DEFAULT 'Free';
             IF COL_LENGTH('AspNetUsers', 'CompanyName') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [CompanyName] nvarchar(200) NULL;
+            IF COL_LENGTH('AspNetUsers', 'ProfilePhotoPath') IS NULL
+                ALTER TABLE [AspNetUsers] ADD [ProfilePhotoPath] nvarchar(300) NULL;
             IF COL_LENGTH('AspNetUsers', 'OrganizationTeam') IS NULL
                 ALTER TABLE [AspNetUsers] ADD [OrganizationTeam] nvarchar(20) NOT NULL CONSTRAINT [DF_AspNetUsers_OrganizationTeam] DEFAULT 'Unassigned';
             IF COL_LENGTH('AspNetUsers', 'IsProSubscriptionActive') IS NULL

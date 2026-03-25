@@ -41,6 +41,14 @@
     var isProPending = currentUser?.SubscriptionPlan == SubscriptionPlan.Pro && !currentUser.IsProSubscriptionActive;
     var planIndicatorClass = isProActive ? "pro" : isProPending ? "pending" : "free";
     var planIndicatorLabel = isProActive ? "PRO ACTIVE" : isProPending ? "PRO PENDING" : "FREE";
+    var sidebarRoleLabel = User.IsInRole("Admin") ? "Admin" : User.IsInRole("Tester") ? "Tester" : User.IsInRole("Developer") ? "Developer" : User.IsInRole("Agent") ? "Agent" : "Employee";
+    var profileDisplayName = string.IsNullOrWhiteSpace(currentUser?.FullName) ? (User.Identity?.Name ?? "User") : currentUser!.FullName;
+    var profileEmail = currentUser?.Email ?? User.Identity?.Name ?? string.Empty;
+    var profilePhotoFileName = string.IsNullOrWhiteSpace(currentUser?.ProfilePhotoPath)
+        ? null
+        : System.IO.Path.GetFileName(currentUser.ProfilePhotoPath);
+    var profilePhotoUrl = string.IsNullOrWhiteSpace(profilePhotoFileName) ? null : Url.Content($"~/uploads/profiles/{profilePhotoFileName}");
+    var profileInitial = string.IsNullOrWhiteSpace(profileDisplayName) ? "U" : profileDisplayName.Trim()[0].ToString().ToUpperInvariant();
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
     var notificationDropdownModel = new WFHMonitor.ViewModels.NotificationDropdownViewModel
     {
@@ -148,7 +156,7 @@
                 <li>
                     <a asp-controller="Monitor" asp-action="Index"
                        class="@(isMonitorSectionActive ? "active" : "")">
-                        <i class="bi bi-activity"></i> Monitor
+                        <i class="bi bi-activity"></i> Monitor (BETA)
                     </a>
                 </li>
             }
@@ -201,14 +209,24 @@
         </ul>
 
         <div class="sidebar-footer">
-            <div class="user-info">
-                <i class="bi bi-person-circle"></i>
-                <div>
-                    <div class="fw-semibold text-white" style="font-size:0.82rem;">@User.Identity!.Name</div>
-                    <div style="font-size:0.72rem;opacity:0.5;">@(User.IsInRole("Admin") ? "Admin" : User.IsInRole("Tester") ? "Tester" : User.IsInRole("Developer") ? "Developer" : User.IsInRole("Agent") ? "Agent" : "Employee")</div>
-                    <div class="plan-indicator @planIndicatorClass">@planIndicatorLabel</div>
-                </div>
-            </div>
+            <button type="button" class="user-info user-info-trigger" data-bs-toggle="modal" data-bs-target="#sidebarProfileModal">
+                <span class="sidebar-user-avatar" aria-hidden="true">
+                    @if (!string.IsNullOrWhiteSpace(profilePhotoUrl))
+                    {
+                        <img src="@profilePhotoUrl" alt="@profileDisplayName profile photo" />
+                    }
+                    else
+                    {
+                        <span>@profileInitial</span>
+                    }
+                </span>
+                <span class="user-info-meta">
+                    <span class="fw-semibold text-white sidebar-user-name">@profileDisplayName</span>
+                    <span class="sidebar-user-email">@profileEmail</span>
+                    <span class="sidebar-user-role">@sidebarRoleLabel</span>
+                    <span class="plan-indicator @planIndicatorClass">@planIndicatorLabel</span>
+                </span>
+            </button>
             <form asp-controller="Auth" asp-action="Logout" method="post">
                 @Html.AntiForgeryToken()
                 <button type="submit">
@@ -217,6 +235,62 @@
             </form>
         </div>
     </aside>
+
+    <div class="modal fade" id="sidebarProfileModal" tabindex="-1" aria-labelledby="sidebarProfileModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content sidebar-profile-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sidebarProfileModalLabel">Edit Profile</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form asp-controller="Auth" asp-action="UpdateProfile" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <div class="modal-body">
+                        <div class="sidebar-profile-preview mb-3">
+                            <span class="sidebar-user-avatar sidebar-user-avatar-lg" aria-hidden="true">
+                                @if (!string.IsNullOrWhiteSpace(profilePhotoUrl))
+                                {
+                                    <img src="@profilePhotoUrl" alt="@profileDisplayName profile photo" />
+                                }
+                                else
+                                {
+                                    <span>@profileInitial</span>
+                                }
+                            </span>
+                            <div>
+                                <div class="fw-semibold">@profileDisplayName</div>
+                                <div class="small text-muted">@profileEmail</div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sidebarProfileNameInput" class="form-label">Name</label>
+                            <input id="sidebarProfileNameInput"
+                                   type="text"
+                                   class="form-control"
+                                   name="FullName"
+                                   value="@profileDisplayName"
+                                   maxlength="100"
+                                   required />
+                        </div>
+                        <div class="mb-2">
+                            <label for="sidebarProfilePhotoInput" class="form-label">Photo</label>
+                            <input id="sidebarProfilePhotoInput"
+                                   type="file"
+                                   class="form-control"
+                                   name="ProfilePhoto"
+                                   accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
+                        </div>
+                        <div class="small text-muted">Upload JPG, JPEG, PNG, WEBP, or GIF up to 5 MB.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <div class="main-wrapper">
         <div class="main-topbar">

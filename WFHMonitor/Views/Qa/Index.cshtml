@@ -20,6 +20,8 @@
     .qa-btn-primary:hover{background:#2563eb;color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(59,130,246,.25)}
     .qa-btn-scan{background:var(--accent);color:#fff}
     .qa-btn-scan:hover{background:var(--accent-hover);color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.25)}
+    .qa-btn-danger{background:#dc2626;color:#fff}
+    .qa-btn-danger:hover{background:#b91c1c;color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(220,38,38,.28)}
     .qa-btn-run{background:#8b5cf6;color:#fff}
     .qa-btn-run:hover{background:#7c3aed;color:#fff;transform:translateY(-1px)}
 
@@ -27,8 +29,8 @@
     .qa-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
     .qa-stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;transition:box-shadow .2s ease}
     .qa-stat:hover{box-shadow:0 6px 20px rgba(0,0,0,.05)}
-    .qa-stat-value{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-    .qa-stat-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+    .qa-stat-value{font-size:1.5rem;font-weight:760;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+    .qa-stat-label{font-size:.68rem;font-weight:650;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;opacity:.88}
     .qa-stat-bar{position:absolute;top:0;left:0;right:0;height:3px}
     .qa-stat-green .qa-stat-value{color:#10b981}
     .qa-stat-green .qa-stat-label{color:#6ee7b7}
@@ -45,8 +47,8 @@
 
     /* Pass rate card */
     .qa-passrate{background:var(--bg-dark);border:1px solid rgba(16,185,129,.18);border-radius:12px;padding:18px 20px;color:#f4f5f7}
-    .qa-passrate-value{font-size:1.6rem;font-weight:800;color:#10b981;font-variant-numeric:tabular-nums}
-    .qa-passrate-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a1a1aa;margin-top:2px}
+    .qa-passrate-value{font-size:1.5rem;font-weight:760;color:#10b981;font-variant-numeric:tabular-nums}
+    .qa-passrate-label{font-size:.68rem;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:#a1a1aa;margin-top:2px;opacity:.9}
 
     /* Main layout */
     .qa-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
@@ -128,6 +130,15 @@
     .qa-action-fail:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.06)}
     .qa-action-del:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.06)}
     .qa-action-scan:hover{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,.06)}
+    .qa-action-more:hover{border-color:#64748b;color:#334155;background:#f8fafc}
+    .qa-overflow-menu{min-width:170px;border:1px solid #e5e7eb;border-radius:10px;padding:6px}
+    .qa-overflow-menu .dropdown-item{font-size:.74rem;border-radius:8px;padding:7px 10px;display:flex;align-items:center;gap:8px}
+    .qa-overflow-menu .dropdown-item.text-danger:active{background:#fee2e2;color:#b91c1c}
+    .qa-flow-option{border:1px solid #dbeafe;border-radius:10px;padding:10px 12px;background:#f8fbff}
+    .qa-flow-option + .qa-flow-option{margin-top:8px}
+    .qa-flow-option-reco{border-color:#93c5fd;background:#eff6ff}
+    .qa-flow-radio{display:flex;align-items:flex-start;gap:10px}
+    .qa-flow-radio input{margin-top:3px}
 
     /* Empty state */
     .qa-empty{text-align:center;padding:48px 20px}
@@ -149,6 +160,11 @@
 
             @* Filters *@
             <form method="get" asp-action="Index" class="qa-filters mt-2">
+                <input type="hidden" name="tab" value="@Model.ActiveTab" />
+                @if (!string.IsNullOrWhiteSpace(Model.SelectedScanAgentId))
+                {
+                    <input type="hidden" name="scanAgentId" value="@Model.SelectedScanAgentId" />
+                }
                 <select name="category" class="qa-filter-select">
                     <option value="">All Categories</option>
                     @foreach (var cat in Enum.GetValues<WFHMonitor.Models.TestCaseCategory>())
@@ -179,6 +195,7 @@
             @if (Model.Projects.Any())
             {
                 <button type="button" class="qa-btn qa-btn-scan" data-bs-toggle="modal" data-bs-target="#generateModal"><i class="bi bi-cpu"></i> Generate</button>
+                <button type="button" class="qa-btn qa-btn-danger" data-bs-toggle="modal" data-bs-target="#securityScanModal"><i class="bi bi-shield-exclamation"></i> Run security scan</button>
             }
         </div>
     </section>
@@ -213,25 +230,38 @@
         <div>
             <div class="qa-section">
                 <div class="qa-section-head">
-                    <div class="qa-section-icon" style="background:#eff6ff;color:#3b82f6"><i class="bi bi-list-check"></i></div>
-                    <div class="qa-section-label">Test cases<span>All test cases across projects</span></div>
-                    <span class="qa-badge-count">@Model.TotalCount total</span>
+                    @if (Model.ActiveTab == "security")
+                    {
+                        <div class="qa-section-icon" style="background:#dcfce7;color:#047857"><i class="bi bi-shield-lock"></i></div>
+                        <div class="qa-section-label">Security results<span>Browse security-tagged QA cases and findings</span></div>
+                        <span class="qa-badge-count">Filtered</span>
+                    }
+                    else
+                    {
+                        <div class="qa-section-icon" style="background:#eff6ff;color:#3b82f6"><i class="bi bi-list-check"></i></div>
+                        <div class="qa-section-label">Test cases<span>All test cases across projects</span></div>
+                        <span class="qa-badge-count">@Model.TotalCount total</span>
+                    }
                 </div>
 
                 @* Category tabs *@
                 <div class="qa-tabs-wrap">
                     <div class="qa-tabs">
-                        <a asp-action="Index" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
-                           class="qa-tab @(string.IsNullOrEmpty(Model.FilterCategory) ? "active" : "")">All</a>
+                        <a asp-action="Index" asp-route-tab="tests" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                           class="qa-tab @(Model.ActiveTab == "tests" && string.IsNullOrEmpty(Model.FilterCategory) ? "active" : "")">All</a>
                         @foreach (var cat in new[] { "Smoke", "Regression", "UAT" })
                         {
-                            <a asp-action="Index" asp-route-category="@cat" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
-                               class="qa-tab @(Model.FilterCategory == cat ? "active" : "")">@cat</a>
+                            <a asp-action="Index" asp-route-tab="tests" asp-route-category="@cat" asp-route-status="@Model.FilterStatus" asp-route-projectId="@Model.FilterProjectId"
+                               class="qa-tab @(Model.ActiveTab == "tests" && Model.FilterCategory == cat ? "active" : "")">@cat</a>
                         }
+                        <a asp-action="Index" asp-route-tab="security" asp-route-projectId="@Model.FilterProjectId" asp-route-scanAgentId="@Model.SelectedScanAgentId"
+                           class="qa-tab @(Model.ActiveTab == "security" ? "active" : "")">Security</a>
                     </div>
                     <form method="get" asp-action="Index" class="qa-project-filter">
                         <input type="hidden" name="category" value="@Model.FilterCategory" />
                         <input type="hidden" name="status" value="@Model.FilterStatus" />
+                        <input type="hidden" name="tab" value="@Model.ActiveTab" />
+                        <input type="hidden" name="scanAgentId" value="@Model.SelectedScanAgentId" />
                         <span class="qa-project-label">Project</span>
                         <select name="projectId" class="qa-project-select" onchange="this.form.submit()">
                             <option value="">All Projects</option>
@@ -245,6 +275,12 @@
 
                 @if (Model.TestCases.Any())
                 {
+                    @if (Model.ActiveTab == "security")
+                    {
+                        <div style="padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:.74rem;color:#64748b">
+                            Showing security-focused test cases (tagged by security keywords).
+                        </div>
+                    }
                     <div class="table-responsive">
                         <table class="qa-table">
                             <thead>
@@ -316,7 +352,7 @@
                                             </a>
                                         </td>
                                         <td>
-                                            <div class="d-flex gap-1">
+                                            <div class="d-flex gap-1 align-items-center">
                                                 <form asp-action="UpdateStatus" method="post" class="d-inline">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="id" value="@tc.Id" />
@@ -333,22 +369,34 @@
                                                         onclick="openEditModal(@tc.Id, '@tc.Name.Replace("'","\\'").Replace("\"","&quot;")', '@(tc.Description?.Replace("'","\\'").Replace("\"","&quot;").Replace("\n","\\n").Replace("\r","") ?? "")', '@(tc.Module ?? "")', '@tc.Status', '@tc.Category', '@tc.Environment', '@(tc.ChangeRequestId?.ToString() ?? "")', '@(tc.LinkedBugId?.ToString() ?? "")')">
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
-                                                @if (tc.ChangeRequestId.HasValue)
-                                                {
+                                                @{
+                                                    var overflowMenuId = $"qaOverflowMenu-{tc.Id}";
                                                     var scanLabel = !string.IsNullOrWhiteSpace(tc.Module) ? $"Scan {tc.Module} module" : "Scan project for bugs";
-                                                    <form asp-action="ScanModule" method="post" class="d-inline" onsubmit="return confirm('@scanLabel using OpenClaw?')">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="id" value="@tc.Id" />
-                                                        <button type="submit" class="qa-action qa-action-scan" title="@scanLabel">
-                                                            <i class="bi bi-search"></i>
-                                                        </button>
-                                                    </form>
                                                 }
-                                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Delete this test case?')">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="id" value="@tc.Id" />
-                                                    <button type="submit" class="qa-action qa-action-del" title="Delete"><i class="bi bi-trash3"></i></button>
-                                                </form>
+                                                <div class="dropdown">
+                                                    <button class="qa-action qa-action-more" type="button" id="@overflowMenuId" data-bs-toggle="dropdown" aria-expanded="false" title="More actions">
+                                                        <i class="bi bi-three-dots"></i>
+                                                    </button>
+                                                    <div class="dropdown-menu dropdown-menu-end qa-overflow-menu" aria-labelledby="@overflowMenuId">
+                                                        @if (tc.ChangeRequestId.HasValue)
+                                                        {
+                                                            <form asp-action="ScanModule" method="post" class="d-block" onsubmit="return confirm('@scanLabel using OpenClaw?')">
+                                                                @Html.AntiForgeryToken()
+                                                                <input type="hidden" name="id" value="@tc.Id" />
+                                                                <button type="submit" class="dropdown-item">
+                                                                    <i class="bi bi-search"></i> @scanLabel
+                                                                </button>
+                                                            </form>
+                                                        }
+                                                        <form asp-action="Delete" method="post" class="d-block" onsubmit="return confirm('Delete this test case?')">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="id" value="@tc.Id" />
+                                                            <button type="submit" class="dropdown-item text-danger">
+                                                                <i class="bi bi-trash3"></i> Delete test case
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -373,7 +421,7 @@
             <div class="qa-section" style="margin-bottom:20px">
                 <div class="qa-section-head">
                     <div class="qa-section-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-bug-fill"></i></div>
-                    <div class="qa-section-label">Linked bugs<span>Bugs connected to test cases</span></div>
+                    <div class="qa-section-label">Linked bugs<span>@(Model.ActiveTab == "security" ? "Security findings and related bug tickets" : "Bugs connected to test cases")</span></div>
                     @if (openBugs.Any())
                     {
                         <span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.1);color:#ef4444;margin-left:auto">@openBugs.Count open</span>
@@ -506,33 +554,131 @@
     </div>
 </div>
 
-@* Generate from Bugs / Scan Modal *@
+@* Generate Modal *@
 <div class="modal fade" id="generateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content" style="border-radius:14px;border:1px solid var(--border)">
-            <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
-                <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-cpu me-2" style="color:var(--accent)"></i>Generate Test Cases</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" style="padding:20px">
-                <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Select a project to auto-generate module-level test cases from project modules, codebase, and repository URL context.</p>
-                @* Auto Generate module-level test cases *@
-                <div style="background:#eff6ff;border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:16px">
-                    <div style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin-bottom:4px"><i class="bi bi-lightning-charge-fill me-1" style="color:#3b82f6"></i> Auto Generate Test Cases</div>
-                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px">OpenClaw analyzes project modules using repository/code context and generates module-level test cases.</div>
-                    <form asp-action="AutoGenerate" method="post" class="d-flex gap-2">
-                        @Html.AntiForgeryToken()
-                        <select name="projectId" class="form-select form-select-sm" style="font-size:.8rem" required>
+            <form asp-action="GenerateFlow" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
+                    <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-cpu me-2" style="color:#3b82f6"></i>Generate Flow</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding:20px">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Project</label>
+                        <select name="projectId" class="form-select" required style="font-size:.84rem">
                             <option value="">Select project...</option>
                             @foreach (var p in Model.Projects)
                             {
-                                <option value="@p.Id">@p.CrNumber — @p.Title</option>
+                                <option value="@p.Id" selected="@(Model.FilterProjectId == p.Id ? "selected" : null)">@p.CrNumber - @p.Title</option>
                             }
                         </select>
-                        <button type="submit" class="btn btn-sm" style="background:#3b82f6;color:#fff;font-weight:600;white-space:nowrap"><i class="bi bi-lightning-charge-fill me-1"></i>Auto Generate</button>
-                    </form>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">OpenClaw Agent</label>
+                        <select name="scanAgentId" class="form-select" style="font-size:.84rem">
+                            @if (Model.OpenClawScanAgentOptions.Any())
+                            {
+                                @foreach (var option in Model.OpenClawScanAgentOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.Value == Model.SelectedScanAgentId ? "selected" : null)">@option.Text</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="">Default (main)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="qa-flow-option qa-flow-option-reco">
+                        <label class="qa-flow-radio">
+                            <input type="radio" name="mode" value="generate_and_scan" checked />
+                            <span style="font-size:.78rem;color:var(--text-primary)">
+                                <strong>Generate + auto-scan all</strong> (Recommended)
+                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Creates test cases, then runs project-wide OpenClaw bug scan automatically.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="qa-flow-option">
+                        <label class="qa-flow-radio">
+                            <input type="radio" name="mode" value="generate_only" />
+                            <span style="font-size:.78rem;color:var(--text-primary)">
+                                <strong>Generate only</strong>
+                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Creates test cases only. No scan will run.</span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
-            </div>
+                <div class="modal-footer" style="border-top:1px solid var(--border);padding:12px 20px">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm" style="background:#3b82f6;color:#fff;font-weight:600">Run Generate Flow</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@* Security Scan Modal *@
+<div class="modal fade" id="securityScanModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:14px;border:1px solid var(--border)">
+            <form asp-action="RunSecurityScan" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="border-bottom:1px solid var(--border);padding:16px 20px">
+                    <h6 class="modal-title fw-bold" style="font-size:.9rem"><i class="bi bi-shield-exclamation me-2" style="color:#dc2626"></i>Run Security Scan</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding:20px">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Project</label>
+                        <select name="projectId" class="form-select" required style="font-size:.84rem">
+                            <option value="">Select project...</option>
+                            @foreach (var p in Model.Projects)
+                            {
+                                <option value="@p.Id" selected="@(Model.FilterProjectId == p.Id ? "selected" : null)">@p.CrNumber - @p.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">OpenClaw Agent</label>
+                        <select name="scanAgentId" class="form-select" style="font-size:.84rem">
+                            @if (Model.OpenClawScanAgentOptions.Any())
+                            {
+                                @foreach (var option in Model.OpenClawScanAgentOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.Value == Model.SelectedScanAgentId ? "selected" : null)">@option.Text</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="">Default (main)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="qa-flow-option qa-flow-option-reco">
+                        <label class="qa-flow-radio">
+                            <input type="radio" name="mode" value="security_tagged_only" checked />
+                            <span style="font-size:.78rem;color:var(--text-primary)">
+                                <strong>Scan security-tagged cases only</strong> (Recommended)
+                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Runs security-focused scans for test cases tagged with security keywords.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="qa-flow-option">
+                        <label class="qa-flow-radio">
+                            <input type="radio" name="mode" value="full_pass" />
+                            <span style="font-size:.78rem;color:var(--text-primary)">
+                                <strong>Run full pass on everything</strong>
+                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Runs a full project security pass and generates bugs for all findings.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid var(--border);padding:12px 20px">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:600">Run Security Scan</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -627,3 +773,4 @@
         }
     </script>
 }
+

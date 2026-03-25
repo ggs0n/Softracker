@@ -121,14 +121,19 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         if (string.IsNullOrWhiteSpace(createdById))
             return;
 
-        var result = await openClaw.ScanProjectAsync(project, NormalizeAgentId(item.ScanAgentId), cancellationToken);
+        var result = await openClaw.ScanProjectAsync(
+            project,
+            NormalizeAgentId(item.ScanAgentId),
+            cancellationToken,
+            item.UseSecurityPrompt);
+        var scanLabel = item.UseSecurityPrompt ? "OpenClaw security scan" : "OpenClaw scan";
         if (!result.Succeeded)
         {
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan failed",
-                $"OpenClaw scan failed for {project.CrNumber}: {TrimTo(result.Error, 600)}",
+                $"{scanLabel} failed",
+                $"{scanLabel} failed for {project.CrNumber}: {TrimTo(result.Error, 600)}",
                 $"/Qa/Index?projectId={project.Id}");
             return;
         }
@@ -138,8 +143,8 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan completed",
-                $"OpenClaw scan completed for {project.CrNumber} with no findings.",
+                $"{scanLabel} completed",
+                $"{scanLabel} completed for {project.CrNumber} with no findings.",
                 $"/Qa/Index?projectId={project.Id}");
             return;
         }
@@ -205,7 +210,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         }
 
         var summary =
-            $"OpenClaw scan found {result.Findings.Count} issue(s) for {project.CrNumber}. " +
+            $"{scanLabel} found {result.Findings.Count} issue(s) for {project.CrNumber}. " +
             $"Created {createdBugs} bug(s) in Bugs module.";
         if (skippedDuplicateBugs > 0)
             summary += $" Skipped {skippedDuplicateBugs} duplicate bug title(s).";
@@ -215,7 +220,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         await NotifyAsync(
             notificationService,
             item.RequestedByUserId,
-            "OpenClaw scan completed",
+            $"{scanLabel} completed",
             summary,
             "/Bug/Index");
     }
@@ -353,19 +358,23 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
                 testCase.ChangeRequest,
                 testCase.Module!,
                 NormalizeAgentId(item.ScanAgentId),
-                cancellationToken)
+                cancellationToken,
+                item.UseSecurityPrompt)
             : await openClaw.ScanProjectAsync(
                 testCase.ChangeRequest,
                 NormalizeAgentId(item.ScanAgentId),
-                cancellationToken);
+                cancellationToken,
+                item.UseSecurityPrompt);
+
+        var operationLabel = item.UseSecurityPrompt ? "OpenClaw security scan" : "OpenClaw scan";
 
         if (!result.Succeeded)
         {
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan failed",
-                $"OpenClaw scan failed for {testCase.TestNumber}: {TrimTo(result.Error, 600)}",
+                $"{operationLabel} failed",
+                $"{operationLabel} failed for {testCase.TestNumber}: {TrimTo(result.Error, 600)}",
                 $"/Qa/Index?projectId={testCase.ChangeRequestId}");
             return;
         }
@@ -376,7 +385,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan completed",
+                $"{operationLabel} completed",
                 $"{scanLabel} scan completed for {testCase.TestNumber} with no findings.",
                 $"/Qa/Index?projectId={testCase.ChangeRequestId}");
             return;
@@ -462,7 +471,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         await NotifyAsync(
             notificationService,
             item.RequestedByUserId,
-            "OpenClaw scan completed",
+            $"{operationLabel} completed",
             summary,
             "/Bug/Index");
     }

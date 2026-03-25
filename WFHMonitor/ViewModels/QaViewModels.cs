@@ -24,6 +24,13 @@ public class QaIndexViewModel
     public string? FilterCategory { get; set; }
     public string? FilterStatus { get; set; }
     public int? FilterProjectId { get; set; }
+
+    // UI state
+    public string ActiveTab { get; set; } = "tests";
+
+    // OpenClaw scan options
+    public string SelectedScanAgentId { get; set; } = string.Empty;
+    public List<SelectOptionItem> OpenClawScanAgentOptions { get; set; } = new();
 }
 
 public class QaTestCaseDetailsViewModel

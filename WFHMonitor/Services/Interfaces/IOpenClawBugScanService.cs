@@ -9,13 +9,15 @@ public interface IOpenClawBugScanService
     Task<OpenClawBugScanResult> ScanProjectAsync(
         ChangeRequest project,
         string? scanAgentId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool useSecurityPrompt = false);
 
     Task<OpenClawBugScanResult> ScanModuleAsync(
         ChangeRequest project,
         string moduleName,
         string? scanAgentId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool useSecurityPrompt = false);
 
     Task<OpenClawBugFixResult> FixBugAsync(
         BugReport bug,

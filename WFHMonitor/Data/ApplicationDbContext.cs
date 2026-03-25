@@ -50,6 +50,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(u => u.CompanyName)
                 .HasMaxLength(200);
 
+            e.Property(u => u.ProfilePhotoPath)
+                .HasMaxLength(300);
+
             e.Property(u => u.IsProSubscriptionActive)
                 .HasDefaultValue(false);
 

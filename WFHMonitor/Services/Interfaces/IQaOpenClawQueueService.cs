@@ -17,4 +17,5 @@ public sealed record QaOpenClawQueueItem(
     string RequestedByUserId,
     int? ProjectId = null,
     int? TestCaseId = null,
-    string? ScanAgentId = null);
+    string? ScanAgentId = null,
+    bool UseSecurityPrompt = false);

@@ -56,3 +56,13 @@ public class SelfRegisterViewModel
     [Display(Name = "Company Name (Optional)")]
     public string? CompanyName { get; set; }
 }
+
+public class UserProfileUpdateViewModel
+{
+    [Required]
+    [StringLength(100)]
+    [Display(Name = "Name")]
+    public string FullName { get; set; } = string.Empty;
+
+    public Microsoft.AspNetCore.Http.IFormFile? ProfilePhoto { get; set; }
+}

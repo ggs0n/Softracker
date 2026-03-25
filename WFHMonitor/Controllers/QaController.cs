@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
+using WFHMonitor.Services;
 using WFHMonitor.Services.Interfaces;
 using WFHMonitor.ViewModels;
 
@@ -17,20 +19,23 @@ public class QaController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ISystemSettingsService _settingsService;
     private readonly IQaOpenClawQueueService _qaOpenClawQueueService;
+    private readonly OpenClawSettings _openClawSettings;
 
     public QaController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         ISystemSettingsService settingsService,
-        IQaOpenClawQueueService qaOpenClawQueueService)
+        IQaOpenClawQueueService qaOpenClawQueueService,
+        IOptions<OpenClawSettings> openClawSettings)
     {
         _db = db;
         _userManager = userManager;
         _settingsService = settingsService;
         _qaOpenClawQueueService = qaOpenClawQueueService;
+        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
     }
 
-    public async Task<IActionResult> Index(string? category, string? status, int? projectId)
+    public async Task<IActionResult> Index(string? category, string? status, int? projectId, string? tab, string? scanAgentId)
     {
         if (!await _settingsService.CanViewModuleAsync(User, AppModuleKeys.QaTesting))
             return Forbid();
@@ -46,6 +51,9 @@ public class QaController : Controller
 
         var projects = await projectsQuery.OrderByDescending(p => p.UpdatedAt).ToListAsync();
         var projectIds = projects.Select(p => p.Id).ToList();
+        var activeTab = string.Equals(tab, "security", StringComparison.OrdinalIgnoreCase)
+            ? "security"
+            : "tests";
 
         var query = _db.TestCases
             .Include(t => t.ChangeRequest)
@@ -53,6 +61,9 @@ public class QaController : Controller
             .Where(t => !t.ChangeRequestId.HasValue || projectIds.Contains(t.ChangeRequestId.Value))
             .AsNoTracking()
             .AsQueryable();
+
+        if (activeTab == "security")
+            query = WhereSecurityTagged(query);
 
         if (!string.IsNullOrWhiteSpace(category) && Enum.TryParse<TestCaseCategory>(category, true, out var cat) && cat != TestCaseCategory.All)
             query = query.Where(t => t.Category == cat);
@@ -93,6 +104,17 @@ public class QaController : Controller
             .OrderByDescending(m => m.Total)
             .ToList();
 
+        var scanAgentOptions = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings)
+            .Select(agentId => new SelectOptionItem
+            {
+                Value = agentId,
+                Text = agentId
+            })
+            .ToList();
+        var selectedScanAgentId = scanAgentOptions.Any(o => string.Equals(o.Value, scanAgentId, StringComparison.OrdinalIgnoreCase))
+            ? scanAgentId?.Trim() ?? string.Empty
+            : scanAgentOptions.FirstOrDefault()?.Value ?? string.Empty;
+
         var vm = new QaIndexViewModel
         {
             TestCases = testCases,
@@ -107,7 +129,10 @@ public class QaController : Controller
             ModuleCoverages = moduleCoverages,
             FilterCategory = category,
             FilterStatus = status,
-            FilterProjectId = projectId
+            FilterProjectId = projectId,
+            ActiveTab = activeTab,
+            SelectedScanAgentId = selectedScanAgentId,
+            OpenClawScanAgentOptions = scanAgentOptions
         };
 
         return View(vm);
@@ -288,10 +313,12 @@ public class QaController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ScanAndGenerate(int projectId, string? scanAgentId)
+    public async Task<IActionResult> ScanAndGenerate(int projectId, string? scanAgentId, bool useSecurityPrompt = false)
     {
         if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
             return Forbid();
+
+        var redirectTab = useSecurityPrompt ? "security" : "tests";
 
         var projectExists = await _db.ChangeRequests
             .AsNoTracking()
@@ -299,7 +326,7 @@ public class QaController : Controller
         if (!projectExists)
         {
             TempData["Error"] = "Project not found.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Index), new { tab = redirectTab, projectId, scanAgentId });
         }
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -313,17 +340,20 @@ public class QaController : Controller
                     QaOpenClawQueueOperation.ScanAndGenerate,
                     userId,
                     ProjectId: projectId,
-                    ScanAgentId: scanAgentId),
+                    ScanAgentId: scanAgentId,
+                    UseSecurityPrompt: useSecurityPrompt),
                 HttpContext.RequestAborted);
 
-            TempData["Success"] = "OpenClaw scan queued. Bugs will be added in the background.";
+            TempData["Success"] = useSecurityPrompt
+                ? "OpenClaw security scan queued. Bugs will be added in the background."
+                : "OpenClaw scan queued. Bugs will be added in the background.";
         }
         catch (Exception ex)
         {
             TempData["Error"] = $"Unable to queue scan: {ex.Message}";
         }
 
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { tab = redirectTab, projectId, scanAgentId });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -363,6 +393,140 @@ public class QaController : Controller
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> GenerateFlow(int projectId, string? scanAgentId, string? mode)
+    {
+        if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
+            return Forbid();
+
+        var projectExists = await _db.ChangeRequests
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == projectId);
+        if (!projectExists)
+        {
+            TempData["Error"] = "Project not found.";
+            return RedirectToAction(nameof(Index), new { tab = "tests", projectId, scanAgentId });
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var normalizedMode = string.Equals(mode, "generate_only", StringComparison.OrdinalIgnoreCase)
+            ? "generate_only"
+            : "generate_and_scan";
+
+        try
+        {
+            await _qaOpenClawQueueService.EnqueueAsync(
+                new QaOpenClawQueueItem(
+                    QaOpenClawQueueOperation.AutoGenerate,
+                    userId,
+                    ProjectId: projectId,
+                    ScanAgentId: scanAgentId),
+                HttpContext.RequestAborted);
+
+            if (normalizedMode == "generate_and_scan")
+            {
+                await _qaOpenClawQueueService.EnqueueAsync(
+                    new QaOpenClawQueueItem(
+                        QaOpenClawQueueOperation.ScanAndGenerate,
+                        userId,
+                        ProjectId: projectId,
+                        ScanAgentId: scanAgentId),
+                    HttpContext.RequestAborted);
+
+                TempData["Success"] = "OpenClaw queued: generated test cases and auto-scan-all.";
+            }
+            else
+            {
+                TempData["Success"] = "OpenClaw queued: generate-only flow.";
+            }
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"Unable to queue generate flow: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "tests", projectId, scanAgentId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RunSecurityScan(int projectId, string? scanAgentId, string? mode)
+    {
+        if (!await _settingsService.CanModifyModuleAsync(User, AppModuleKeys.QaTesting))
+            return Forbid();
+
+        var projectExists = await _db.ChangeRequests
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == projectId);
+        if (!projectExists)
+        {
+            TempData["Error"] = "Project not found.";
+            return RedirectToAction(nameof(Index), new { tab = "security", projectId, scanAgentId });
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var normalizedMode = string.Equals(mode, "full_pass", StringComparison.OrdinalIgnoreCase)
+            ? "full_pass"
+            : "security_tagged_only";
+
+        try
+        {
+            if (normalizedMode == "full_pass")
+            {
+                await _qaOpenClawQueueService.EnqueueAsync(
+                    new QaOpenClawQueueItem(
+                        QaOpenClawQueueOperation.ScanAndGenerate,
+                        userId,
+                        ProjectId: projectId,
+                        ScanAgentId: scanAgentId,
+                        UseSecurityPrompt: true),
+                    HttpContext.RequestAborted);
+
+                TempData["Success"] = "OpenClaw security scan queued for full project pass.";
+            }
+            else
+            {
+                var taggedCaseIds = await WhereSecurityTagged(
+                        _db.TestCases
+                            .AsNoTracking()
+                            .Where(t => t.ChangeRequestId == projectId))
+                    .Select(t => t.Id)
+                    .ToListAsync(HttpContext.RequestAborted);
+
+                if (taggedCaseIds.Count == 0)
+                {
+                    TempData["Info"] = "No security-tagged test cases found for this project.";
+                    return RedirectToAction(nameof(Index), new { tab = "security", projectId, scanAgentId });
+                }
+
+                foreach (var id in taggedCaseIds)
+                {
+                    await _qaOpenClawQueueService.EnqueueAsync(
+                        new QaOpenClawQueueItem(
+                            QaOpenClawQueueOperation.ScanModule,
+                            userId,
+                            TestCaseId: id,
+                            ScanAgentId: scanAgentId,
+                            UseSecurityPrompt: true),
+                        HttpContext.RequestAborted);
+                }
+
+                TempData["Success"] = $"OpenClaw security scan queued for {taggedCaseIds.Count} security-tagged test case(s).";
+            }
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"Unable to queue security scan: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "security", projectId, scanAgentId });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -410,6 +574,34 @@ public class QaController : Controller
         // For now, this is a placeholder that updates the UI
         TempData["Info"] = "Test run queued. Results will appear when the agent completes.";
         return RedirectToAction(nameof(Index), new { projectId });
+    }
+
+    private static IQueryable<TestCase> WhereSecurityTagged(IQueryable<TestCase> query)
+    {
+        return query.Where(t =>
+            (!string.IsNullOrEmpty(t.Name) &&
+                (EF.Functions.Like(t.Name, "%security%") ||
+                 EF.Functions.Like(t.Name, "%secure%") ||
+                 EF.Functions.Like(t.Name, "%auth%") ||
+                 EF.Functions.Like(t.Name, "%access control%") ||
+                 EF.Functions.Like(t.Name, "%xss%") ||
+                 EF.Functions.Like(t.Name, "%csrf%") ||
+                 EF.Functions.Like(t.Name, "%sql injection%") ||
+                 EF.Functions.Like(t.Name, "%owasp%"))) ||
+            (!string.IsNullOrEmpty(t.Description) &&
+                (EF.Functions.Like(t.Description, "%security%") ||
+                 EF.Functions.Like(t.Description, "%secure%") ||
+                 EF.Functions.Like(t.Description, "%auth%") ||
+                 EF.Functions.Like(t.Description, "%access control%") ||
+                 EF.Functions.Like(t.Description, "%xss%") ||
+                 EF.Functions.Like(t.Description, "%csrf%") ||
+                 EF.Functions.Like(t.Description, "%sql injection%") ||
+                 EF.Functions.Like(t.Description, "%owasp%"))) ||
+            (!string.IsNullOrEmpty(t.Module) &&
+                (EF.Functions.Like(t.Module, "%security%") ||
+                 EF.Functions.Like(t.Module, "%secure%") ||
+                 EF.Functions.Like(t.Module, "%auth%") ||
+                 EF.Functions.Like(t.Module, "%access%"))));
     }
 
     private async Task<string> GenerateTestNumberAsync()
