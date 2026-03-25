@@ -134,11 +134,20 @@ public class AdminController : Controller
             })
             .ToListAsync();
 
+        var taskStatsByProject = allTasks
+            .Where(t => t.ChangeRequestId.HasValue)
+            .ToDictionary(t => t.ChangeRequestId!.Value);
+        var bugStatsByProject = allBugs
+            .Where(b => b.ChangeRequestId.HasValue)
+            .ToDictionary(b => b.ChangeRequestId!.Value);
+        var featureStatsByProject = allFeatures.ToDictionary(f => f.ChangeRequestId);
+
         var projectItems = projects.Select(p =>
         {
-            var taskStats = allTasks.FirstOrDefault(t => t.ChangeRequestId == p.Id);
-            var bugStats = allBugs.FirstOrDefault(b => b.ChangeRequestId == p.Id);
-            var featureStats = allFeatures.FirstOrDefault(f => f.ChangeRequestId == p.Id);
+            taskStatsByProject.TryGetValue(p.Id, out var taskStats);
+            bugStatsByProject.TryGetValue(p.Id, out var bugStats);
+            featureStatsByProject.TryGetValue(p.Id, out var featureStats);
+
             return new ProjectOverviewItem
             {
                 Id = p.Id,
