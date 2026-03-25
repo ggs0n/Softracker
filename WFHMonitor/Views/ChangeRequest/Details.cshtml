@@ -1,4 +1,4 @@
-@model WFHMonitor.Models.ChangeRequest
+﻿@model WFHMonitor.Models.ChangeRequest
 @{
     ViewData["Title"] = Model.CrNumber;
     var resolvedRepoOwner = ViewBag.ResolvedGitHubOwner as string;
@@ -15,18 +15,36 @@
     var isBugScanRunning = isBugScanQueued || isBugScanProcessing;
     var repositoryFeatures = Model.RepositoryFeatures.OrderBy(f => f.Name).ToList();
 
-    var stageItems = new List<(WFHMonitor.Models.CrStage Stage, string Label)>
-    {
-        (WFHMonitor.Models.CrStage.Development, "Development"),
-        (WFHMonitor.Models.CrStage.Testing, "Testing"),
-        (WFHMonitor.Models.CrStage.Deploy, "Deploy")
-    };
-    var normalizedStage = Model.Stage == WFHMonitor.Models.CrStage.ProjectStart
-        ? WFHMonitor.Models.CrStage.Development
-        : Model.Stage == WFHMonitor.Models.CrStage.DeploymentComplete
-            ? WFHMonitor.Models.CrStage.Deploy
-            : Model.Stage;
-    var currentStageIndex = stageItems.FindIndex(s => s.Stage == normalizedStage);
+    var canViewFeaturesModule = ViewBag.CanViewFeaturesModule as bool? ?? true;
+    var canViewBugsModule = ViewBag.CanViewBugsModule as bool? ?? true;
+    var canViewQaModule = ViewBag.CanViewQaModule as bool? ?? false;
+    var pipelineQaCases = ViewBag.PipelineQaCases as IList<WFHMonitor.Models.TestCase> ?? new List<WFHMonitor.Models.TestCase>();
+
+    var pipelineFeatureTotal = canViewFeaturesModule ? Model.Features.Count : 0;
+    var pipelineFeatureDone = canViewFeaturesModule ? Model.Features.Count(f =>
+        f.Status == WFHMonitor.Models.CrStatus.Done || f.Status == WFHMonitor.Models.CrStatus.Approved) : 0;
+    var pipelineFeatureInProgress = canViewFeaturesModule ? Model.Features.Count(f =>
+        f.Status == WFHMonitor.Models.CrStatus.InProgress || f.Status == WFHMonitor.Models.CrStatus.InReview) : 0;
+    var pipelineFeatureNotStarted = Math.Max(0, pipelineFeatureTotal - pipelineFeatureDone - pipelineFeatureInProgress);
+
+    var pipelineQaTotal = canViewQaModule ? pipelineQaCases.Count : 0;
+    var pipelineQaPassed = canViewQaModule ? pipelineQaCases.Count(t => t.Status == WFHMonitor.Models.TestCaseStatus.Pass) : 0;
+    var pipelineQaPending = canViewQaModule ? pipelineQaCases.Count(t => t.Status == WFHMonitor.Models.TestCaseStatus.Pending) : 0;
+
+    var pipelineBugTotal = canViewBugsModule ? linkedBugs.Count : 0;
+    var pipelineBugOpen = canViewBugsModule ? linkedBugs.Count(b => b.Status != WFHMonitor.Models.BugStatus.Complete) : 0;
+    var pipelineBugCriticalOpen = canViewBugsModule
+        ? linkedBugs.Count(b => b.Status != WFHMonitor.Models.BugStatus.Complete && b.Severity == WFHMonitor.Models.BugSeverity.Critical)
+        : 0;
+
+    var pipelineHasFeatureData = pipelineFeatureTotal > 0;
+    var pipelineHasQaData = pipelineQaTotal > 0;
+    var pipelineHasBugData = pipelineBugTotal > 0;
+    var pipelineIsResolutionReady = pipelineFeatureTotal > 0 &&
+        pipelineFeatureInProgress == 0 &&
+        pipelineFeatureNotStarted == 0 &&
+        pipelineQaPending == 0 &&
+        pipelineBugOpen == 0;
 }
 
 <style>
@@ -45,12 +63,34 @@
     .pd-btn-del{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:8px 16px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .2s ease}
     .pd-btn-del:hover{background:rgba(239,68,68,.2);color:#f87171;transform:translateY(-1px)}
 
-    /* Stage flow */
-    .pd-stage-flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center;position:relative;z-index:1}
-    .pd-stage{font-size:.72rem;font-weight:700;border-radius:999px;padding:5px 13px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#71717a;transition:all .2s ease}
-    .pd-stage-done{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);color:#34d399}
-    .pd-stage-now{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#60a5fa}
-    .pd-stage-arrow{color:#52525b;font-size:.68rem}
+    /* Pipeline */
+    .pd-pipe{background:linear-gradient(160deg,#0f223d 0%,#152d4f 100%);border:1px solid rgba(96,165,250,.2);border-radius:16px;padding:18px 20px;margin-bottom:20px}
+    .pd-pipe-head{font-size:.72rem;font-weight:700;letter-spacing:.06em;color:#9fb5d3;text-transform:uppercase;margin-bottom:14px}
+    .pd-pipe-steps{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:nowrap}
+    .pd-pipe-step{flex:1;min-width:95px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative}
+    .pd-pipe-step::after{content:'';position:absolute;top:18px;right:-50%;width:100%;height:2px;background:rgba(96,165,250,.28)}
+    .pd-pipe-step:last-child::after{display:none}
+    .pd-pipe-dot{width:38px;height:38px;border-radius:999px;border:1px solid rgba(96,165,250,.55);display:flex;align-items:center;justify-content:center;color:#60a5fa;background:rgba(15,23,42,.6);font-size:.92rem;font-weight:700}
+    .pd-pipe-step.is-done .pd-pipe-dot{border-color:rgba(16,185,129,.7);color:#34d399;background:rgba(16,185,129,.15)}
+    .pd-pipe-step.is-alert .pd-pipe-dot{border-color:rgba(248,113,113,.8);color:#f87171;background:rgba(239,68,68,.14)}
+    .pd-pipe-step.is-empty .pd-pipe-dot{border-color:rgba(148,163,184,.45);color:#64748b;background:rgba(30,41,59,.45)}
+    .pd-pipe-step.is-empty .pd-pipe-label,.pd-pipe-step.is-empty .pd-pipe-sub{color:#6b7f9d}
+    .pd-pipe-label{margin-top:8px;font-size:.88rem;font-weight:700;color:#ecf3ff;line-height:1.1}
+    .pd-pipe-sub{font-size:.72rem;color:#8fb2da;line-height:1.2;margin-top:3px;min-height:30px}
+    .pd-pipe-panel{margin-top:14px;background:rgba(20,40,68,.7);border:1px solid rgba(96,165,250,.2);border-radius:12px;padding:12px}
+    .pd-pipe-panel.is-empty{opacity:.58}
+    .pd-pipe-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+    .pd-pipe-panel-title{font-size:.92rem;font-weight:700;color:#f8fbff;display:flex;align-items:center;gap:8px}
+    .pd-pipe-panel-tag{font-size:.72rem;font-weight:700;color:#86a5cc}
+    .pd-pipe-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .pd-pipe-metric{background:rgba(15,23,42,.45);border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px 10px 8px}
+    .pd-pipe-metric-num{font-size:1.4rem;font-weight:800;line-height:1;color:#ecf3ff}
+    .pd-pipe-metric-label{margin-top:6px;font-size:.72rem;font-weight:600;color:#8fb2da}
+    .pd-pipe-metric-line{height:2px;border-radius:999px;background:rgba(148,163,184,.22);margin-top:7px}
+    .pd-pipe-metric-line > span{display:block;height:100%;border-radius:999px;background:#3b82f6}
+    .pd-pipe-link{margin-top:10px;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(96,165,250,.65);border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;color:#93c5fd;text-decoration:none}
+    .pd-pipe-link:hover{background:rgba(59,130,246,.16);color:#bfdbfe}
+    .pd-pipe-link.is-disabled{opacity:.45;pointer-events:none}
 
     /* Grid */
     .pd-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
@@ -174,6 +214,10 @@
         .pd-grid{grid-template-columns:1fr}
         .pd-hero-title{font-size:1.4rem}
         .pd-hero{padding:22px 18px 20px}
+        .pd-pipe-steps{gap:4px}
+        .pd-pipe-step{min-width:74px}
+        .pd-pipe-step::after{display:none}
+        .pd-pipe-metrics{grid-template-columns:1fr}
     }
 </style>
 
@@ -185,7 +229,7 @@
         </div>
     }
 
-    @* ── Hero ── *@
+    @* â”€â”€ Hero â”€â”€ *@
     <section class="pd-hero">
         <div class="pd-hero-top">
             <div>
@@ -213,25 +257,124 @@
                 </div>
             }
         </div>
-        <div class="pd-stage-flow">
-            @for (var i = 0; i < stageItems.Count; i++)
-            {
-                var isComplete = i < currentStageIndex;
-                var isCurrent = i == currentStageIndex;
-                var cls = isCurrent ? "pd-stage-now" : isComplete ? "pd-stage-done" : "";
-                <span class="pd-stage @cls">@stageItems[i].Label</span>
-                if (i < stageItems.Count - 1)
-                {
-                    <i class="bi bi-chevron-right pd-stage-arrow"></i>
-                }
-            }
+    </section>
+
+    <section class="pd-pipe">
+        <div class="pd-pipe-head">Project Pipeline</div>
+        @{
+            var featureStepClass = !pipelineHasFeatureData
+                ? "is-empty"
+                : pipelineFeatureInProgress == 0 && pipelineFeatureNotStarted == 0
+                    ? "is-done"
+                    : "is-alert";
+            var qaStepClass = !pipelineHasQaData
+                ? "is-empty"
+                : pipelineQaPending == 0
+                    ? "is-done"
+                    : "is-alert";
+            var bugStepClass = !pipelineHasBugData
+                ? "is-empty"
+                : pipelineBugOpen == 0
+                    ? "is-done"
+                    : "is-alert";
+            var hasPipelineSignals = pipelineHasFeatureData || pipelineHasQaData || pipelineHasBugData;
+            var resolutionStepClass = !hasPipelineSignals
+                ? "is-empty"
+                : pipelineIsResolutionReady
+                    ? "is-done"
+                    : "is-alert";
+
+            var completePct = pipelineFeatureTotal == 0 ? 0 : (int)Math.Round(pipelineFeatureDone * 100.0 / pipelineFeatureTotal);
+            var inProgressPct = pipelineFeatureTotal == 0 ? 0 : (int)Math.Round(pipelineFeatureInProgress * 100.0 / pipelineFeatureTotal);
+            var notStartedPct = pipelineFeatureTotal == 0 ? 0 : (int)Math.Round(pipelineFeatureNotStarted * 100.0 / pipelineFeatureTotal);
+        }
+        <div class="pd-pipe-steps">
+            <div class="pd-pipe-step is-done">
+                <div class="pd-pipe-dot"><i class="bi bi-check-lg"></i></div>
+                <div class="pd-pipe-label">Project</div>
+                <div class="pd-pipe-sub">Setup done</div>
+            </div>
+            <div class="pd-pipe-step @featureStepClass">
+                <div class="pd-pipe-dot"><i class="bi bi-grid"></i></div>
+                <div class="pd-pipe-label">Features</div>
+                <div class="pd-pipe-sub">
+                    @if (pipelineHasFeatureData)
+                    {
+                        <span>@pipelineFeatureDone/@pipelineFeatureTotal done</span>
+                    }
+                    else
+                    {
+                        <span>No data</span>
+                    }
+                </div>
+            </div>
+            <div class="pd-pipe-step @qaStepClass">
+                <div class="pd-pipe-dot"><i class="bi bi-clipboard-check"></i></div>
+                <div class="pd-pipe-label">QA Testing</div>
+                <div class="pd-pipe-sub">
+                    @if (pipelineHasQaData)
+                    {
+                        <span>@pipelineQaPending pending</span>
+                    }
+                    else
+                    {
+                        <span>No data</span>
+                    }
+                </div>
+            </div>
+            <div class="pd-pipe-step @bugStepClass">
+                <div class="pd-pipe-dot"><i class="bi bi-bug"></i></div>
+                <div class="pd-pipe-label">Bugs</div>
+                <div class="pd-pipe-sub">
+                    @if (pipelineHasBugData)
+                    {
+                        <span>@pipelineBugOpen open - @pipelineBugCriticalOpen critical</span>
+                    }
+                    else
+                    {
+                        <span>No data</span>
+                    }
+                </div>
+            </div>
+            <div class="pd-pipe-step @resolutionStepClass">
+                <div class="pd-pipe-dot"><i class="bi bi-stars"></i></div>
+                <div class="pd-pipe-label">Resolution</div>
+                <div class="pd-pipe-sub">@(pipelineIsResolutionReady ? "Ready" : "Waiting")</div>
+            </div>
+        </div>
+
+        <div class="pd-pipe-panel @(pipelineHasFeatureData ? string.Empty : "is-empty")">
+            <div class="pd-pipe-panel-head">
+                <div class="pd-pipe-panel-title"><i class="bi bi-grid"></i> Features</div>
+                <div class="pd-pipe-panel-tag">@Model.CrNumber</div>
+            </div>
+            <div class="pd-pipe-metrics">
+                <div class="pd-pipe-metric">
+                    <div class="pd-pipe-metric-num">@pipelineFeatureDone</div>
+                    <div class="pd-pipe-metric-label">Complete</div>
+                    <div class="pd-pipe-metric-line"><span style="width:@completePct%"></span></div>
+                </div>
+                <div class="pd-pipe-metric">
+                    <div class="pd-pipe-metric-num">@pipelineFeatureInProgress</div>
+                    <div class="pd-pipe-metric-label">In progress</div>
+                    <div class="pd-pipe-metric-line"><span style="width:@inProgressPct%"></span></div>
+                </div>
+                <div class="pd-pipe-metric">
+                    <div class="pd-pipe-metric-num">@pipelineFeatureNotStarted</div>
+                    <div class="pd-pipe-metric-label">Not started</div>
+                    <div class="pd-pipe-metric-line"><span style="width:@notStartedPct%"></span></div>
+                </div>
+            </div>
+            <a asp-action="Features" asp-route-projectId="@Model.Id" class="pd-pipe-link @(pipelineHasFeatureData ? string.Empty : "is-disabled")">
+                <i class="bi bi-arrow-right"></i> Go to Features
+            </a>
         </div>
     </section>
 
-    @* ── Grid ── *@
+    @* â”€â”€ Grid â”€â”€ *@
     <div class="pd-grid">
 
-        @* ═══ Left Column ═══ *@
+        @* â•â•â• Left Column â•â•â• *@
         <div>
 
             @* Description *@
@@ -277,7 +420,7 @@
                                         <div style="flex:1;min-width:200px">
                                             <label style="font-size:.74rem;font-weight:600;color:#52525b;margin-bottom:4px;display:block">Document File <span style="color:#ef4444">*</span></label>
                                             <input type="file" name="file" class="form-control form-control-sm" style="border:1px solid #d1d5db;border-radius:8px;font-size:.8rem" required />
-                                            <div style="font-size:.68rem;color:#a1a1aa;margin-top:3px">PDF, Word, Excel, PowerPoint, TXT — max 20 MB</div>
+                                            <div style="font-size:.68rem;color:#a1a1aa;margin-top:3px">PDF, Word, Excel, PowerPoint, TXT â€” max 20 MB</div>
                                         </div>
                                         <button type="submit" class="pd-upload-btn"><i class="bi bi-upload"></i> Upload</button>
                                     </div>
@@ -586,7 +729,7 @@
 
         </div>
 
-        @* ═══ Right Column ═══ *@
+        @* â•â•â• Right Column â•â•â• *@
         <div>
 
             @* Project Health *@
@@ -724,12 +867,12 @@
                         <div style="display:flex;align-items:center;gap:14px">
                             <div>
                                 <div style="font-size:.68rem;color:#a1a1aa;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Start</div>
-                                <div style="font-size:.88rem;font-weight:700;color:var(--text-primary)">@(Model.TimelineStart?.ToString("MMM dd, yyyy") ?? "—")</div>
+                                <div style="font-size:.88rem;font-weight:700;color:var(--text-primary)">@(Model.TimelineStart?.ToString("MMM dd, yyyy") ?? "â€”")</div>
                             </div>
                             <i class="bi bi-arrow-right" style="color:#d1d5db"></i>
                             <div>
                                 <div style="font-size:.68rem;color:#a1a1aa;font-weight:600;text-transform:uppercase;letter-spacing:.04em">End</div>
-                                <div style="font-size:.88rem;font-weight:700;color:var(--text-primary)">@(Model.TimelineEnd?.ToString("MMM dd, yyyy") ?? "—")</div>
+                                <div style="font-size:.88rem;font-weight:700;color:var(--text-primary)">@(Model.TimelineEnd?.ToString("MMM dd, yyyy") ?? "â€”")</div>
                             </div>
                         </div>
                         @if (Model.TimelineStart.HasValue && Model.TimelineEnd.HasValue)

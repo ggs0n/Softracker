@@ -1,13 +1,6 @@
-@using Microsoft.AspNetCore.Mvc.Rendering
 @model WFHMonitor.ViewModels.ChangeRequestFormViewModel
 @{
     ViewData["Title"] = "New Project";
-    var stageOptions = new List<SelectListItem>
-    {
-        new() { Value = WFHMonitor.Models.CrStage.Development.ToString(), Text = "Development" },
-        new() { Value = WFHMonitor.Models.CrStage.Testing.ToString(), Text = "Testing" },
-        new() { Value = WFHMonitor.Models.CrStage.Deploy.ToString(), Text = "Deploy" }
-    };
 }
 
 <style>
@@ -67,6 +60,7 @@
 
     <form asp-action="Create" method="post" id="crForm">
         @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Stage" value="@WFHMonitor.Models.CrStage.Development" />
         <div asp-validation-summary="All" class="alert alert-danger small mb-3" style="border-radius:10px;"></div>
 
         @* GitHub Integration *@
@@ -158,10 +152,6 @@
                         <div class="np-label">Priority</div>
                         <select asp-for="Priority" asp-items="Html.GetEnumSelectList<WFHMonitor.Models.CrPriority>()" class="np-select"></select>
                     </div>
-                </div>
-                <div>
-                    <div class="np-label">Stage</div>
-                    <select asp-for="Stage" asp-items="stageOptions" class="np-select"></select>
                 </div>
             </div>
         </div>

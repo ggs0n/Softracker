@@ -599,6 +599,21 @@ public class ChangeRequestController : Controller
             .ToListAsync();
         ViewBag.LinkedBugs = linkedBugs;
 
+        var canViewFeaturesModule = await _systemSettingsService.CanViewModuleAsync(User, AppModuleKeys.Features);
+        var canViewBugsModule = await _systemSettingsService.CanViewModuleAsync(User, AppModuleKeys.Bugs);
+        var canViewQaModule = await _systemSettingsService.CanViewModuleAsync(User, AppModuleKeys.QaTesting);
+        ViewBag.CanViewFeaturesModule = canViewFeaturesModule;
+        ViewBag.CanViewBugsModule = canViewBugsModule;
+        ViewBag.CanViewQaModule = canViewQaModule;
+
+        var pipelineQaCases = canViewQaModule
+            ? await _db.TestCases
+                .Where(t => t.ChangeRequestId == id)
+                .AsNoTracking()
+                .ToListAsync()
+            : [];
+        ViewBag.PipelineQaCases = pipelineQaCases;
+
         var owner = cr.GitHubRepoOwner;
         var repo = cr.GitHubRepoName;
         var branch = cr.GitHubBranch;
