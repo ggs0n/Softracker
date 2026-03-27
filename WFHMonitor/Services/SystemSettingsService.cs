@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services.Interfaces;
@@ -10,21 +11,21 @@ namespace WFHMonitor.Services;
 public class SystemSettingsService : ISystemSettingsService
 {
     private static readonly string[] RoleOrder = ["Admin", "Tester", "Developer", "Agent", "Employee"];
+    private const string PermissionsCacheKey = "sys:permissions";
+    private const string PreferenceCacheKey = "sys:preference";
 
     private readonly ApplicationDbContext _db;
+    private readonly IMemoryCache _cache;
 
-    public SystemSettingsService(ApplicationDbContext db)
+    public SystemSettingsService(ApplicationDbContext db, IMemoryCache cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public async Task<SettingsPageViewModel> BuildSettingsPageAsync(string? activeMenu = null)
     {
-        var permissions = await _db.ModulePermissionSettings
-            .AsNoTracking()
-            .ToListAsync();
-
-        var byKey = permissions.ToDictionary(p => p.ModuleKey, StringComparer.OrdinalIgnoreCase);
+        var byKey = await GetCachedPermissionsAsync();
 
         var modules = AppModuleKeys.All
             .Select(moduleKey => BuildPermissionEditor(moduleKey, byKey.GetValueOrDefault(moduleKey)))
@@ -74,6 +75,7 @@ public class SystemSettingsService : ISystemSettingsService
         }
 
         await _db.SaveChangesAsync();
+        _cache.Remove(PermissionsCacheKey);
     }
 
     public async Task SaveBellNotificationSettingsAsync(bool enabled, string? soundOption)
@@ -83,6 +85,7 @@ public class SystemSettingsService : ISystemSettingsService
         pref.BellNotificationSoundOption = NormalizeSoundOption(soundOption);
         pref.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        _cache.Remove(PreferenceCacheKey);
     }
 
     public async Task SaveProVersionSettingsAsync(ProVersionSettingsViewModel model)
@@ -95,6 +98,7 @@ public class SystemSettingsService : ISystemSettingsService
         pref.AllowOpenClawForFreePlan = model.AllowOpenClawForFreePlan;
         pref.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        _cache.Remove(PreferenceCacheKey);
     }
 
     public async Task<bool> CanViewModuleAsync(ClaimsPrincipal user, string moduleKey)
@@ -109,12 +113,7 @@ public class SystemSettingsService : ISystemSettingsService
 
     public async Task<RuntimeSystemAccessViewModel> BuildRuntimeAccessAsync(ClaimsPrincipal user)
     {
-        var allPermissions = await _db.ModulePermissionSettings
-            .AsNoTracking()
-            .Where(m => AppModuleKeys.All.Contains(m.ModuleKey))
-            .ToListAsync();
-
-        var byKey = allPermissions.ToDictionary(p => p.ModuleKey, StringComparer.OrdinalIgnoreCase);
+        var byKey = await GetCachedPermissionsAsync();
         var pref = await GetOrCreatePreferenceAsync(trackChanges: false);
 
         return new RuntimeSystemAccessViewModel
@@ -140,11 +139,20 @@ public class SystemSettingsService : ISystemSettingsService
         if (!AppModuleKeys.All.Contains(moduleKey, StringComparer.OrdinalIgnoreCase))
             return false;
 
-        var permission = await _db.ModulePermissionSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.ModuleKey == moduleKey);
+        var permissions = await GetCachedPermissionsAsync();
+        var permission = permissions.GetValueOrDefault(moduleKey);
 
         return IsAllowed(user, permission, isModify);
+    }
+
+    private async Task<Dictionary<string, ModulePermissionSetting>> GetCachedPermissionsAsync()
+    {
+        return (await _cache.GetOrCreateAsync(PermissionsCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            var list = await _db.ModulePermissionSettings.AsNoTracking().ToListAsync();
+            return list.ToDictionary(p => p.ModuleKey, StringComparer.OrdinalIgnoreCase);
+        }))!;
     }
 
     private static bool IsAllowed(ClaimsPrincipal user, ModulePermissionSetting? permission, bool isModify)
@@ -183,16 +191,19 @@ public class SystemSettingsService : ISystemSettingsService
 
     private async Task<SystemPreference> GetOrCreatePreferenceAsync(bool trackChanges)
     {
-        IQueryable<SystemPreference> query = _db.SystemPreferences;
         if (!trackChanges)
-            query = query.AsNoTracking();
+        {
+            return (await _cache.GetOrCreateAsync(PreferenceCacheKey, async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+                return await _db.SystemPreferences.AsNoTracking().FirstOrDefaultAsync(p => p.Id == 1)
+                       ?? new SystemPreference();
+            }))!;
+        }
 
-        var pref = await query.FirstOrDefaultAsync(p => p.Id == 1);
+        var pref = await _db.SystemPreferences.FirstOrDefaultAsync(p => p.Id == 1);
         if (pref != null)
             return pref;
-
-        if (!trackChanges)
-            return new SystemPreference();
 
         var created = new SystemPreference
         {

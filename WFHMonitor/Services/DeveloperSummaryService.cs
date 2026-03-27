@@ -111,29 +111,32 @@ public class DeveloperSummaryService : IDeveloperSummaryService
         {
             try
             {
-                var commitItems = new List<DeveloperGitHubCommitItem>();
-
-                foreach (var cr in githubLinkedCrs)
+                var semaphore = new SemaphoreSlim(5, 5);
+                var commitTasks = githubLinkedCrs.Select(async cr =>
                 {
                     HasGitHubConfig(cr, out var owner, out var repo, out var branch);
-                    var commits = await _gitHubService.GetCommitsAsync(
-                        owner!, repo!, branch!, count: 15);
-
-                    foreach (var commit in commits.Where(c =>
-                                 string.Equals(c.AuthorEmail, developerEmail, StringComparison.OrdinalIgnoreCase)))
+                    await semaphore.WaitAsync();
+                    try
                     {
-                        commitItems.Add(new DeveloperGitHubCommitItem
-                        {
-                            CrNumber = cr.CrNumber,
-                            Repo = $"{owner}/{repo}",
-                            Branch = branch!,
-                            Sha = commit.Sha,
-                            Message = commit.Message,
-                            Date = commit.Date,
-                            Url = commit.Url
-                        });
+                        var commits = await _gitHubService.GetCommitsAsync(
+                            owner!, repo!, branch!, count: 15);
+                        return commits
+                            .Where(c => string.Equals(c.AuthorEmail, developerEmail, StringComparison.OrdinalIgnoreCase))
+                            .Select(commit => new DeveloperGitHubCommitItem
+                            {
+                                CrNumber = cr.CrNumber,
+                                Repo = $"{owner}/{repo}",
+                                Branch = branch!,
+                                Sha = commit.Sha,
+                                Message = commit.Message,
+                                Date = commit.Date,
+                                Url = commit.Url
+                            });
                     }
-                }
+                    finally { semaphore.Release(); }
+                });
+                var results = await Task.WhenAll(commitTasks);
+                var commitItems = results.SelectMany(x => x).ToList();
 
                 vm.RecentCommits = commitItems
                     .OrderByDescending(c => c.Date)

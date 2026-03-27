@@ -18,17 +18,20 @@ public class BugService : IBugService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IWebHostEnvironment _env;
     private readonly INotificationService _notificationService;
+    private readonly IUserRoleCacheService _userRoleCache;
 
     public BugService(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         IWebHostEnvironment env,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IUserRoleCacheService userRoleCache)
     {
         _db = db;
         _userManager = userManager;
         _env = env;
         _notificationService = notificationService;
+        _userRoleCache = userRoleCache;
     }
 
     public async Task<List<BugReport>> GetIndexBugsAsync(
@@ -160,8 +163,7 @@ public class BugService : IBugService
 
     public async Task<(bool Succeeded, string Error, int BugId)> CreateAsync(BugFormViewModel model, string createdById)
     {
-        var bugCount = await _db.BugReports.CountAsync();
-        var bugNumber = $"BUG-{DateTime.UtcNow.Year}-{(bugCount + 1):D4}";
+        var bugNumber = await GenerateNextBugNumberAsync();
         var bug = new BugReport
         {
             BugNumber = bugNumber,
@@ -417,8 +419,8 @@ public class BugService : IBugService
 
     private async Task<List<SelectListItem>> GetDeveloperOptionsAsync(string? companyName, string? currentUserId)
     {
-        var developers = await _userManager.GetUsersInRoleAsync("Developer");
-        developers = FilterUsersByCompany(developers, companyName, currentUserId);
+        var allDevelopers = await _userRoleCache.GetUsersInRoleAsync("Developer");
+        var developers = FilterUsersByCompany(allDevelopers, companyName, currentUserId);
         return developers
             .OrderBy(d => d.FullName)
             .Select(d => new SelectListItem(d.FullName, d.Id))
@@ -427,8 +429,8 @@ public class BugService : IBugService
 
     private async Task<List<SelectListItem>> GetAgentOptionsAsync(string? companyName, string? currentUserId)
     {
-        var agents = await _userManager.GetUsersInRoleAsync("Agent");
-        agents = FilterUsersByCompany(agents, companyName, currentUserId);
+        var allAgents = await _userRoleCache.GetUsersInRoleAsync("Agent");
+        var agents = FilterUsersByCompany(allAgents, companyName, currentUserId);
         return agents
             .OrderBy(a => a.FullName)
             .Select(a => new SelectListItem(a.FullName, a.Id))
@@ -539,6 +541,26 @@ public class BugService : IBugService
     {
         var normalized = (value ?? string.Empty).Trim();
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private async Task<string> GenerateNextBugNumberAsync()
+    {
+        var yearPrefix = $"BUG-{DateTime.UtcNow.Year}-";
+        var lastBugNumber = await _db.BugReports
+            .Where(b => b.BugNumber.StartsWith(yearPrefix))
+            .OrderByDescending(b => b.BugNumber)
+            .Select(b => b.BugNumber)
+            .FirstOrDefaultAsync();
+
+        var nextNumber = 1;
+        if (lastBugNumber != null)
+        {
+            var parts = lastBugNumber.Split('-');
+            if (parts.Length >= 3 && int.TryParse(parts[^1], out var current))
+                nextNumber = current + 1;
+        }
+
+        return $"{yearPrefix}{nextNumber:D4}";
     }
 
     private static IList<ApplicationUser> FilterUsersByCompany(

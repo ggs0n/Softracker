@@ -22,6 +22,7 @@ public class BugController : Controller
     private readonly IBugFixQueueService _bugFixQueue;
     private readonly OpenClawSettings _openClawSettings;
     private readonly ISystemSettingsService _systemSettingsService;
+    private readonly IUserRoleCacheService _userRoleCache;
 
     public BugController(
         ApplicationDbContext db,
@@ -29,6 +30,7 @@ public class BugController : Controller
         IBugService bugService,
         IBugFixQueueService bugFixQueue,
         ISystemSettingsService systemSettingsService,
+        IUserRoleCacheService userRoleCache,
         IOptions<OpenClawSettings> openClawSettings)
     {
         _db = db;
@@ -36,6 +38,7 @@ public class BugController : Controller
         _bugService = bugService;
         _bugFixQueue = bugFixQueue;
         _systemSettingsService = systemSettingsService;
+        _userRoleCache = userRoleCache;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
     }
 
@@ -541,7 +544,7 @@ public class BugController : Controller
     {
         var currentUser = await _userManager.GetUserAsync(User);
         var currentCompany = NormalizeCompanyName(currentUser?.CompanyName);
-        var agents = (await _userManager.GetUsersInRoleAsync("Agent"))
+        var agents = (await _userRoleCache.GetUsersInRoleAsync("Agent"))
             .Where(a => IsCompanyAllowed(currentCompany, a.CompanyName))
             .ToList();
         return agents
@@ -554,7 +557,7 @@ public class BugController : Controller
     {
         var currentUser = await _userManager.GetUserAsync(User);
         var currentCompany = NormalizeCompanyName(currentUser?.CompanyName);
-        var agents = (await _userManager.GetUsersInRoleAsync("Agent"))
+        var agents = (await _userRoleCache.GetUsersInRoleAsync("Agent"))
             .Where(a => IsCompanyAllowed(currentCompany, a.CompanyName))
             .ToList();
         var preferred = agents

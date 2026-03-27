@@ -12,11 +12,12 @@ namespace WFHMonitor.Services;
 
 public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugScanQueueService
 {
-    private readonly Channel<ProjectBugScanQueueItem> _queue = Channel.CreateUnbounded<ProjectBugScanQueueItem>(
-        new UnboundedChannelOptions
+    private readonly Channel<ProjectBugScanQueueItem> _queue = Channel.CreateBounded<ProjectBugScanQueueItem>(
+        new BoundedChannelOptions(50)
         {
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
     private readonly IServiceScopeFactory _scopeFactory;

@@ -11,11 +11,12 @@ namespace WFHMonitor.Services;
 
 public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQueueService
 {
-    private readonly Channel<FeatureAgentQueueItem> _queue = Channel.CreateUnbounded<FeatureAgentQueueItem>(
-        new UnboundedChannelOptions
+    private readonly Channel<FeatureAgentQueueItem> _queue = Channel.CreateBounded<FeatureAgentQueueItem>(
+        new BoundedChannelOptions(50)
         {
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
     private readonly IServiceScopeFactory _scopeFactory;

@@ -10,11 +10,12 @@ namespace WFHMonitor.Services;
 
 public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
 {
-    private readonly Channel<BugFixQueueItem> _queue = Channel.CreateUnbounded<BugFixQueueItem>(
-        new UnboundedChannelOptions
+    private readonly Channel<BugFixQueueItem> _queue = Channel.CreateBounded<BugFixQueueItem>(
+        new BoundedChannelOptions(50)
         {
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
     private readonly IServiceScopeFactory _scopeFactory;

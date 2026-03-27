@@ -43,6 +43,7 @@ public class ChangeRequestController : Controller
     private readonly IOpenClawBugScanService _openClawBugScanService;
     private readonly OpenClawSettings _openClawSettings;
     private readonly ISystemSettingsService _systemSettingsService;
+    private readonly IUserRoleCacheService _userRoleCache;
     private readonly IWebHostEnvironment env;
 
     public ChangeRequestController(
@@ -54,6 +55,7 @@ public class ChangeRequestController : Controller
         INotificationService notificationService,
         IOpenClawBugScanService openClawBugScanService,
         ISystemSettingsService systemSettingsService,
+        IUserRoleCacheService userRoleCache,
         Microsoft.Extensions.Options.IOptions<OpenClawSettings> openClawSettings,
         IWebHostEnvironment env)
     {
@@ -65,6 +67,7 @@ public class ChangeRequestController : Controller
         _notificationService = notificationService;
         _openClawBugScanService = openClawBugScanService;
         _systemSettingsService = systemSettingsService;
+        _userRoleCache = userRoleCache;
         _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
         this.env = env;
     }
@@ -1676,9 +1679,9 @@ public class ChangeRequestController : Controller
     private async Task<List<SelectListItem>> GetEmployeeOptions()
     {
         var companyName = await GetCurrentCompanyNameAsync();
-        var employees = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Employee"), companyName);
-        var developers = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Developer"), companyName);
-        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
+        var employees = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Employee"), companyName);
+        var developers = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Developer"), companyName);
+        var agents = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Agent"), companyName);
 
         return employees.Select(e => new SelectListItem($"{e.FullName} (Employee)", e.Id))
             .Concat(developers.Select(e => new SelectListItem($"{e.FullName} (Developer)", e.Id)))
@@ -1787,8 +1790,8 @@ public class ChangeRequestController : Controller
     private async Task<List<SelectListItem>> GetDeveloperOptionsAsync()
     {
         var companyName = await GetCurrentCompanyNameAsync();
-        var developers = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Developer"), companyName);
-        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
+        var developers = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Developer"), companyName);
+        var agents = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Agent"), companyName);
 
         var usersById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
         var rolesByUser = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -1831,7 +1834,7 @@ public class ChangeRequestController : Controller
     private async Task<List<SelectListItem>> GetAgentUserOptionsAsync()
     {
         var companyName = await GetCurrentCompanyNameAsync();
-        var agents = FilterUsersByCompany(await _userManager.GetUsersInRoleAsync("Agent"), companyName);
+        var agents = FilterUsersByCompany(await _userRoleCache.GetUsersInRoleAsync("Agent"), companyName);
         return agents
             .OrderBy(a => a.FullName)
             .Select(a => new SelectListItem(a.FullName, a.Id))

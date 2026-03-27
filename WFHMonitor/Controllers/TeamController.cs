@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
+using WFHMonitor.Services.Interfaces;
 using WFHMonitor.ViewModels;
 
 namespace WFHMonitor.Controllers;
@@ -16,13 +17,16 @@ public class TeamController : Controller
 
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserRoleCacheService _userRoleCache;
 
     public TeamController(
         ApplicationDbContext db,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IUserRoleCacheService userRoleCache)
     {
         _db = db;
         _userManager = userManager;
+        _userRoleCache = userRoleCache;
     }
 
     public async Task<IActionResult> Index()
@@ -306,10 +310,11 @@ public class TeamController : Controller
         var userRoles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var usersById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
 
+        var allUsersByRole = await _userRoleCache.GetAllUsersByRoleAsync();
         foreach (var role in TeamRoles)
         {
-            var users = await _userManager.GetUsersInRoleAsync(role);
-            foreach (var user in users)
+            if (!allUsersByRole.TryGetValue(role, out var roleUsers)) continue;
+            foreach (var user in roleUsers)
             {
                 if (!IsCompanyVisibleToAdmin(user.CompanyName, currentCompanyName, currentAdminId, user.Id))
                     continue;

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
+using WFHMonitor.Services.Interfaces;
 using WFHMonitor.ViewModels;
 
 namespace WFHMonitor.Controllers;
@@ -35,11 +36,13 @@ public class AgentController : Controller
 
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserRoleCacheService _userRoleCache;
 
-    public AgentController(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+    public AgentController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, IUserRoleCacheService userRoleCache)
     {
         _db = db;
         _userManager = userManager;
+        _userRoleCache = userRoleCache;
     }
 
     public async Task<IActionResult> Index()
@@ -59,17 +62,18 @@ public class AgentController : Controller
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == 1);
 
-        var agentUsers = (await _userManager.GetUsersInRoleAsync("Agent"))
+        var agentUsers = (await _userRoleCache.GetUsersInRoleAsync("Agent"))
             .Where(u => IsCompanyVisibleToViewer(u.CompanyName, currentCompanyName, currentUserId, u.Id))
             .Where(u => IsVisibleToViewer(u.OrgTeamId, isAdmin, viewerTeamId))
             .OrderBy(u => u.FullName)
             .ToList();
 
+        var allUsersByRole = await _userRoleCache.GetAllUsersByRoleAsync();
         var employeeRoleMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var employeesById = new Dictionary<string, ApplicationUser>(StringComparer.OrdinalIgnoreCase);
         foreach (var role in EmployeeRoles)
         {
-            var users = await _userManager.GetUsersInRoleAsync(role);
+            if (!allUsersByRole.TryGetValue(role, out var users)) continue;
             foreach (var user in users)
             {
                 if (!IsCompanyVisibleToViewer(user.CompanyName, currentCompanyName, currentUserId, user.Id))

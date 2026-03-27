@@ -12,11 +12,13 @@ public class TaskBoardService : ITaskBoardService
 {
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserRoleCacheService _userRoleCache;
 
-    public TaskBoardService(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+    public TaskBoardService(ApplicationDbContext db, UserManager<ApplicationUser> userManager, IUserRoleCacheService userRoleCache)
     {
         _db = db;
         _userManager = userManager;
+        _userRoleCache = userRoleCache;
     }
 
     public async Task<TaskBoardViewModel> BuildBoardAsync(bool isAdmin, string? userId)
@@ -69,12 +71,10 @@ public class TaskBoardService : ITaskBoardService
     public async Task<List<SelectListItem>> GetAssigneeOptionsAsync()
     {
         var roles = new[] { "Employee", "Developer", "Agent" };
-        var usersByRole = new List<IList<ApplicationUser>>();
-        foreach (var role in roles)
-            usersByRole.Add(await _userManager.GetUsersInRoleAsync(role));
-
-        var users = usersByRole
-            .SelectMany(x => x)
+        var allUsersByRole = await _userRoleCache.GetAllUsersByRoleAsync();
+        var users = roles
+            .Where(r => allUsersByRole.ContainsKey(r))
+            .SelectMany(r => allUsersByRole[r])
             .GroupBy(u => u.Id)
             .Select(g => g.First())
             .ToList();

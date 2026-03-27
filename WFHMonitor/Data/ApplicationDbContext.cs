@@ -50,6 +50,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(u => u.CompanyName)
                 .HasMaxLength(200);
 
+            e.HasIndex(u => u.CompanyName);
+
             e.Property(u => u.ProfilePhotoPath)
                 .HasMaxLength(300);
 
@@ -91,6 +93,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(t => t.DueDate);
             e.HasIndex(t => t.ChangeRequestId);
             e.HasIndex(t => t.BugReportId);
+            e.HasIndex(t => t.CreatedById);
 
             e.HasOne(t => t.Assignee)
              .WithMany(u => u.AssignedTasks)
@@ -136,6 +139,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(c => c.CrNumber).IsUnique();
             e.HasIndex(c => c.Status);
             e.HasIndex(c => c.BugScanStatus);
+            e.HasIndex(c => c.CreatedById);
+            e.HasIndex(c => c.OrgTeamId);
 
             e.HasOne(c => c.CreatedBy)
              .WithMany()
@@ -203,6 +208,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(b => b.AssigneeType);
             e.HasIndex(b => b.AgentStatus);
             e.HasIndex(b => b.BugNumber).IsUnique();
+            e.HasIndex(b => b.CreatedById);
 
             e.Property(b => b.Severity)
              .HasConversion<string>()
@@ -354,6 +360,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(n => n.RecipientId);
             e.HasIndex(n => new { n.RecipientId, n.IsRead });
             e.HasIndex(n => n.CreatedAt);
+            e.HasIndex(n => new { n.RecipientId, n.CreatedAt });
 
             e.HasOne(n => n.Recipient)
              .WithMany(u => u.Notifications)

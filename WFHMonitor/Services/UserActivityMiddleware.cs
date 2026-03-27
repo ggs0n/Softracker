@@ -1,18 +1,20 @@
 using System.Collections.Concurrent;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Identity;
-using WFHMonitor.Models;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using WFHMonitor.Data;
 
 namespace WFHMonitor.Services;
 
 /// <summary>
-/// Stamps LastActivityAt on authenticated users. Throttled to once per 2 minutes per user
-/// to avoid excessive DB writes on every request.
+/// Stamps LastActivityAt on authenticated users. Throttled to once per 5 minutes per user.
+/// Uses raw SQL to avoid loading the full user entity.
 /// </summary>
 public sealed class UserActivityMiddleware
 {
     private static readonly ConcurrentDictionary<string, DateTime> LastStamped = new();
-    private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
+    private const int MaxDictionarySize = 500;
 
     private readonly RequestDelegate _next;
 
@@ -31,17 +33,25 @@ public sealed class UserActivityMiddleware
             if (shouldUpdate)
             {
                 LastStamped[userId] = now;
+                EvictStaleEntries(now);
 
-                var userManager = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
-                var user = await userManager.FindByIdAsync(userId);
-                if (user != null)
-                {
-                    user.LastActivityAt = now;
-                    await userManager.UpdateAsync(user);
-                }
+                var db = context.RequestServices.GetRequiredService<ApplicationDbContext>();
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE AspNetUsers SET LastActivityAt = {now} WHERE Id = {userId}");
             }
         }
 
         await _next(context);
+    }
+
+    private static void EvictStaleEntries(DateTime now)
+    {
+        if (LastStamped.Count <= MaxDictionarySize) return;
+
+        foreach (var kvp in LastStamped)
+        {
+            if ((now - kvp.Value) > TimeSpan.FromMinutes(10))
+                LastStamped.TryRemove(kvp.Key, out _);
+        }
     }
 }

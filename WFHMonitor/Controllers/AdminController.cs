@@ -16,15 +16,18 @@ public class AdminController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IUserRegistrationService _userRegistrationService;
+    private readonly IUserRoleCacheService _userRoleCache;
 
     public AdminController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
-        IUserRegistrationService userRegistrationService)
+        IUserRegistrationService userRegistrationService,
+        IUserRoleCacheService userRoleCache)
     {
         _db = db;
         _userManager = userManager;
         _userRegistrationService = userRegistrationService;
+        _userRoleCache = userRoleCache;
     }
 
     [Authorize(Roles = "Admin")]
@@ -44,9 +47,11 @@ public class AdminController : Controller
         var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var developerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        var allUsersByRole = await _userRoleCache.GetAllUsersByRoleAsync();
         foreach (var role in teamRoles)
         {
-            var users = (await _userManager.GetUsersInRoleAsync(role))
+            if (!allUsersByRole.TryGetValue(role, out var roleUsers)) continue;
+            var users = roleUsers
                 .Where(u => IsCompanyVisibleToAdmin(u.CompanyName, currentCompanyName, currentAdminId, u.Id))
                 .ToList();
             foreach (var user in users)
@@ -500,11 +505,12 @@ public class AdminController : Controller
         var currentAdminId = currentAdmin?.Id ?? string.Empty;
         var currentCompanyName = NormalizeCompanyName(currentAdmin?.CompanyName);
         var roles = new[] { "Employee", "Developer", "Tester", "Agent" };
+        var allUsersByRole = await _userRoleCache.GetAllUsersByRoleAsync();
         var items = new List<EmployeeListItem>();
         foreach (var role in roles)
         {
-            var users = await _userManager.GetUsersInRoleAsync(role);
-            items.AddRange(users
+            if (!allUsersByRole.TryGetValue(role, out var roleUsers)) continue;
+            items.AddRange(roleUsers
                 .Where(user => IsCompanyVisibleToAdmin(user.CompanyName, currentCompanyName, currentAdminId, user.Id))
                 .Select(user => new EmployeeListItem { Employee = user, Role = role }));
         }

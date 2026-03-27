@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build:*)",
-      "Bash(dotnet ef:*)"
+      "Bash(dotnet ef:*)",
+      "Bash(grep -r \"AddPooling\\\\|ConfigureAwait\" /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor --include=*.cs)",
+      "Bash(find /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor -name \"*.csproj\" -exec grep -l \"PackageReference\\\\|ItemGroup\" {})",
+      "Bash(find /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor/wwwroot -type f \\\\\\(-name *.css -o -name *.js \\\\\\))",
+      "Bash(grep -n \"Semaphore\\\\|SemaphoreSlim\\\\|Mutex\" /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor/Services/*.cs)",
+      "Bash(grep -n \"MaxBufferSize\\\\|MaxItems\" /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor/Services/*.cs)",
+      "Bash(grep -rn \"PublishOptions\\\\|Kestrel\\\\|MaxRequestBodySize\" /c/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor --include=*.cs --include=*.json)",
+      "Bash(ls c:/Users/A/source/repos/WFHMonitorDeveloper/WFHMonitor/appsettings*.json)",
+      "Bash(dotnet add:*)"
     ]
   }
 }

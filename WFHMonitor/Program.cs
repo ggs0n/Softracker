@@ -1,4 +1,8 @@
+using System.IO.Compression;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using WFHMonitor.Data;
@@ -8,8 +12,8 @@ using WFHMonitor.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")), poolSize: 128);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -65,6 +69,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueu
 builder.Services.AddSingleton<QaOpenClawQueueService>();
 builder.Services.AddSingleton<IQaOpenClawQueueService>(sp => sp.GetRequiredService<QaOpenClawQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<QaOpenClawQueueService>());
+builder.Services.AddScoped<IUserRoleCacheService, UserRoleCacheService>();
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
@@ -73,6 +78,32 @@ builder.Services.AddScoped<IOutlookCalendarSyncService, OutlookCalendarSyncServi
 builder.Services.AddScoped<IProjectMonitoringService, ProjectMonitoringService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddMemoryCache();
+builder.Services.AddResponseCompression(opts =>
+{
+    opts.EnableForHttps = true;
+    opts.Providers.Add<BrotliCompressionProvider>();
+    opts.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(opts => opts.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(opts => opts.Level = CompressionLevel.SmallestSize);
+
+builder.Services.AddRateLimiter(opts =>
+{
+    opts.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User?.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+    opts.RejectionStatusCode = 429;
+});
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>();
 
 builder.Services.AddControllersWithViews();
 
@@ -85,12 +116,19 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+app.UseResponseCompression();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+        ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=604800")
+});
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<WFHMonitor.Services.UserActivityMiddleware>();
 
+app.MapHealthChecks("/health");
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

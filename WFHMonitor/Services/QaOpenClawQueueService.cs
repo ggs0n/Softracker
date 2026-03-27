@@ -9,11 +9,12 @@ namespace WFHMonitor.Services;
 
 public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueueService
 {
-    private readonly Channel<QaOpenClawQueueItem> _queue = Channel.CreateUnbounded<QaOpenClawQueueItem>(
-        new UnboundedChannelOptions
+    private readonly Channel<QaOpenClawQueueItem> _queue = Channel.CreateBounded<QaOpenClawQueueItem>(
+        new BoundedChannelOptions(50)
         {
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
     private readonly IServiceScopeFactory _scopeFactory;
