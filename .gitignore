@@ -28,6 +28,7 @@ packages/
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Secrets.json
+appsettings.json
 *.pfx
 *.p12
 
