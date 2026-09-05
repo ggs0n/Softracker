@@ -330,8 +330,7 @@
                     }
                     else if (codexAuthStatus.IsAvailable)
                     {
-                        <form asp-controller="CodexAuth" asp-action="Connect" method="post" target="_blank" class="d-inline">
-                            @Html.AntiForgeryToken()
+                        <form asp-controller="CodexAuth" asp-action="Connect" method="get" class="d-inline">
                             <input type="hidden" name="returnUrl" value="@returnUrl" />
                             <button type="submit"
                                     class="btn btn-sm btn-outline-dark notification-btn"

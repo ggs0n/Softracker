@@ -49,3 +49,7 @@ dotnet test WFHMonitor.Tests/WFHMonitor.Tests.csproj
 ```
 
 The `/health` endpoint can be used to verify that the application and database are available.
+
+For a Windows desktop package with the existing interface embedded in WebView2, run `./publish-desktop.ps1` and then open `artifacts/SoftrackerDesktop/Softracker.exe`.
+The desktop host runs WFHMonitor only on a private localhost port and closes the local server when the desktop window exits.
+Full Codex readiness scans use temporary repository snapshots and remove the downloaded source after each scan completes.

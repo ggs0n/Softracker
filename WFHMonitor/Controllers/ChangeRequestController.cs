@@ -19,7 +19,7 @@ namespace WFHMonitor.Controllers;
 [Authorize]
 public class ChangeRequestController : Controller
 {
-    private static readonly HashSet<string> AllProjectsViewActions = [nameof(Index), nameof(Details)];
+    private static readonly HashSet<string> AllProjectsViewActions = [nameof(Index), nameof(Details), nameof(CodeReadiness)];
     private static readonly HashSet<string> FeaturesViewActions = [nameof(Features), nameof(FeatureDetails)];
     private static readonly HashSet<string> FeaturesModifyActions =
     [
@@ -38,6 +38,7 @@ public class ChangeRequestController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IGitHubService _gitHub;
     private readonly IProjectBugScanQueueService _projectBugScanQueueService;
+    private readonly ICodeReadinessScanQueueService _codeReadinessScanQueueService;
     private readonly IFeatureAgentQueueService _featureAgentQueueService;
     private readonly INotificationService _notificationService;
     private readonly ICodexBugScanService _codexBugScanService;
@@ -51,6 +52,7 @@ public class ChangeRequestController : Controller
         UserManager<ApplicationUser> userManager,
         IGitHubService gitHub,
         IProjectBugScanQueueService projectBugScanQueueService,
+        ICodeReadinessScanQueueService codeReadinessScanQueueService,
         IFeatureAgentQueueService featureAgentQueueService,
         INotificationService notificationService,
         ICodexBugScanService codexBugScanService,
@@ -63,6 +65,7 @@ public class ChangeRequestController : Controller
         _userManager = userManager;
         _gitHub = gitHub;
         _projectBugScanQueueService = projectBugScanQueueService;
+        _codeReadinessScanQueueService = codeReadinessScanQueueService;
         _featureAgentQueueService = featureAgentQueueService;
         _notificationService = notificationService;
         _codexBugScanService = codexBugScanService;
@@ -700,6 +703,162 @@ public class ChangeRequestController : Controller
         }
 
         return View(cr);
+    }
+
+    public async Task<IActionResult> CodeReadiness(int id)
+    {
+        var project = await _db.ChangeRequests
+            .Include(c => c.Features)
+            .Include(c => c.RepositoryFeatures)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (project == null)
+            return NotFound();
+        if (!await CanViewProjectAsync(project.Id))
+            return Forbid();
+
+        var bugs = await _db.BugReports
+            .Where(b => b.ChangeRequestId == id)
+            .AsNoTracking()
+            .ToListAsync();
+        var testCases = await _db.TestCases
+            .Where(t => t.ChangeRequestId == id)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var repositoryPaths = new List<string>();
+        var detectedModules = new List<DetectedRepositoryModule>();
+        GitHubCommit? latestCommit = null;
+        string? scanError = null;
+        var repositoryConnected = TryResolveGitHubConfig(project, out var owner, out var repo, out var branch);
+        branch = string.IsNullOrWhiteSpace(branch) ? "main" : branch;
+
+        if (repositoryConnected)
+        {
+            try
+            {
+                repositoryPaths = await _gitHub.GetRepoTreeAsync(owner, repo, branch);
+                detectedModules = FeatureDetector.DetectModules(repositoryPaths);
+                latestCommit = (await _gitHub.GetCommitsAsync(owner, repo, branch, 1)).FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                scanError = ex.Message;
+            }
+        }
+
+        var model = BuildCodeReadinessViewModel(
+            project,
+            repositoryPaths,
+            detectedModules,
+            bugs,
+            testCases,
+            repositoryConnected,
+            owner,
+            repo,
+            branch,
+            latestCommit,
+            scanError);
+
+        ApplyCodexCodeReadinessResult(model, project, owner, repo, branch);
+        model.CodexAgentOptions = GetCodexScanAgentOptions();
+
+        return View(model);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin,Tester,Developer")]
+    public async Task<IActionResult> StartCodeReadinessScan(int id, string? scanAgentId)
+    {
+        var project = await _db.ChangeRequests.FirstOrDefaultAsync(change => change.Id == id);
+        if (project is null)
+            return NotFound();
+        if (!await CanViewProjectAsync(project.Id))
+            return Forbid();
+
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        var currentUser = await _userManager.FindByIdAsync(userId);
+        var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
+        if (currentUser is null || !HasCodexAccess(currentUser, planSettings))
+        {
+            TempData["Error"] = planSettings.EnableCodexAgents
+                ? "A plan with Codex access is required for a full source scan."
+                : "Codex agents are temporarily disabled by admin.";
+            return RedirectToAction(nameof(CodeReadiness), new { id });
+        }
+
+        if (!TryResolveGitHubConfig(project, out _, out _, out _))
+        {
+            TempData["Error"] = "Connect a valid GitHub repository before starting a full source scan.";
+            return RedirectToAction(nameof(CodeReadiness), new { id });
+        }
+
+        if (project.CodeReadinessScanStatus is CodeReadinessScanStatus.Queued or CodeReadinessScanStatus.InProgress)
+        {
+            TempData["Info"] = "A Code Readiness source scan is already running.";
+            return RedirectToAction(nameof(CodeReadiness), new { id });
+        }
+
+        var configuredAgents = CodexBugScanService.GetConfiguredAgentIds(_codexSettings);
+        var selectedAgent = string.IsNullOrWhiteSpace(scanAgentId)
+            ? configuredAgents.FirstOrDefault()
+            : scanAgentId.Trim();
+        if (!string.IsNullOrWhiteSpace(selectedAgent) &&
+            configuredAgents.Count > 0 &&
+            !configuredAgents.Contains(selectedAgent, StringComparer.OrdinalIgnoreCase))
+        {
+            TempData["Error"] = "The selected Codex model is not allowed by configuration.";
+            return RedirectToAction(nameof(CodeReadiness), new { id });
+        }
+
+        project.CodeReadinessScanStatus = CodeReadinessScanStatus.Queued;
+        project.CodeReadinessScanAgentId = selectedAgent;
+        project.CodeReadinessScanMessage = "Full source scan queued.";
+        project.CodeReadinessScanStartedAt = null;
+        project.CodeReadinessScanCompletedAt = null;
+        await _db.SaveChangesAsync();
+
+        try
+        {
+            await _codeReadinessScanQueueService.EnqueueAsync(new CodeReadinessScanQueueItem(
+                project.Id,
+                userId,
+                selectedAgent));
+            TempData["Success"] = "Full source scan queued. You can remain on this page while it runs.";
+        }
+        catch (Exception ex)
+        {
+            project.CodeReadinessScanStatus = CodeReadinessScanStatus.Failed;
+            project.CodeReadinessScanMessage = ex.Message.Length <= 500 ? ex.Message : ex.Message[..500];
+            project.CodeReadinessScanCompletedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            TempData["Error"] = "Unable to queue the Code Readiness scan.";
+        }
+
+        return RedirectToAction(nameof(CodeReadiness), new { id });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetCodeReadinessScanStatus(int id)
+    {
+        if (!await CanViewProjectAsync(id))
+            return Forbid();
+
+        var state = await _db.ChangeRequests
+            .Where(change => change.Id == id)
+            .Select(change => new
+            {
+                status = change.CodeReadinessScanStatus.ToString(),
+                message = change.CodeReadinessScanMessage,
+                startedAtUtc = change.CodeReadinessScanStartedAt,
+                completedAtUtc = change.CodeReadinessScanCompletedAt,
+                commitSha = change.CodeReadinessScanCommitSha
+            })
+            .FirstOrDefaultAsync();
+        return state is null ? NotFound() : Json(state);
     }
 
     [Authorize(Roles = "Admin")]
@@ -1975,6 +2134,520 @@ public class ChangeRequestController : Controller
             };
 
         return Math.Clamp(score, 0, 100);
+    }
+
+    private static CodeReadinessViewModel BuildCodeReadinessViewModel(
+        ChangeRequest project,
+        IReadOnlyCollection<string> repositoryPaths,
+        IReadOnlyCollection<DetectedRepositoryModule> detectedModules,
+        IReadOnlyCollection<BugReport> bugs,
+        IReadOnlyCollection<TestCase> testCases,
+        bool repositoryConnected,
+        string owner,
+        string repo,
+        string branch,
+        GitHubCommit? latestCommit,
+        string? scanError)
+    {
+        var paths = repositoryPaths
+            .Select(path => path.Replace('\\', '/').Trim('/'))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var files = paths.Where(path => Path.HasExtension(path)).ToList();
+        var sourceExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cs", ".cshtml", ".razor", ".js", ".ts", ".tsx", ".jsx", ".java", ".py", ".go", ".rb", ".php", ".cpp", ".c", ".h"
+        };
+        var sourceFiles = files
+            .Where(path => sourceExtensions.Contains(Path.GetExtension(path)))
+            .ToList();
+
+        bool HasPath(Func<string, bool> predicate) => paths.Any(predicate);
+        bool ContainsSegment(string path, params string[] segments) => segments.Any(segment =>
+            path.Contains($"/{segment}/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith($"{segment}/", StringComparison.OrdinalIgnoreCase));
+
+        var hasBuildManifest = HasPath(path =>
+            path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("package.json", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("pom.xml", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("build.gradle", StringComparison.OrdinalIgnoreCase));
+        var buildManifest = paths.FirstOrDefault(path =>
+            path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("package.json", StringComparison.OrdinalIgnoreCase));
+        var hasAutomatedTests = HasPath(path =>
+            (path.Contains("test", StringComparison.OrdinalIgnoreCase) || path.Contains("spec", StringComparison.OrdinalIgnoreCase)) &&
+            (sourceExtensions.Contains(Path.GetExtension(path)) || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)));
+        var hasCi = HasPath(path =>
+            path.StartsWith(".github/workflows/", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("azure-pipelines.yml", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".gitlab-ci.yml", StringComparison.OrdinalIgnoreCase));
+        var hasReadme = HasPath(path => Path.GetFileName(path).StartsWith("README", StringComparison.OrdinalIgnoreCase));
+        var hasSafeConfigTemplate = HasPath(path =>
+            path.Contains("appsettings.example", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".env.example", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".env.sample", StringComparison.OrdinalIgnoreCase));
+        var repositoryScanned = repositoryConnected && string.IsNullOrWhiteSpace(scanError);
+
+        var webLayerFiles = sourceFiles.Count(path => ContainsSegment(path, "Controllers", "Views", "Pages", "Components") ||
+            path.StartsWith("Controllers/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("Views/", StringComparison.OrdinalIgnoreCase));
+        var serviceLayerFiles = sourceFiles.Count(path => ContainsSegment(path, "Services", "Application", "UseCases") ||
+            path.StartsWith("Services/", StringComparison.OrdinalIgnoreCase));
+        var domainLayerFiles = sourceFiles.Count(path => ContainsSegment(path, "Models", "Domain", "Entities") ||
+            path.StartsWith("Models/", StringComparison.OrdinalIgnoreCase));
+        var dataLayerFiles = sourceFiles.Count(path => ContainsSegment(path, "Data", "Infrastructure", "Repositories", "Persistence") ||
+            path.StartsWith("Data/", StringComparison.OrdinalIgnoreCase));
+        var detectedLayerCount = new[] { webLayerFiles, serviceLayerFiles, domainLayerFiles, dataLayerFiles }.Count(count => count > 0);
+
+        var openBugs = bugs.Where(bug => bug.Status != BugStatus.Complete).ToList();
+        var criticalOpenBugs = openBugs.Count(bug => bug.Severity == BugSeverity.Critical);
+        var highOpenBugs = openBugs.Count(bug => bug.Severity == BugSeverity.High);
+        var failedTests = testCases.Count(test => test.Status == TestCaseStatus.Fail);
+        var pendingTests = testCases.Count(test => test.Status == TestCaseStatus.Pending);
+        var skippedTests = testCases.Count(test => test.Status == TestCaseStatus.Skip);
+        var passedTests = testCases.Count(test => test.Status == TestCaseStatus.Pass);
+        var incompleteFeatures = project.Features.Count(feature =>
+            !feature.IsCompleted && feature.Status is not CrStatus.Done and not CrStatus.Approved);
+        var completedFeatures = Math.Max(0, project.Features.Count - incompleteFeatures);
+
+        var buildScore = repositoryScanned
+            ? 30 + (hasBuildManifest ? 35 : 0) + (hasCi ? 20 : 0) + (hasSafeConfigTemplate ? 15 : 0)
+            : 0;
+        var testScore = hasAutomatedTests ? 55 : repositoryScanned ? 10 : 0;
+        if (testCases.Count > 0)
+            testScore += (int)Math.Round(45.0 * passedTests / testCases.Count);
+        else if (hasAutomatedTests)
+            testScore += 20;
+        testScore = Math.Clamp(testScore - (failedTests * 12) - (skippedTests * 2), 0, 100);
+
+        var securityScore = repositoryConnected ? 85 : 20;
+        securityScore = Math.Clamp(securityScore - (criticalOpenBugs * 25) - (highOpenBugs * 10) - (hasSafeConfigTemplate ? 0 : 10), 0, 100);
+        var maintainabilityScore = repositoryScanned
+            ? 25 + (detectedLayerCount * 12) + (hasReadme ? 12 : 0) + (!string.IsNullOrWhiteSpace(project.ArchSpecLink) ? 15 : 0)
+            : 10;
+        maintainabilityScore = Math.Clamp(maintainabilityScore, 0, 100);
+
+        var featureCompletion = project.Features.Count == 0 ? 35 : (int)Math.Round(60.0 * completedFeatures / project.Features.Count);
+        var bugCompletion = bugs.Count == 0 ? 20 : (int)Math.Round(20.0 * (bugs.Count - openBugs.Count) / bugs.Count);
+        var qaCompletion = testCases.Count == 0 ? 5 : (int)Math.Round(20.0 * passedTests / testCases.Count);
+        var completenessScore = Math.Clamp(featureCompletion + bugCompletion + qaCompletion, 0, 100);
+
+        var categories = new List<CodeReadinessCategoryViewModel>
+        {
+            BuildReadinessCategory("Build", buildScore, !repositoryScanned ? "Repository scan unavailable." : hasBuildManifest ? "Build manifest detected; build execution is not run by this safe metadata scan." : "No supported build manifest detected.", "bi-hammer"),
+            BuildReadinessCategory("Tests", testScore, !repositoryScanned ? $"Repository test assets unavailable; {failedTests} tracked QA failure(s)." : hasAutomatedTests ? $"Automated test assets detected; {failedTests} tracked QA failure(s)." : "No automated test assets detected in the repository tree.", "bi-clipboard-check"),
+            BuildReadinessCategory("Security", securityScore, $"Based on {criticalOpenBugs} critical and {highOpenBugs} high open tracked bug(s); source security analysis is pending.", "bi-shield-check"),
+            BuildReadinessCategory("Maintainability", maintainabilityScore, repositoryScanned ? $"{detectedLayerCount}/4 common architecture layers and {(hasReadme ? "repository documentation" : "no README")} detected." : "Repository structure scan unavailable.", "bi-braces"),
+            BuildReadinessCategory("Completeness", completenessScore, $"{incompleteFeatures} incomplete feature(s), {openBugs.Count} open bug(s), and {pendingTests} pending QA case(s).", "bi-file-earmark-check")
+        };
+
+        var findings = new List<CodeReadinessFindingViewModel>();
+        void AddFinding(string severity, string category, string title, string description, string? location = null, int confidence = 100)
+        {
+            findings.Add(new CodeReadinessFindingViewModel
+            {
+                Severity = severity,
+                Category = category,
+                Title = title,
+                Description = description,
+                Location = location,
+                CodeUrl = location is null || string.IsNullOrWhiteSpace(project.GitHubRepoUrl)
+                    ? null
+                    : BuildGitHubFileUrl(project.GitHubRepoUrl, branch, location),
+                Confidence = confidence
+            });
+        }
+
+        if (!repositoryConnected)
+            AddFinding("Critical", "Repository", "GitHub repository is not connected", "Connect a repository before code-readiness checks can run.");
+        else if (!string.IsNullOrWhiteSpace(scanError))
+            AddFinding("High", "Repository", "Repository metadata could not be scanned", scanError);
+        if (repositoryScanned && !hasBuildManifest)
+            AddFinding("High", "Build", "No supported build manifest detected", "Add a solution, project, package, Maven, or Gradle build manifest.");
+        if (repositoryScanned && !hasAutomatedTests)
+            AddFinding("High", "Testing", "No automated test assets detected", "Add automated tests and keep them in a clearly named test project or directory.");
+        if (failedTests > 0)
+            AddFinding("High", "Testing", $"{failedTests} tracked QA test(s) are failing", "Resolve failing test cases before treating the project as release ready.");
+        if (repositoryScanned && !hasCi)
+            AddFinding("Medium", "Delivery", "No CI workflow detected", "Add a workflow that restores dependencies, builds the project, and runs tests for each change.");
+        if (repositoryScanned && !hasSafeConfigTemplate)
+            AddFinding("Medium", "Security", "No safe configuration template detected", "Provide example settings without credentials so deployments have an explicit configuration contract.");
+        if (criticalOpenBugs > 0)
+            AddFinding("Critical", "Reliability", $"{criticalOpenBugs} critical bug(s) remain open", "Resolve or explicitly accept critical risks before release.");
+        if (highOpenBugs > 0)
+            AddFinding("High", "Reliability", $"{highOpenBugs} high-severity bug(s) remain open", "Prioritize these issues in the next stabilization pass.");
+        if (incompleteFeatures > 0)
+            AddFinding("Medium", "Completeness", $"{incompleteFeatures} feature(s) are not complete", "Review acceptance criteria and connect each feature to passing QA evidence.");
+        if (repositoryScanned && !hasReadme)
+            AddFinding("Low", "Documentation", "README is missing", "Document setup, configuration, testing, and deployment steps.");
+        if (repositoryScanned && detectedLayerCount < 3)
+            AddFinding("Medium", "Architecture", "Application layer structure is unclear", "Review boundaries between web, application, domain, and data responsibilities.", confidence: 75);
+
+        var severityOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Critical"] = 0,
+            ["High"] = 1,
+            ["Medium"] = 2,
+            ["Low"] = 3
+        };
+        findings = findings
+            .OrderBy(finding => severityOrder.GetValueOrDefault(finding.Severity, 4))
+            .ThenBy(finding => finding.Category)
+            .ToList();
+
+        var score = (int)Math.Round(categories.Average(category => category.Score));
+        var label = !repositoryConnected ? "Not Ready" : score switch
+        {
+            >= 85 => "Ready",
+            >= 65 => "Needs Attention",
+            _ => "Critical"
+        };
+        var dependencyCount = string.IsNullOrWhiteSpace(project.TechnologyStack)
+            ? 0
+            : project.TechnologyStack.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+        var relatedModules = BuildRelatedModules(project, bugs, testCases, detectedModules, branch);
+
+        return new CodeReadinessViewModel
+        {
+            Project = project,
+            RepositoryConnected = repositoryConnected,
+            RepositoryName = repositoryConnected ? $"{owner}/{repo}" : "Not connected",
+            Branch = repositoryConnected ? branch : "-",
+            CommitSha = latestCommit?.Sha,
+            RepositoryUrl = project.GitHubRepoUrl,
+            Score = score,
+            Label = label,
+            Summary = repositoryScanned
+                ? $"Repository metadata and project delivery signals found {findings.Count} item(s) requiring review."
+                : repositoryConnected
+                    ? "The repository is connected, but its metadata could not be scanned."
+                : "Connect a GitHub repository to begin the code-readiness assessment.",
+            ScannedAtUtc = DateTime.UtcNow,
+            ScanError = scanError,
+            SourceFileCount = sourceFiles.Count,
+            ModuleCount = Math.Max(relatedModules.Count, detectedLayerCount),
+            DependencyCount = dependencyCount,
+            OpenBugCount = openBugs.Count,
+            FailedTestCount = failedTests,
+            PendingTestCount = pendingTests,
+            IncompleteFeatureCount = incompleteFeatures,
+            Categories = categories,
+            Findings = findings,
+            ArchitectureLayers =
+            [
+                new() { Name = "Web Layer", Description = "HTTP endpoints, pages, and user interface", Icon = "bi-window", FileCount = webLayerFiles },
+                new() { Name = "Application Services", Description = "Business workflows and integrations", Icon = "bi-gear", FileCount = serviceLayerFiles },
+                new() { Name = "Domain & Models", Description = "Core entities and business concepts", Icon = "bi-box", FileCount = domainLayerFiles },
+                new() { Name = "Data & Infrastructure", Description = "Persistence and external resources", Icon = "bi-database", FileCount = dataLayerFiles }
+            ],
+            SolidChecks =
+            [
+                new() { Principle = "SRP", Name = "Single Responsibility", Status = "Source review required" },
+                new() { Principle = "OCP", Name = "Open/Closed", Status = "Source review required" },
+                new() { Principle = "LSP", Name = "Liskov Substitution", Status = "Source review required" },
+                new() { Principle = "ISP", Name = "Interface Segregation", Status = "Source review required" },
+                new() { Principle = "DIP", Name = "Dependency Inversion", Status = detectedLayerCount >= 3 ? "Layer structure detected; source review pending" : "Layer structure needs review" }
+            ],
+            RelatedModules = relatedModules
+        };
+    }
+
+    private static CodeReadinessCategoryViewModel BuildReadinessCategory(string name, int score, string detail, string icon) =>
+        new()
+        {
+            Name = name,
+            Score = Math.Clamp(score, 0, 100),
+            Status = score >= 85 ? "Passed" : score >= 65 ? "Needs Work" : "At Risk",
+            Detail = detail,
+            Icon = icon
+        };
+
+    private static string BuildGitHubFileUrl(string repositoryUrl, string branch, string path)
+    {
+        var baseUrl = repositoryUrl.Trim().TrimEnd('/');
+        if (baseUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            baseUrl = baseUrl[..^4];
+
+        var safeBranch = string.Join('/', branch.Split('/').Select(Uri.EscapeDataString));
+        var safePath = string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+        return $"{baseUrl}/blob/{safeBranch}/{safePath}";
+    }
+
+    private static List<CodeReadinessModuleViewModel> BuildRelatedModules(
+        ChangeRequest project,
+        IReadOnlyCollection<BugReport> bugs,
+        IReadOnlyCollection<TestCase> testCases,
+        IReadOnlyCollection<DetectedRepositoryModule> detectedModules,
+        string branch)
+    {
+        static IEnumerable<string> Expand(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return [];
+
+            return value
+                .Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(name => !string.IsNullOrWhiteSpace(name) && name != "-");
+        }
+
+        static bool Matches(string? value, string module) =>
+            Expand(value).Any(name => name.Equals(module, StringComparison.OrdinalIgnoreCase));
+
+        var repositoryModuleNames = detectedModules.Count > 0
+            ? detectedModules.Select(module => module.Name)
+            : project.RepositoryFeatures.SelectMany(feature => Expand(feature.Name));
+        var moduleNames = repositoryModuleNames
+            .Concat(project.Features.SelectMany(feature => Expand(feature.ModuleImpacted)))
+            .Concat(bugs.SelectMany(bug => Expand(bug.ModuleImpacted)))
+            .Concat(testCases.SelectMany(test => Expand(test.Module)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return moduleNames
+            .Select(module =>
+            {
+                var detectedModule = detectedModules.FirstOrDefault(item => item.Name.Equals(module, StringComparison.OrdinalIgnoreCase));
+                var repositorySignals = detectedModule?.EvidencePaths.Count ??
+                    project.RepositoryFeatures.Count(feature => Matches(feature.Name, module));
+                var relatedFeatures = project.Features.Where(feature => Matches(feature.ModuleImpacted, module)).ToList();
+                var incompleteFeatures = relatedFeatures.Count(feature =>
+                    !feature.IsCompleted && feature.Status is not CrStatus.Done and not CrStatus.Approved);
+                var relatedBugs = bugs.Where(bug => Matches(bug.ModuleImpacted, module)).ToList();
+                var openBugs = relatedBugs.Count(bug => bug.Status != BugStatus.Complete);
+                var relatedTests = testCases.Where(test => Matches(test.Module, module)).ToList();
+                var failedTests = relatedTests.Count(test => test.Status == TestCaseStatus.Fail);
+                var pendingTests = relatedTests.Count(test => test.Status == TestCaseStatus.Pending);
+                var score = 100;
+                score -= Math.Min(40, openBugs * 12);
+                score -= Math.Min(30, failedTests * 15);
+                score -= Math.Min(24, incompleteFeatures * 8);
+                score -= Math.Min(16, pendingTests * 4);
+                if (relatedTests.Count == 0)
+                    score -= 15;
+                if (relatedFeatures.Count == 0 && relatedBugs.Count == 0 && relatedTests.Count == 0)
+                    score = Math.Min(score, 65);
+                score = Math.Clamp(score, 0, 100);
+
+                return new CodeReadinessModuleViewModel
+                {
+                    Name = module,
+                    Score = score,
+                    Status = score >= 85 ? "Ready" : score >= 65 ? "Needs Attention" : "At Risk",
+                    RepositorySignalCount = repositorySignals,
+                    FeatureCount = relatedFeatures.Count,
+                    IncompleteFeatureCount = incompleteFeatures,
+                    OpenBugCount = openBugs,
+                    TestCount = relatedTests.Count,
+                    FailedTestCount = failedTests,
+                    PendingTestCount = pendingTests,
+                    EvidencePaths = detectedModule?.EvidencePaths.Take(3).ToList() ?? [],
+                    CodeUrl = detectedModule?.EvidencePaths.FirstOrDefault() is { } evidencePath &&
+                              !string.IsNullOrWhiteSpace(project.GitHubRepoUrl)
+                        ? BuildGitHubFileUrl(project.GitHubRepoUrl, branch, evidencePath)
+                        : null
+                };
+            })
+            .OrderBy(module => module.Score)
+            .ThenBy(module => module.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void ApplyCodexCodeReadinessResult(
+        CodeReadinessViewModel model,
+        ChangeRequest project,
+        string owner,
+        string repository,
+        string branch)
+    {
+        model.DeepScanStatus = project.CodeReadinessScanStatus;
+        model.DeepScanStatusText = project.CodeReadinessScanStatus switch
+        {
+            CodeReadinessScanStatus.Queued => "Queued",
+            CodeReadinessScanStatus.InProgress => "Scanning source",
+            CodeReadinessScanStatus.Completed => "Source scan complete",
+            CodeReadinessScanStatus.Failed => "Source scan failed",
+            _ => "Not started"
+        };
+        model.DeepScanMessage = project.CodeReadinessScanMessage;
+        model.DeepScanCompletedAtUtc = project.CodeReadinessScanCompletedAt;
+
+        if (project.CodeReadinessScanStatus != CodeReadinessScanStatus.Completed ||
+            string.IsNullOrWhiteSpace(project.CodeReadinessScanResultJson))
+        {
+            return;
+        }
+
+        CodexCodeReadinessResult? result;
+        try
+        {
+            result = JsonSerializer.Deserialize<CodexCodeReadinessResult>(
+                project.CodeReadinessScanResultJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            model.DeepScanStatus = CodeReadinessScanStatus.Failed;
+            model.DeepScanStatusText = "Stored result unavailable";
+            model.DeepScanMessage = "The last source scan result could not be read.";
+            return;
+        }
+
+        if (result is null || !result.Succeeded)
+            return;
+
+        model.UsedCodexSourceScan = true;
+        model.CodexAnalyzedFileCount = result.AnalyzedFiles;
+        model.SourceFileCount = Math.Max(model.SourceFileCount, result.AnalyzedFiles);
+        model.Score = Math.Clamp(result.Score, 0, 100);
+        model.Label = model.Score >= 85 ? "Ready" : model.Score >= 65 ? "Needs Attention" : "At Risk";
+        if (!string.IsNullOrWhiteSpace(result.Summary))
+            model.Summary = result.Summary;
+        if (project.CodeReadinessScanCompletedAt.HasValue)
+            model.ScannedAtUtc = project.CodeReadinessScanCompletedAt.Value;
+        if (!string.IsNullOrWhiteSpace(project.CodeReadinessScanCommitSha))
+            model.CommitSha = project.CodeReadinessScanCommitSha.Length > 7
+                ? project.CodeReadinessScanCommitSha[..7]
+                : project.CodeReadinessScanCommitSha;
+
+        if (result.Categories.Count > 0)
+        {
+            model.Categories = result.Categories.Select(category => new CodeReadinessCategoryViewModel
+            {
+                Name = category.Name,
+                Score = Math.Clamp(category.Score, 0, 100),
+                Status = category.Score >= 85 ? "Passed" : category.Score >= 65 ? "Review" : "At Risk",
+                Detail = category.Summary,
+                Icon = category.Name.ToLowerInvariant() switch
+                {
+                    "tests" => "bi-clipboard-check",
+                    "security" => "bi-shield-check",
+                    "maintainability" => "bi-wrench-adjustable",
+                    "completeness" => "bi-file-earmark-check",
+                    _ => "bi-diagram-3"
+                }
+            }).ToList();
+        }
+
+        var repositoryUrl = !string.IsNullOrWhiteSpace(project.GitHubRepoUrl)
+            ? project.GitHubRepoUrl
+            : !string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repository)
+                ? $"https://github.com/{owner}/{repository}"
+                : string.Empty;
+        var sourceFindings = result.Findings.Select(finding =>
+        {
+            var location = string.IsNullOrWhiteSpace(finding.File)
+                ? null
+                : finding.Line.HasValue ? $"{finding.File}:{finding.Line}" : finding.File;
+            var description = finding.Evidence;
+            if (!string.IsNullOrWhiteSpace(finding.Recommendation))
+                description = $"{description} Recommended: {finding.Recommendation}".Trim();
+            var safeFile = !string.IsNullOrWhiteSpace(finding.File) &&
+                           !finding.File.Contains("..", StringComparison.Ordinal) &&
+                           !Path.IsPathRooted(finding.File);
+
+            return new CodeReadinessFindingViewModel
+            {
+                Severity = finding.Severity,
+                Category = finding.Principle is "SRP" or "OCP" or "LSP" or "ISP" or "DIP"
+                    ? $"SOLID / {finding.Principle}"
+                    : finding.Category,
+                Title = finding.Title,
+                Description = description,
+                Location = location,
+                CodeUrl = safeFile && !string.IsNullOrWhiteSpace(repositoryUrl)
+                    ? BuildGitHubFileUrl(repositoryUrl, branch, finding.File)
+                    : null,
+                Confidence = Math.Clamp(finding.Confidence, 0, 100)
+            };
+        }).ToList();
+
+        model.Findings = sourceFindings
+            .Concat(model.Findings)
+            .GroupBy(finding => $"{finding.Title}|{finding.Location}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        model.DesignPatterns = (result.DesignPatterns ?? [])
+            .Select(pattern => new CodeReadinessDesignPatternViewModel
+            {
+                Name = pattern.Name,
+                Category = pattern.Category,
+                Status = pattern.Status,
+                Summary = pattern.Summary,
+                Confidence = Math.Clamp(pattern.Confidence, 0, 100),
+                EvidenceFiles = (pattern.Files ?? [])
+                    .Where(file => !string.IsNullOrWhiteSpace(file))
+                    .Select(file => new CodeReadinessPatternEvidenceViewModel
+                    {
+                        Path = file,
+                        CodeUrl = !file.Contains("..", StringComparison.Ordinal) &&
+                                  !Path.IsPathRooted(file) &&
+                                  !string.IsNullOrWhiteSpace(repositoryUrl)
+                            ? BuildGitHubFileUrl(repositoryUrl, branch, file)
+                            : null
+                    })
+                    .ToList()
+            })
+            .ToList();
+
+        model.OwaspAssessments = (result.Owasp ?? [])
+            .Select(assessment =>
+            {
+                var safeFile = !string.IsNullOrWhiteSpace(assessment.File) &&
+                               !assessment.File.Contains("..", StringComparison.Ordinal) &&
+                               !Path.IsPathRooted(assessment.File);
+                var location = safeFile
+                    ? assessment.Line.HasValue
+                        ? $"{assessment.File}:{assessment.Line.Value}"
+                        : assessment.File
+                    : null;
+                return new CodeReadinessOwaspViewModel
+                {
+                    Id = assessment.Id,
+                    Name = assessment.Name,
+                    Status = assessment.Status,
+                    Summary = assessment.Summary,
+                    Evidence = assessment.Evidence,
+                    Recommendation = assessment.Recommendation,
+                    Location = location,
+                    CodeUrl = safeFile && !string.IsNullOrWhiteSpace(repositoryUrl)
+                        ? BuildGitHubFileUrl(repositoryUrl, branch, assessment.File)
+                        : null,
+                    Confidence = Math.Clamp(assessment.Confidence, 0, 100)
+                };
+            })
+            .ToList();
+
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SRP"] = "Single Responsibility",
+            ["OCP"] = "Open/Closed",
+            ["LSP"] = "Liskov Substitution",
+            ["ISP"] = "Interface Segregation",
+            ["DIP"] = "Dependency Inversion"
+        };
+        var checks = result.Solid
+            .GroupBy(check => check.Principle, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        model.SolidChecks = names.Select(entry =>
+        {
+            checks.TryGetValue(entry.Key, out var check);
+            var status = check is null
+                ? "Unknown - source scan returned no conclusion"
+                : $"{check.Status} - {check.Summary}";
+            return new CodeReadinessSolidCheckViewModel
+            {
+                Principle = entry.Key,
+                Name = entry.Value,
+                Status = status
+            };
+        }).ToList();
     }
 
     private static ProjectHealthViewModel BuildFallbackProjectHealth(

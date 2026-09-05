@@ -274,8 +274,18 @@ public class GitHubService : IGitHubService
 
     private async Task<string> SendGitHubGetAsync(string url)
     {
-        var request = await CreateRequestAsync(HttpMethod.Get, url);
-        var response = await _http.SendAsync(request);
+        using var request = await CreateRequestAsync(HttpMethod.Get, url);
+        using var response = await _http.SendAsync(request);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            using var publicRequest = new HttpRequestMessage(HttpMethod.Get, url);
+            publicRequest.Headers.UserAgent.ParseAdd("WFHMonitor/1.0");
+            publicRequest.Headers.Accept.ParseAdd("application/vnd.github+json");
+            using var publicResponse = await _http.SendAsync(publicRequest);
+            if (publicResponse.IsSuccessStatusCode)
+                return await publicResponse.Content.ReadAsStringAsync();
+        }
 
         if (!response.IsSuccessStatusCode)
         {

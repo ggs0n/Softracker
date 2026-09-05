@@ -17,6 +17,7 @@ publish/
 **/publish/
 **/PublishProfiles/
 /.wfhtmp/
+/artifacts/
 
 ## NuGet
 *.nupkg

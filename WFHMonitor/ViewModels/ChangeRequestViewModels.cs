@@ -152,3 +152,119 @@ public class ProjectHealthViewModel
     public bool UsedCodex { get; set; }
     public string? Error { get; set; }
 }
+
+public class CodeReadinessViewModel
+{
+    public ChangeRequest Project { get; set; } = new();
+    public string RepositoryName { get; set; } = "Not connected";
+    public string Branch { get; set; } = "-";
+    public string? CommitSha { get; set; }
+    public string? RepositoryUrl { get; set; }
+    public bool RepositoryConnected { get; set; }
+    public int Score { get; set; }
+    public string Label { get; set; } = "Not Scanned";
+    public string Summary { get; set; } = string.Empty;
+    public DateTime ScannedAtUtc { get; set; }
+    public string? ScanError { get; set; }
+    public CodeReadinessScanStatus DeepScanStatus { get; set; }
+    public string DeepScanStatusText { get; set; } = "Not started";
+    public string? DeepScanMessage { get; set; }
+    public DateTime? DeepScanCompletedAtUtc { get; set; }
+    public bool UsedCodexSourceScan { get; set; }
+    public int CodexAnalyzedFileCount { get; set; }
+    public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> CodexAgentOptions { get; set; } = [];
+    public int SourceFileCount { get; set; }
+    public int ModuleCount { get; set; }
+    public int DependencyCount { get; set; }
+    public int OpenBugCount { get; set; }
+    public int FailedTestCount { get; set; }
+    public int PendingTestCount { get; set; }
+    public int IncompleteFeatureCount { get; set; }
+    public List<CodeReadinessCategoryViewModel> Categories { get; set; } = [];
+    public List<CodeReadinessFindingViewModel> Findings { get; set; } = [];
+    public List<CodeReadinessLayerViewModel> ArchitectureLayers { get; set; } = [];
+    public List<CodeReadinessSolidCheckViewModel> SolidChecks { get; set; } = [];
+    public List<CodeReadinessDesignPatternViewModel> DesignPatterns { get; set; } = [];
+    public List<CodeReadinessOwaspViewModel> OwaspAssessments { get; set; } = [];
+    public List<CodeReadinessModuleViewModel> RelatedModules { get; set; } = [];
+}
+
+public class CodeReadinessCategoryViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public int Score { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public string Icon { get; set; } = "bi-circle";
+}
+
+public class CodeReadinessFindingViewModel
+{
+    public string Severity { get; set; } = "Low";
+    public string Category { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public string? CodeUrl { get; set; }
+    public int Confidence { get; set; } = 100;
+}
+
+public class CodeReadinessLayerViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Icon { get; set; } = "bi-box";
+    public int FileCount { get; set; }
+}
+
+public class CodeReadinessSolidCheckViewModel
+{
+    public string Principle { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = "Source review required";
+}
+
+public class CodeReadinessDesignPatternViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = "Other";
+    public string Status { get; set; } = "Partial";
+    public string Summary { get; set; } = string.Empty;
+    public int Confidence { get; set; }
+    public List<CodeReadinessPatternEvidenceViewModel> EvidenceFiles { get; set; } = [];
+}
+
+public class CodeReadinessPatternEvidenceViewModel
+{
+    public string Path { get; set; } = string.Empty;
+    public string? CodeUrl { get; set; }
+}
+
+public class CodeReadinessOwaspViewModel
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public string? CodeUrl { get; set; }
+    public int Confidence { get; set; }
+}
+
+public class CodeReadinessModuleViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public int Score { get; set; }
+    public string Status { get; set; } = "Needs Review";
+    public int RepositorySignalCount { get; set; }
+    public int FeatureCount { get; set; }
+    public int IncompleteFeatureCount { get; set; }
+    public int OpenBugCount { get; set; }
+    public int TestCount { get; set; }
+    public int FailedTestCount { get; set; }
+    public int PendingTestCount { get; set; }
+    public List<string> EvidencePaths { get; set; } = [];
+    public string? CodeUrl { get; set; }
+}

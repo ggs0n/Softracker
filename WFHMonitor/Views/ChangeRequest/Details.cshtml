@@ -80,6 +80,10 @@
 
     /* Grid */
     .pd-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
+    .pd-tabs{display:flex;align-items:center;gap:4px;margin:-8px 0 20px;padding:4px;background:#eef2f7;border:1px solid var(--border);border-radius:11px;width:max-content;max-width:100%}
+    .pd-tab{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:8px;color:#71717a;text-decoration:none;font-size:.78rem;font-weight:700;transition:all .15s ease}
+    .pd-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.65)}
+    .pd-tab.is-active{background:#fff;color:var(--text-primary);box-shadow:0 1px 4px rgba(15,23,42,.08)}
 
     /* Section cards */
     .pd-section{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:20px;overflow:hidden;transition:box-shadow .2s ease}
@@ -327,6 +331,15 @@
     </section>
 
     @* â”€â”€ Grid â”€â”€ *@
+    <nav class="pd-tabs" aria-label="Project details sections">
+        <a asp-action="Details" asp-route-id="@Model.Id" class="pd-tab is-active" aria-current="page">
+            <i class="bi bi-grid"></i> Overview
+        </a>
+        <a asp-action="CodeReadiness" asp-route-id="@Model.Id" class="pd-tab">
+            <i class="bi bi-shield-check"></i> Code Readiness
+        </a>
+    </nav>
+
     <div class="pd-grid">
 
         @* â•â•â• Left Column â•â•â• *@

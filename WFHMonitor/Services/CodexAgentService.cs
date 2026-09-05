@@ -147,13 +147,16 @@ public sealed class CodexBugScanService : ICodexBugScanService
 
     private readonly CodexSettings _settings;
     private readonly ILogger<CodexBugScanService> _logger;
+    private readonly ISystemSettingsService _systemSettingsService;
 
     public CodexBugScanService(
         IOptions<CodexSettings> settings,
-        ILogger<CodexBugScanService> logger)
+        ILogger<CodexBugScanService> logger,
+        ISystemSettingsService systemSettingsService)
     {
         _settings = settings.Value ?? new CodexSettings();
         _logger = logger;
+        _systemSettingsService = systemSettingsService;
     }
 
     public int MaxFindingsPerScan => NormalizeFindingsLimit(_settings.MaxFindingsPerScan);
@@ -169,7 +172,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedAgentId(scanAgentId, _settings));
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var findingsLimit = MaxFindingsPerScan;
         var additionalInstructions = useSecurityPrompt
@@ -189,7 +192,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return Failed($"Codex scan failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
 
         using var process = new Process { StartInfo = startInfo };
 
@@ -291,7 +294,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedAgentId(scanAgentId, _settings));
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var findingsLimit = MaxFindingsPerScan;
         var additionalInstructions = useSecurityPrompt
@@ -311,7 +314,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return Failed($"Codex scan failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -403,7 +406,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedAgentId(scanAgentId, _settings));
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var maxTestCases = Math.Clamp(_settings.MaxTestCasesPerGeneration, 1, 30);
         var additionalInstructions = ResolveTestCaseGenAdditionalInstructions(_settings);
@@ -419,7 +422,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return FailedTestCaseGen($"Codex failed: CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -498,7 +501,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedAgentId(scanAgentId, _settings));
         var timeoutSeconds = Math.Clamp(NormalizeTimeout(_settings.TimeoutSeconds), 20, 90);
         var prompt = BuildProjectHealthPrompt(
             project,
@@ -520,7 +523,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return FailedProjectHealth($"Codex failed: CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -589,7 +592,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedFixAgentId(fixAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedFixAgentId(fixAgentId, _settings));
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var additionalInstructions = ResolveFixAdditionalInstructions(_settings);
         var prompt = BuildFixPrompt(bug, additionalInstructions, _settings);
@@ -604,7 +607,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return FailedFix($"Codex fix failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -681,7 +684,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
             ? "codex"
             : _settings.CliPath.Trim();
-        var agentId = ResolveRequestedFeatureAgentId(featureAgentId, _settings);
+        var execution = await ResolveExecutionSettingsAsync(ResolveRequestedFeatureAgentId(featureAgentId, _settings));
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
         var additionalInstructions = ResolveFeatureAdditionalInstructions(_settings);
         var prompt = BuildFeaturePrompt(feature, project, additionalInstructions, _settings);
@@ -696,7 +699,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return FailedFeature($"Codex feature run failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, execution.Model, prompt, reasoningEffort: execution.ReasoningEffort);
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -756,6 +759,156 @@ public sealed class CodexBugScanService : ICodexBugScanService
             return FailedFeature("Codex feature run failed: empty response.");
 
         return new CodexFeatureImplementResult(true, string.Empty, TrimTo(implementationPlan, 3500));
+    }
+
+    public async Task<CodexCodeReadinessResult> ScanCodeReadinessAsync(
+        ChangeRequest project,
+        string repositoryPath,
+        string commitSha,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (string.IsNullOrWhiteSpace(repositoryPath) || !Directory.Exists(repositoryPath))
+            return FailedCodeReadiness("Repository snapshot is unavailable.");
+
+        var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
+            ? "codex"
+            : _settings.CliPath.Trim();
+        var resolvedCliPath = ResolveCliExecutable(configuredCliPath);
+        if (string.IsNullOrWhiteSpace(resolvedCliPath))
+        {
+            var recommendedPath = GetRecommendedWindowsCliPath();
+            var hint = string.IsNullOrWhiteSpace(recommendedPath)
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return FailedCodeReadiness($"Codex readiness scan failed: Codex CLI not found. {hint}");
+        }
+
+        var schemaPath = Path.Combine(
+            repositoryPath,
+            $".softracker-readiness-schema-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(schemaPath, BuildCodeReadinessSchema(), cancellationToken);
+            var prompt = BuildCodeReadinessPrompt(project, commitSha);
+            var execution = await ResolveExecutionSettingsAsync(ResolveRequestedAgentId(scanAgentId, _settings));
+            var startInfo = BuildProcessStartInfo(
+                resolvedCliPath,
+                execution.Model,
+                prompt,
+                repositoryPath,
+                "read-only",
+                schemaPath,
+                stripSensitiveEnvironment: true,
+                reasoningEffort: execution.ReasoningEffort);
+
+            using var process = new Process { StartInfo = startInfo };
+            try
+            {
+                if (!process.Start())
+                    return FailedCodeReadiness("Codex readiness scan failed: unable to start Codex process.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to start Codex readiness scan in {RepositoryPath}", repositoryPath);
+                return FailedCodeReadiness($"Codex readiness scan failed: cannot start '{resolvedCliPath}'.");
+            }
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            try
+            {
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(300, NormalizeTimeout(_settings.TimeoutSeconds))));
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                TryKill(process);
+                return FailedCodeReadiness("Codex readiness scan timed out before analysis completed.");
+            }
+
+            var stdout = StripAnsi((await stdoutTask).Trim());
+            var stderr = StripAnsi((await stderrTask).Trim());
+            if (process.ExitCode != 0)
+            {
+                var detail = string.IsNullOrWhiteSpace(stderr)
+                    ? "Codex command returned a non-zero exit code."
+                    : TrimTo(stderr, 300);
+                return FailedCodeReadiness($"Codex readiness scan failed: {detail}");
+            }
+
+            var json = StripCodeFence(stdout).Trim();
+            CodexCodeReadinessResult? result;
+            try
+            {
+                result = JsonSerializer.Deserialize<CodexCodeReadinessResult>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Codex readiness output was not valid JSON: {Preview}", TrimTo(stdout, 500));
+                return FailedCodeReadiness("Codex readiness scan returned an invalid structured response.");
+            }
+
+            if (result is null)
+                return FailedCodeReadiness("Codex readiness scan returned an empty response.");
+
+            result.Succeeded = true;
+            result.Error = string.Empty;
+            result.Score = Math.Clamp(result.Score, 0, 100);
+            result.Summary = TrimTo(result.Summary, 1500);
+            result.AnalyzedFiles = Math.Max(0, result.AnalyzedFiles);
+            result.Categories = result.Categories
+                .Where(category => !string.IsNullOrWhiteSpace(category.Name))
+                .Take(10)
+                .Select(category => new CodexCodeReadinessCategory
+                {
+                    Name = TrimTo(category.Name, 80),
+                    Score = Math.Clamp(category.Score, 0, 100),
+                    Summary = TrimTo(category.Summary, 500)
+                })
+                .ToList();
+            result.Findings = result.Findings
+                .Where(finding => !string.IsNullOrWhiteSpace(finding.Title))
+                .Take(50)
+                .Select(NormalizeCodeReadinessFinding)
+                .ToList();
+            result.Solid = result.Solid
+                .Where(check => !string.IsNullOrWhiteSpace(check.Principle))
+                .Take(5)
+                .Select(check => new CodexSolidReview
+                {
+                    Principle = TrimTo(check.Principle.ToUpperInvariant(), 5),
+                    Status = NormalizeSolidStatus(check.Status),
+                    Summary = TrimTo(check.Summary, 500)
+                })
+                .ToList();
+            result.DesignPatterns = (result.DesignPatterns ?? [])
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern.Name))
+                .Take(15)
+                .Select(NormalizeDesignPattern)
+                .ToList();
+            result.Owasp = NormalizeOwaspAssessments(result.Owasp);
+
+            return result;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(schemaPath))
+                    File.Delete(schemaPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Unable to remove temporary Codex output schema {SchemaPath}", schemaPath);
+            }
+        }
     }
 
     private static int NormalizeTimeout(int configuredTimeoutSeconds)
@@ -849,6 +1002,19 @@ public sealed class CodexBugScanService : ICodexBugScanService
         }
 
         return string.Join("\n", instructions);
+    }
+
+    private async Task<CodexExecutionSettings> ResolveExecutionSettingsAsync(string? requestedModel)
+    {
+        var preferences = await _systemSettingsService.GetCodexAiSettingsAsync();
+        var useSavedModel = string.IsNullOrWhiteSpace(requestedModel) ||
+                            requestedModel.Equals("main", StringComparison.OrdinalIgnoreCase) ||
+                            requestedModel.Equals("default", StringComparison.OrdinalIgnoreCase);
+        var model = useSavedModel ? preferences.Model : requestedModel!.Trim();
+        var reasoning = CodexAiDefaults.ReasoningEfforts.FirstOrDefault(value =>
+                            value.Equals(preferences.ReasoningEffort, StringComparison.OrdinalIgnoreCase))
+                        ?? CodexAiDefaults.ReasoningEffort;
+        return new CodexExecutionSettings(model, reasoning);
     }
 
     private static string ResolveRequestedAgentId(string? scanAgentId, CodexSettings settings)
@@ -1025,18 +1191,30 @@ public sealed class CodexBugScanService : ICodexBugScanService
     private static ProcessStartInfo BuildProcessStartInfo(
         string resolvedCliPath,
         string model,
-        string prompt)
+        string prompt,
+        string? workingDirectory = null,
+        string sandbox = "workspace-write",
+        string? outputSchemaPath = null,
+        bool stripSensitiveEnvironment = false,
+        string reasoningEffort = CodexAiDefaults.ReasoningEffort)
     {
         var args = new List<string>
         {
             "exec",
             "--ephemeral",
+            "--ignore-user-config",
             "--color",
             "never",
             "--sandbox",
-            "workspace-write",
+            sandbox,
             "--skip-git-repo-check"
         };
+
+        if (!string.IsNullOrWhiteSpace(outputSchemaPath))
+        {
+            args.Add("--output-schema");
+            args.Add(outputSchemaPath);
+        }
 
         if (!string.IsNullOrWhiteSpace(model) &&
             !model.Equals("main", StringComparison.OrdinalIgnoreCase) &&
@@ -1045,6 +1223,9 @@ public sealed class CodexBugScanService : ICodexBugScanService
             args.Add("--model");
             args.Add(model.Trim());
         }
+
+        args.Add("--config");
+        args.Add($"model_reasoning_effort=\"{reasoningEffort}\"");
 
         args.Add(prompt);
 
@@ -1061,6 +1242,18 @@ public sealed class CodexBugScanService : ICodexBugScanService
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+            startInfo.WorkingDirectory = Path.GetFullPath(workingDirectory);
+
+        if (stripSensitiveEnvironment)
+        {
+            var sensitiveNames = startInfo.Environment.Keys
+                .Where(IsSensitiveEnvironmentVariable)
+                .ToList();
+            foreach (var name in sensitiveNames)
+                startInfo.Environment.Remove(name);
+        }
 
         if (usePowerShellHost)
         {
@@ -1083,6 +1276,21 @@ public sealed class CodexBugScanService : ICodexBugScanService
             startInfo.ArgumentList.Add(arg);
 
         return startInfo;
+    }
+
+    private sealed record CodexExecutionSettings(string Model, string ReasoningEffort);
+
+    private static bool IsSensitiveEnvironmentVariable(string name)
+    {
+        var normalized = name.Replace("_", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+        return normalized.Contains("SECRET", StringComparison.Ordinal) ||
+               normalized.Contains("TOKEN", StringComparison.Ordinal) ||
+               normalized.Contains("PASSWORD", StringComparison.Ordinal) ||
+               normalized.Contains("APIKEY", StringComparison.Ordinal) ||
+               normalized.Contains("CONNECTIONSTRING", StringComparison.Ordinal) ||
+               normalized.StartsWith("GITHUB", StringComparison.Ordinal) ||
+               normalized.StartsWith("STRIPE", StringComparison.Ordinal) ||
+               normalized.StartsWith("JWT", StringComparison.Ordinal);
     }
 
     private static string? ResolveCliExecutable(string configuredCliPath)
@@ -1564,6 +1772,252 @@ public sealed class CodexBugScanService : ICodexBugScanService
 
         return [];
     }
+
+    private static string BuildCodeReadinessPrompt(ChangeRequest project, string commitSha)
+    {
+        var prompt = $"""
+            You are performing a read-only, source-level code readiness review of the repository in the current working directory.
+            Project: {TrimTo(project.Title, 200)} ({TrimTo(project.CrNumber, 30)}). Commit: {TrimTo(commitSha, 64)}.
+            Inspect the actual application source comprehensively using repository-wide searches and direct file reads. Do not judge from folder names alone.
+            Review SOLID principles (SRP, OCP, LSP, ISP, DIP), architecture boundaries, maintainability, security, automated tests, error handling, configuration, persistence, and incomplete implementation.
+            Identify design and architectural code patterns actually implemented, such as MVC, layered architecture, repository, unit of work, service layer, dependency injection, factory, strategy, adapter, observer, mediator, or CQRS. Include a pattern only when direct source evidence exists, mark it Implemented or Partial, and cite up to five repository-relative files. Do not list a framework feature as a pattern without implementation evidence.
+            Assess every OWASP Top 10:2025 category exactly once: A01 Broken Access Control, A02 Security Misconfiguration, A03 Software Supply Chain Failures, A04 Cryptographic Failures, A05 Injection, A06 Insecure Design, A07 Authentication Failures, A08 Software or Data Integrity Failures, A09 Security Logging and Alerting Failures, and A10 Mishandling of Exceptional Conditions. Use Pass only when positive source evidence supports it, Fail only for a directly evidenced weakness, Warning for partial controls or material risk, NotApplicable only when clearly irrelevant, and Unknown when source-only review cannot establish the result. Cite a repository-relative file and line for evidence when available and provide a concrete recommendation for every Warning or Fail. Do not claim that runtime configuration, deployed infrastructure, or dependency vulnerability status was tested.
+            Ignore .git, node_modules, bin, obj, dist, coverage, vendor, generated files, lock files, minified assets, and every .softracker-readiness-schema-* file.
+            Do not edit files, install dependencies, build the application, run tests, execute repository scripts, or access the network.
+            Every failing or warning finding must cite a repository-relative file and the best available one-based line number. Do not invent files, lines, vulnerabilities, or principles.
+            Use Unknown when evidence is insufficient. Return no more than 50 findings, ordered by severity and impact.
+            Return only JSON matching the supplied schema. Categories should include Structure, Tests, Security, Maintainability, and Completeness.
+            """;
+
+        return Regex.Replace(prompt, @"\s+", " ").Trim();
+    }
+
+    private static string BuildCodeReadinessSchema() => """
+        {
+          "type": "object",
+          "properties": {
+            "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "summary": { "type": "string" },
+            "analyzedFiles": { "type": "integer", "minimum": 0 },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "summary": { "type": "string" }
+                },
+                "required": ["name", "score", "summary"],
+                "additionalProperties": false
+              }
+            },
+            "findings": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "principle": { "type": "string", "enum": ["SRP", "OCP", "LSP", "ISP", "DIP", "None"] },
+                  "category": { "type": "string" },
+                  "severity": { "type": "string", "enum": ["Critical", "High", "Medium", "Low"] },
+                  "title": { "type": "string" },
+                  "evidence": { "type": "string" },
+                  "recommendation": { "type": "string" },
+                  "file": { "type": "string" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                },
+                "required": ["principle", "category", "severity", "title", "evidence", "recommendation", "file", "line", "confidence"],
+                "additionalProperties": false
+              }
+            },
+            "solid": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "principle": { "type": "string", "enum": ["SRP", "OCP", "LSP", "ISP", "DIP"] },
+                  "status": { "type": "string", "enum": ["Pass", "Warning", "Fail", "Unknown"] },
+                  "summary": { "type": "string" }
+                },
+                "required": ["principle", "status", "summary"],
+                "additionalProperties": false
+              }
+            },
+            "designPatterns": {
+              "type": "array",
+              "maxItems": 15,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "category": { "type": "string", "enum": ["Architectural", "Creational", "Structural", "Behavioral", "Enterprise", "Other"] },
+                  "status": { "type": "string", "enum": ["Implemented", "Partial"] },
+                  "summary": { "type": "string" },
+                  "files": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "items": { "type": "string" }
+                  },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                },
+                "required": ["name", "category", "status", "summary", "files", "confidence"],
+                "additionalProperties": false
+              }
+            },
+            "owasp": {
+              "type": "array",
+              "minItems": 10,
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "enum": ["A01:2025", "A02:2025", "A03:2025", "A04:2025", "A05:2025", "A06:2025", "A07:2025", "A08:2025", "A09:2025", "A10:2025"] },
+                  "status": { "type": "string", "enum": ["Pass", "Warning", "Fail", "NotApplicable", "Unknown"] },
+                  "summary": { "type": "string" },
+                  "evidence": { "type": "string" },
+                  "recommendation": { "type": "string" },
+                  "file": { "type": "string" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                },
+                "required": ["id", "status", "summary", "evidence", "recommendation", "file", "line", "confidence"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["score", "summary", "analyzedFiles", "categories", "findings", "solid", "designPatterns", "owasp"],
+          "additionalProperties": false
+        }
+        """;
+
+    private static CodexCodeReadinessFinding NormalizeCodeReadinessFinding(CodexCodeReadinessFinding finding)
+    {
+        var severity = finding.Severity?.Trim();
+        if (severity is not ("Critical" or "High" or "Medium" or "Low"))
+            severity = "Low";
+
+        var principle = finding.Principle?.Trim().ToUpperInvariant();
+        if (principle is not ("SRP" or "OCP" or "LSP" or "ISP" or "DIP"))
+            principle = "None";
+
+        return new CodexCodeReadinessFinding
+        {
+            Principle = principle,
+            Category = TrimTo(finding.Category, 80),
+            Severity = severity,
+            Title = TrimTo(finding.Title, 300),
+            Evidence = TrimTo(finding.Evidence, 1500),
+            Recommendation = TrimTo(finding.Recommendation, 1000),
+            File = TrimTo(finding.File, 500).Replace('\\', '/').TrimStart('/'),
+            Line = finding.Line is > 0 ? finding.Line : null,
+            Confidence = Math.Clamp(finding.Confidence, 0, 100)
+        };
+    }
+
+    private static string NormalizeSolidStatus(string? status) => status?.Trim() switch
+    {
+        "Pass" => "Pass",
+        "Warning" => "Warning",
+        "Fail" => "Fail",
+        _ => "Unknown"
+    };
+
+    private static CodexDesignPattern NormalizeDesignPattern(CodexDesignPattern pattern)
+    {
+        var allowedCategories = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Architectural", "Creational", "Structural", "Behavioral", "Enterprise", "Other"
+        };
+        var category = pattern.Category?.Trim() ?? string.Empty;
+        if (!allowedCategories.Contains(category))
+            category = "Other";
+
+        var status = pattern.Status?.Trim() == "Implemented" ? "Implemented" : "Partial";
+        var files = (pattern.Files ?? [])
+            .Where(file => !string.IsNullOrWhiteSpace(file))
+            .Select(file => TrimTo(file, 500).Replace('\\', '/').TrimStart('/'))
+            .Where(file => !file.Contains("..", StringComparison.Ordinal) && !Path.IsPathRooted(file))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToList();
+
+        return new CodexDesignPattern
+        {
+            Name = TrimTo(pattern.Name, 120),
+            Category = category,
+            Status = status,
+            Summary = TrimTo(pattern.Summary, 750),
+            Files = files,
+            Confidence = Math.Clamp(pattern.Confidence, 0, 100)
+        };
+    }
+
+    private static List<CodexOwaspAssessment> NormalizeOwaspAssessments(
+        IEnumerable<CodexOwaspAssessment>? assessments)
+    {
+        var categories = new (string Id, string Name)[]
+        {
+            ("A01:2025", "Broken Access Control"),
+            ("A02:2025", "Security Misconfiguration"),
+            ("A03:2025", "Software Supply Chain Failures"),
+            ("A04:2025", "Cryptographic Failures"),
+            ("A05:2025", "Injection"),
+            ("A06:2025", "Insecure Design"),
+            ("A07:2025", "Authentication Failures"),
+            ("A08:2025", "Software or Data Integrity Failures"),
+            ("A09:2025", "Security Logging and Alerting Failures"),
+            ("A10:2025", "Mishandling of Exceptional Conditions")
+        };
+        var supplied = (assessments ?? [])
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id))
+            .GroupBy(item => item.Id.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return categories.Select(category =>
+        {
+            supplied.TryGetValue(category.Id, out var assessment);
+            assessment ??= new CodexOwaspAssessment
+            {
+                Id = category.Id,
+                Status = "Unknown",
+                Summary = "The source scan returned no conclusion for this category."
+            };
+            var status = assessment.Status?.Trim() switch
+            {
+                "Pass" => "Pass",
+                "Warning" => "Warning",
+                "Fail" => "Fail",
+                "NotApplicable" or "Not Applicable" => "Not Applicable",
+                _ => "Unknown"
+            };
+            var file = TrimTo(assessment.File, 500).Replace('\\', '/').TrimStart('/');
+            if (file.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(file))
+                file = string.Empty;
+
+            return new CodexOwaspAssessment
+            {
+                Id = category.Id,
+                Name = category.Name,
+                Status = status,
+                Summary = TrimTo(assessment.Summary, 750),
+                Evidence = TrimTo(assessment.Evidence, 1000),
+                Recommendation = TrimTo(assessment.Recommendation, 1000),
+                File = file,
+                Line = assessment.Line is > 0 ? assessment.Line : null,
+                Confidence = Math.Clamp(assessment.Confidence, 0, 100)
+            };
+        }).ToList();
+    }
+
+    private static CodexCodeReadinessResult FailedCodeReadiness(string error) => new()
+    {
+        Succeeded = false,
+        Error = TrimTo(error, 500)
+    };
 
     private static string BuildProjectHealthPrompt(
         ChangeRequest project,

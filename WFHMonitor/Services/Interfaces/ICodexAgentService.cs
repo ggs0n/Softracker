@@ -45,6 +45,77 @@ public interface ICodexBugScanService
         int complexityScore,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default);
+
+    Task<CodexCodeReadinessResult> ScanCodeReadinessAsync(
+        ChangeRequest project,
+        string repositoryPath,
+        string commitSha,
+        string? scanAgentId = null,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class CodexCodeReadinessResult
+{
+    public bool Succeeded { get; set; }
+    public string Error { get; set; } = string.Empty;
+    public int Score { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public int AnalyzedFiles { get; set; }
+    public List<CodexCodeReadinessCategory> Categories { get; set; } = [];
+    public List<CodexCodeReadinessFinding> Findings { get; set; } = [];
+    public List<CodexSolidReview> Solid { get; set; } = [];
+    public List<CodexDesignPattern> DesignPatterns { get; set; } = [];
+    public List<CodexOwaspAssessment> Owasp { get; set; } = [];
+}
+
+public sealed class CodexCodeReadinessCategory
+{
+    public string Name { get; set; } = string.Empty;
+    public int Score { get; set; }
+    public string Summary { get; set; } = string.Empty;
+}
+
+public sealed class CodexCodeReadinessFinding
+{
+    public string Principle { get; set; } = "None";
+    public string Category { get; set; } = string.Empty;
+    public string Severity { get; set; } = "Low";
+    public string Title { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string File { get; set; } = string.Empty;
+    public int? Line { get; set; }
+    public int Confidence { get; set; }
+}
+
+public sealed class CodexSolidReview
+{
+    public string Principle { get; set; } = string.Empty;
+    public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+}
+
+public sealed class CodexDesignPattern
+{
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = "Other";
+    public string Status { get; set; } = "Partial";
+    public string Summary { get; set; } = string.Empty;
+    public List<string> Files { get; set; } = [];
+    public int Confidence { get; set; }
+}
+
+public sealed class CodexOwaspAssessment
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string File { get; set; } = string.Empty;
+    public int? Line { get; set; }
+    public int Confidence { get; set; }
 }
 
 public sealed record CodexTestCaseGenResult(

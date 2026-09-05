@@ -39,7 +39,18 @@ public class SystemPreference
     public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
     public bool EnableCodexAgents { get; set; } = true;
     public bool AllowCodexForFreePlan { get; set; } = false;
+    [Required, MaxLength(100)]
+    public string CodexModel { get; set; } = CodexAiDefaults.Model;
+    [Required, MaxLength(20)]
+    public string CodexReasoningEffort { get; set; } = CodexAiDefaults.ReasoningEffort;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class CodexAiDefaults
+{
+    public const string Model = "gpt-5.6-sol";
+    public const string ReasoningEffort = "low";
+    public static readonly string[] ReasoningEfforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 }
 
 public static class ProVersionDefaults

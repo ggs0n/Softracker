@@ -139,6 +139,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(c => c.CrNumber).IsUnique();
             e.HasIndex(c => c.Status);
             e.HasIndex(c => c.BugScanStatus);
+            e.HasIndex(c => c.CodeReadinessScanStatus);
             e.HasIndex(c => c.CreatedById);
             e.HasIndex(c => c.OrgTeamId);
 
@@ -162,6 +163,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             e.Property(c => c.BugScanLastMessage)
              .HasMaxLength(500);
+
+            e.Property(c => c.CodeReadinessScanStatus)
+             .HasConversion<string>()
+             .HasMaxLength(20)
+             .HasDefaultValue(CodeReadinessScanStatus.None);
+
+            e.Property(c => c.CodeReadinessScanAgentId)
+             .HasMaxLength(100);
+
+            e.Property(c => c.CodeReadinessScanMessage)
+             .HasMaxLength(500);
+
+            e.Property(c => c.CodeReadinessScanCommitSha)
+             .HasMaxLength(64);
         });
 
         builder.Entity<ChangeRequestPic>(e =>
@@ -407,6 +422,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             e.Property(s => s.AllowCodexForFreePlan)
                 .HasDefaultValue(false);
+
+            e.Property(s => s.CodexModel)
+                .HasMaxLength(100)
+                .HasDefaultValue(CodexAiDefaults.Model);
+
+            e.Property(s => s.CodexReasoningEffort)
+                .HasMaxLength(20)
+                .HasDefaultValue(CodexAiDefaults.ReasoningEffort);
         });
 
         builder.Entity<UserOnboardingState>(e =>

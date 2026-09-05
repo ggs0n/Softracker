@@ -10,6 +10,29 @@ public class SettingsPageViewModel
     public bool BellNotificationSoundEnabled { get; set; }
     public string BellNotificationSoundOption { get; set; } = BellSoundOptions.Classic;
     public ProVersionSettingsViewModel ProVersion { get; set; } = new();
+    public CodexAiSettingsViewModel CodexAi { get; set; } = new();
+    public List<CodexModelOptionViewModel> CodexModels { get; set; } = new();
+    public string CodexModelCatalogMessage { get; set; } = string.Empty;
+}
+
+public class CodexAiSettingsViewModel
+{
+    [Required, StringLength(100)]
+    [RegularExpression(@"^[A-Za-z0-9._:-]+$", ErrorMessage = "Choose a valid Codex model.")]
+    public string Model { get; set; } = CodexAiDefaults.Model;
+
+    [Required, StringLength(20)]
+    public string ReasoningEffort { get; set; } = CodexAiDefaults.ReasoningEffort;
+}
+
+public class CodexModelOptionViewModel
+{
+    public string Id { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string DefaultReasoningEffort { get; set; } = CodexAiDefaults.ReasoningEffort;
+    public List<string> SupportedReasoningEfforts { get; set; } = new();
+    public bool IsDefault { get; set; }
+    public string? UpgradeModel { get; set; }
 }
 
 public class ModulePermissionEditItemViewModel

@@ -112,7 +112,11 @@ public class BugController : Controller
     }
 
     [Authorize(Roles = "Admin,Tester")]
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create(
+        int? changeRequestId = null,
+        string? title = null,
+        string? description = null,
+        string? moduleImpacted = null)
     {
         var userId = _userManager.GetUserId(User);
         if (!string.IsNullOrWhiteSpace(userId))
@@ -125,8 +129,25 @@ public class BugController : Controller
             }
         }
 
-        var vm = new BugFormViewModel();
         var currentUser = await _userManager.GetUserAsync(User);
+        if (changeRequestId.HasValue && !await CanAccessProjectByTeamAsync(changeRequestId, currentUser))
+            changeRequestId = null;
+
+        static string? Limit(string? value, int maxLength)
+        {
+            var clean = value?.Trim();
+            return string.IsNullOrWhiteSpace(clean)
+                ? null
+                : clean.Length <= maxLength ? clean : clean[..maxLength];
+        }
+
+        var vm = new BugFormViewModel
+        {
+            ChangeRequestId = changeRequestId,
+            Title = Limit(title, 300) ?? string.Empty,
+            Description = Limit(description, 4000),
+            ModuleImpacted = Limit(moduleImpacted, 200)
+        };
         await _bugService.PopulateFormOptionsAsync(vm, User.IsInRole("Admin"), currentUser?.OrgTeamId, currentUser?.CompanyName, currentUser?.Id);
         return View(vm);
     }

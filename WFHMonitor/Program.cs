@@ -51,12 +51,14 @@ builder.Services.Configure<CodexSettings>(
     builder.Configuration.GetSection("Codex"));
 builder.Services.AddHttpClient<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
+builder.Services.AddScoped<IRepositorySnapshotService, RepositorySnapshotService>();
 builder.Services.AddHttpClient<IStripeBillingService, StripeBillingService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
 builder.Services.AddScoped<IDeveloperSummaryService, DeveloperSummaryService>();
 builder.Services.AddScoped<IBugService, BugService>();
 builder.Services.AddScoped<ICodexBugScanService, CodexBugScanService>();
+builder.Services.AddSingleton<ICodexModelCatalogService, CodexModelCatalogService>();
 builder.Services.AddSingleton<ICodexAuthService, CodexAuthService>();
 builder.Services.AddSingleton<BugFixQueueService>();
 builder.Services.AddSingleton<IBugFixQueueService>(sp => sp.GetRequiredService<BugFixQueueService>());
@@ -67,6 +69,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FeatureAgentQueueS
 builder.Services.AddSingleton<ProjectBugScanQueueService>();
 builder.Services.AddSingleton<IProjectBugScanQueueService>(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
+builder.Services.AddSingleton<CodeReadinessScanQueueService>();
+builder.Services.AddSingleton<ICodeReadinessScanQueueService>(sp => sp.GetRequiredService<CodeReadinessScanQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CodeReadinessScanQueueService>());
 builder.Services.AddSingleton<QaCodexQueueService>();
 builder.Services.AddSingleton<IQaCodexQueueService>(sp => sp.GetRequiredService<QaCodexQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<QaCodexQueueService>());

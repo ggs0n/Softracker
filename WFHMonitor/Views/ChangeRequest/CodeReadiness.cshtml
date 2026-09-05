@@ -1,0 +1,510 @@
+@model WFHMonitor.ViewModels.CodeReadinessViewModel
+@{
+    ViewData["Title"] = $"{Model.Project.CrNumber} Code Readiness";
+    var scoreClass = Model.Score >= 85 ? "is-good" : Model.Score >= 65 ? "is-warn" : "is-bad";
+    var canCreateBug = User.IsInRole("Admin") || User.IsInRole("Tester");
+    var canStartSourceScan = User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer");
+    var sourceScanRunning = Model.DeepScanStatus is WFHMonitor.Models.CodeReadinessScanStatus.Queued or WFHMonitor.Models.CodeReadinessScanStatus.InProgress;
+}
+
+<style>
+    .cr-shell{max-width:1420px;margin:0 auto}
+    .cr-hero{background:#18181b;border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .cr-project-tag{display:inline-flex;align-items:center;gap:6px;color:#34d399;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+    .cr-project-title{font-size:1.45rem;font-weight:800;color:#f4f4f5;line-height:1.2}
+    .cr-project-meta{font-size:.75rem;color:#a1a1aa;margin-top:5px}
+    .cr-tabs{display:flex;align-items:center;gap:4px;margin-bottom:20px;padding:4px;background:#eef2f7;border:1px solid var(--border);border-radius:11px;width:max-content;max-width:100%}
+    .cr-tab{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:8px;color:#71717a;text-decoration:none;font-size:.78rem;font-weight:700;transition:all .15s ease}
+    .cr-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.65)}
+    .cr-tab.is-active{background:#fff;color:var(--text-primary);box-shadow:0 1px 4px rgba(15,23,42,.08)}
+    .cr-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;margin-bottom:18px;overflow:hidden}
+    .cr-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:#fafbfc;flex-wrap:wrap}
+    .cr-panel-title{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:800;color:var(--text-primary)}
+    .cr-scan-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.72rem;color:#71717a}
+    .cr-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;background:#fff;border:1px solid var(--border);border-radius:7px;font-family:Consolas,monospace;color:#52525b}
+    .cr-run{display:inline-flex;align-items:center;gap:7px;background:#059669;color:#fff;border:0;border-radius:8px;padding:8px 14px;text-decoration:none;font-size:.76rem;font-weight:800}
+    .cr-run:hover{background:#047857;color:#fff}
+    .cr-run:disabled{opacity:.6;cursor:not-allowed}.cr-scan-form{display:flex;align-items:center;gap:6px}.cr-agent{height:33px;border:1px solid var(--border);border-radius:8px;background:#fff;color:#52525b;padding:0 8px;font-size:.7rem;max-width:155px}.cr-deep-state{margin:0 16px 16px;padding:11px 13px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:9px;display:flex;align-items:center;gap:9px;font-size:.72rem;color:#1e3a8a}.cr-deep-state.is-running{border-color:#a7f3d0;background:#ecfdf5;color:#065f46}.cr-deep-state.is-failed{border-color:#fecaca;background:#fef2f2;color:#991b1b}.cr-deep-state strong{font-weight:850}.cr-spinner{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:cr-spin .8s linear infinite}@@keyframes cr-spin{to{transform:rotate(360deg)}}
+    .cr-overview{display:grid;grid-template-columns:minmax(260px,1.45fr) repeat(5,minmax(125px,1fr));gap:12px;padding:16px}
+    .cr-score{border:1px solid #fecaca;background:#fffafa;border-radius:11px;padding:18px;display:flex;align-items:center;gap:16px}
+    .cr-score.is-good{border-color:#bbf7d0;background:#f7fff9}.cr-score.is-warn{border-color:#fde68a;background:#fffdf5}.cr-score.is-bad{border-color:#fecaca;background:#fffafa}
+    .cr-score-icon{font-size:1.45rem}.cr-score.is-good .cr-score-icon{color:#16a34a}.cr-score.is-warn .cr-score-icon{color:#d97706}.cr-score.is-bad .cr-score-icon{color:#dc2626}
+    .cr-score-label{font-size:.95rem;font-weight:800;color:var(--text-primary)}
+    .cr-score-value{font-size:2.15rem;font-weight:900;color:#18181b;line-height:1;margin-top:4px}.cr-score-value span{font-size:.8rem;color:#71717a;font-weight:600}
+    .cr-score-summary{font-size:.71rem;color:#71717a;margin-top:7px;line-height:1.35}
+    .cr-category{border:1px solid var(--border);border-radius:11px;padding:14px 10px;text-align:center;background:#fff;min-width:0}
+    .cr-category i{font-size:1.1rem;color:#059669}.cr-category-name{font-size:.72rem;font-weight:700;color:#52525b;margin-top:7px}.cr-category-score{font-size:1.25rem;font-weight:900;color:#18181b;margin-top:4px}.cr-category-score span{font-size:.65rem;color:#a1a1aa}.cr-category-status{font-size:.65rem;font-weight:700;margin-top:4px;color:#d97706}.cr-category-status.is-passed{color:#16a34a}.cr-category-status.is-risk{color:#dc2626}
+    .cr-main{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(280px,.85fr);gap:18px}
+    .cr-table-wrap{overflow-x:auto}.cr-table{width:100%;border-collapse:collapse;font-size:.76rem}.cr-table th{padding:9px 10px;text-align:left;font-size:.65rem;color:#71717a;text-transform:uppercase;letter-spacing:.04em;background:#fafbfc;border-bottom:1px solid var(--border)}.cr-table td{padding:11px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:#52525b}.cr-table tr:last-child td{border-bottom:0}
+    .cr-finding-title{font-weight:750;color:var(--text-primary);font-size:.78rem}.cr-finding-desc{font-size:.68rem;color:#71717a;margin-top:2px;max-width:380px}.cr-location{font-family:Consolas,monospace;font-size:.68rem;color:#52525b;word-break:break-word}
+    .cr-severity{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:.62rem;font-weight:800}.cr-severity-critical{background:#fee2e2;color:#b91c1c}.cr-severity-high{background:#ffedd5;color:#c2410c}.cr-severity-medium{background:#fef3c7;color:#b45309}.cr-severity-low{background:#eff6ff;color:#1d4ed8}
+    .cr-confidence{font-weight:800;color:#374151}.cr-actions{display:flex;gap:5px;white-space:nowrap}.cr-action{display:inline-flex;align-items:center;gap:4px;border:1px solid #d1d5db;border-radius:7px;padding:5px 8px;background:#fff;color:#52525b;text-decoration:none;font-size:.65rem;font-weight:700}.cr-action:hover{border-color:#10b981;color:#047857}.cr-action-primary{border-color:#a7f3d0;color:#047857;background:#f0fdf4}
+    .cr-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);background:#fafbfc;flex-wrap:wrap}.cr-page-summary{font-size:.69rem;color:#71717a}.cr-page-controls{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.cr-page-button{min-width:32px;height:30px;padding:0 9px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#52525b;font-size:.68rem;font-weight:750}.cr-page-button:hover:not(:disabled){border-color:#10b981;color:#047857;background:#f0fdf4}.cr-page-button.is-active{border-color:#059669;background:#059669;color:#fff}.cr-page-button:disabled{opacity:.45;cursor:not-allowed}
+    .cr-summary{padding:14px 16px}.cr-summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed #e5e7eb;font-size:.73rem}.cr-summary-row:last-child{border-bottom:0}.cr-summary-key{color:#71717a;display:flex;align-items:center;gap:7px}.cr-summary-value{font-weight:800;color:var(--text-primary);text-align:right}
+    .cr-solid{padding:10px 16px}.cr-solid-row{display:grid;grid-template-columns:34px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0}.cr-solid-row:last-child{border-bottom:0}.cr-solid-code{font-size:.7rem;font-weight:900;color:#047857}.cr-solid-name{font-size:.7rem;font-weight:700;color:#3f3f46}.cr-solid-status{font-size:.65rem;color:#a16207;margin-top:2px}
+    .cr-modules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:16px}.cr-module{border:1px solid var(--border);border-radius:11px;padding:14px;background:#fff}.cr-module-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cr-module-name{font-size:.8rem;font-weight:800;color:#27272a;word-break:break-word}.cr-module-status{font-size:.61rem;font-weight:800;border-radius:999px;padding:3px 7px;white-space:nowrap;background:#fef3c7;color:#a16207}.cr-module-status.is-ready{background:#dcfce7;color:#15803d}.cr-module-status.is-risk{background:#fee2e2;color:#b91c1c}.cr-module-score{display:flex;align-items:center;gap:8px;margin-top:11px}.cr-module-track{height:6px;flex:1;border-radius:999px;background:#e5e7eb;overflow:hidden}.cr-module-fill{height:100%;background:#f59e0b;border-radius:999px}.cr-module-fill.is-ready{background:#16a34a}.cr-module-fill.is-risk{background:#dc2626}.cr-module-score-value{font-size:.68rem;font-weight:900;color:#3f3f46}.cr-module-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}.cr-module-metric{background:#f8fafc;border-radius:7px;padding:7px;text-align:center}.cr-module-metric strong{display:block;font-size:.78rem;color:#18181b}.cr-module-metric span{font-size:.58rem;color:#71717a}.cr-module-source{font-size:.63rem;color:#71717a;margin-top:9px}.cr-module-evidence{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px dashed #e5e7eb;font-family:Consolas,monospace;font-size:.6rem;color:#64748b;min-width:0}.cr-module-evidence span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cr-module-evidence a{margin-left:auto;flex-shrink:0;color:#047857;text-decoration:none;font-family:inherit;font-weight:800}
+    .cr-patterns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:16px}.cr-pattern{border:1px solid var(--border);border-radius:11px;padding:15px;background:#fff;min-width:0}.cr-pattern-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cr-pattern-category{font-size:.6rem;font-weight:850;text-transform:uppercase;letter-spacing:.04em;color:#7c3aed}.cr-pattern-name{font-size:.86rem;font-weight:850;color:#27272a;margin-top:3px}.cr-pattern-status{font-size:.6rem;font-weight:850;border-radius:999px;padding:4px 8px;white-space:nowrap;background:#fef3c7;color:#a16207}.cr-pattern-status.is-implemented{background:#dcfce7;color:#15803d}.cr-pattern-summary{font-size:.69rem;color:#71717a;line-height:1.45;margin-top:10px}.cr-pattern-confidence{font-size:.63rem;font-weight:800;color:#475569;margin-top:10px}.cr-pattern-files{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.cr-pattern-file{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 7px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;color:#475569;font:600 .6rem Consolas,monospace;text-decoration:none}.cr-pattern-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cr-pattern-file:hover{border-color:#a78bfa;color:#6d28d9}
+    .cr-owasp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px}.cr-owasp-card{border:1px solid var(--border);border-left:4px solid #94a3b8;border-radius:10px;padding:14px;background:#fff;min-width:0}.cr-owasp-card.is-pass{border-left-color:#16a34a}.cr-owasp-card.is-warning{border-left-color:#f59e0b}.cr-owasp-card.is-fail{border-left-color:#dc2626}.cr-owasp-card.is-not-applicable{border-left-color:#64748b}.cr-owasp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cr-owasp-id{font:800 .64rem Consolas,monospace;color:#0369a1}.cr-owasp-name{font-size:.82rem;font-weight:850;color:#27272a;margin-top:3px}.cr-owasp-status{font-size:.6rem;font-weight:850;border-radius:999px;padding:4px 8px;white-space:nowrap;background:#e2e8f0;color:#475569}.cr-owasp-status.is-pass{background:#dcfce7;color:#15803d}.cr-owasp-status.is-warning{background:#fef3c7;color:#a16207}.cr-owasp-status.is-fail{background:#fee2e2;color:#b91c1c}.cr-owasp-summary{font-size:.7rem;color:#52525b;line-height:1.45;margin-top:10px}.cr-owasp-detail{font-size:.66rem;color:#71717a;line-height:1.45;margin-top:7px}.cr-owasp-detail strong{color:#3f3f46}.cr-owasp-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:.62rem;color:#64748b}.cr-owasp-location{font-family:Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cr-owasp-link{flex-shrink:0;color:#0369a1;font-weight:800;text-decoration:none}
+    .cr-bottom{display:grid;grid-template-columns:1.55fr .8fr;gap:18px}
+    .cr-layers{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px}.cr-layer{position:relative;border:1px solid var(--border);border-radius:10px;padding:13px;background:#fff}.cr-layer:not(:last-child)::after{content:'→';position:absolute;right:-10px;top:50%;transform:translate(50%,-50%);z-index:2;color:#71717a;font-weight:800}.cr-layer-icon{width:30px;height:30px;border-radius:8px;background:#ecfdf5;color:#059669;display:flex;align-items:center;justify-content:center}.cr-layer-name{font-size:.72rem;font-weight:800;color:#27272a;margin-top:8px}.cr-layer-desc{font-size:.64rem;color:#71717a;line-height:1.35;margin-top:3px}.cr-layer-count{font-size:.64rem;color:#059669;font-weight:800;margin-top:7px}
+    .cr-incomplete{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:16px}.cr-stat{border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center;background:#fff}.cr-stat-value{font-size:1.25rem;font-weight:900;color:#18181b}.cr-stat-label{font-size:.64rem;color:#71717a;margin-top:3px}
+    .cr-note{margin:0 16px 16px;padding:10px 12px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;font-size:.7rem;color:#075985;line-height:1.45}
+    .cr-empty{padding:28px;text-align:center;color:#71717a}.cr-empty i{font-size:1.6rem;color:#a1a1aa}.cr-empty-title{font-size:.9rem;font-weight:800;color:#3f3f46;margin-top:8px}.cr-empty-text{font-size:.74rem;margin-top:4px}.cr-edit-link{display:inline-flex;margin-top:12px;color:#047857;font-size:.73rem;font-weight:800;text-decoration:none}
+    @@media(max-width:1180px){.cr-overview{grid-template-columns:repeat(3,1fr)}.cr-score{grid-column:span 3}.cr-main,.cr-bottom{grid-template-columns:1fr}.cr-modules,.cr-patterns{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:720px){.cr-overview{grid-template-columns:repeat(2,1fr)}.cr-score{grid-column:span 2}.cr-layers,.cr-modules,.cr-patterns,.cr-owasp-grid{grid-template-columns:1fr}.cr-layer::after{display:none}.cr-hero{padding:18px}.cr-project-title{font-size:1.2rem}}
+</style>
+
+<div class="cr-shell">
+    <section class="cr-hero">
+        <div>
+            <div class="cr-project-tag"><i class="bi bi-folder2-open"></i> @Model.Project.CrNumber</div>
+            <div class="cr-project-title">@Model.Project.Title</div>
+            <div class="cr-project-meta">Project code quality and release-readiness assessment</div>
+        </div>
+        @if (User.IsInRole("Admin"))
+        {
+            <a asp-action="Edit" asp-route-id="@Model.Project.Id" class="cr-run" style="background:#3f3f46"><i class="bi bi-gear"></i> Project Settings</a>
+        }
+    </section>
+
+    <nav class="cr-tabs" aria-label="Project details sections">
+        <a asp-action="Details" asp-route-id="@Model.Project.Id" class="cr-tab"><i class="bi bi-grid"></i> Overview</a>
+        <a asp-action="CodeReadiness" asp-route-id="@Model.Project.Id" class="cr-tab is-active" aria-current="page"><i class="bi bi-shield-check"></i> Code Readiness</a>
+    </nav>
+
+    <section class="cr-panel">
+        <div class="cr-panel-head">
+            <div class="cr-panel-title"><i class="bi bi-code-square" style="color:#059669"></i> Repository Readiness</div>
+            <div class="cr-scan-meta">
+                <span class="cr-chip"><i class="bi bi-git"></i> @Model.Branch</span>
+                @if (!string.IsNullOrWhiteSpace(Model.CommitSha))
+                {
+                    <span class="cr-chip"><i class="bi bi-bezier2"></i> @Model.CommitSha</span>
+                }
+                <span><i class="bi bi-clock"></i> Scanned @Model.ScannedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                <a asp-action="CodeReadiness" asp-route-id="@Model.Project.Id" class="cr-action"><i class="bi bi-arrow-repeat"></i> Refresh Structure</a>
+                @if (Model.RepositoryConnected && canStartSourceScan)
+                {
+                    <form asp-action="StartCodeReadinessScan" method="post" class="cr-scan-form">
+                        <input type="hidden" name="id" value="@Model.Project.Id" />
+                        @if (Model.CodexAgentOptions.Count > 1)
+                        {
+                            <select name="scanAgentId" class="cr-agent" aria-label="Codex model">
+                                @foreach (var option in Model.CodexAgentOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.Value == Model.Project.CodeReadinessScanAgentId ? "selected" : null)">@option.Text</option>
+                                }
+                            </select>
+                        }
+                        else if (Model.CodexAgentOptions.Count == 1)
+                        {
+                            <input type="hidden" name="scanAgentId" value="@Model.CodexAgentOptions[0].Value" />
+                        }
+                        <button type="submit" class="cr-run" disabled="@(sourceScanRunning ? "disabled" : null)">
+                            @if (sourceScanRunning)
+                            {
+                                <span class="cr-spinner" aria-hidden="true"></span><span>Scanning Source</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-stars"></i><span>Full Codex Scan</span>
+                            }
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        @if (!Model.RepositoryConnected)
+        {
+            <div class="cr-empty">
+                <i class="bi bi-github"></i>
+                <div class="cr-empty-title">Connect a GitHub repository first</div>
+                <div class="cr-empty-text">Code Readiness needs the selected project's repository and branch to inspect its structure.</div>
+                @if (User.IsInRole("Admin"))
+                {
+                    <a asp-action="Edit" asp-route-id="@Model.Project.Id" class="cr-edit-link">Open project settings <i class="bi bi-arrow-right ms-1"></i></a>
+                }
+            </div>
+        }
+        else
+        {
+            var deepStateClass = sourceScanRunning ? "is-running" : Model.DeepScanStatus == WFHMonitor.Models.CodeReadinessScanStatus.Failed ? "is-failed" : "";
+            <div id="deepScanState" class="cr-deep-state @deepStateClass">
+                @if (sourceScanRunning)
+                {
+                    <span class="cr-spinner" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <i class="bi @(Model.UsedCodexSourceScan ? "bi-check-circle" : Model.DeepScanStatus == WFHMonitor.Models.CodeReadinessScanStatus.Failed ? "bi-exclamation-circle" : "bi-info-circle")"></i>
+                }
+                <span><strong id="deepScanStatus">@Model.DeepScanStatusText.</strong> <span id="deepScanMessage">@Model.DeepScanMessage</span></span>
+            </div>
+            <div class="cr-overview">
+                <div class="cr-score @scoreClass">
+                    <i class="bi @(Model.Score >= 85 ? "bi-check-circle" : "bi-exclamation-triangle") cr-score-icon"></i>
+                    <div>
+                        <div class="cr-score-label">@Model.Label</div>
+                        <div class="cr-score-value">@Model.Score <span>/ 100</span></div>
+                        <div class="cr-score-summary">@Model.Summary</div>
+                    </div>
+                </div>
+                @foreach (var category in Model.Categories)
+                {
+                    var statusClass = category.Status == "Passed" ? "is-passed" : category.Status == "At Risk" ? "is-risk" : "";
+                    <div class="cr-category" title="@category.Detail">
+                        <i class="bi @category.Icon"></i>
+                        <div class="cr-category-name">@category.Name</div>
+                        <div class="cr-category-score">@category.Score <span>/ 100</span></div>
+                        <div class="cr-category-status @statusClass">@category.Status</div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    @if (Model.RepositoryConnected)
+    {
+        <div class="cr-main">
+            <section class="cr-panel">
+                <div class="cr-panel-head">
+                    <div class="cr-panel-title"><i class="bi bi-list-check" style="color:#dc2626"></i> Fix First <span style="color:#a1a1aa">(@Model.Findings.Count)</span></div>
+                </div>
+                @if (Model.Findings.Count == 0)
+                {
+                    <div class="cr-empty"><i class="bi bi-check-circle" style="color:#16a34a"></i><div class="cr-empty-title">No findings available</div><div class="cr-empty-text">Run Full Codex Scan to inspect source-level SOLID, security, architecture, and maintainability evidence.</div></div>
+                }
+                else
+                {
+                    <div class="cr-table-wrap">
+                        <table class="cr-table">
+                            <thead><tr><th>Severity</th><th>Category</th><th>Finding</th><th>Location</th><th>Confidence</th><th>Actions</th></tr></thead>
+                            <tbody>
+                            @foreach (var finding in Model.Findings)
+                            {
+                                <tr data-fix-first-row>
+                                    <td><span class="cr-severity cr-severity-@finding.Severity.ToLowerInvariant()">@finding.Severity</span></td>
+                                    <td>@finding.Category</td>
+                                    <td><div class="cr-finding-title">@finding.Title</div><div class="cr-finding-desc">@finding.Description</div></td>
+                                    <td><span class="cr-location">@(finding.Location ?? "Project signal")</span></td>
+                                    <td><span class="cr-confidence">@finding.Confidence%</span></td>
+                                    <td>
+                                        <div class="cr-actions">
+                                            @if (!string.IsNullOrWhiteSpace(finding.CodeUrl))
+                                            {
+                                                <a href="@finding.CodeUrl" target="_blank" rel="noopener" class="cr-action"><i class="bi bi-code-slash"></i> View Code</a>
+                                            }
+                                            @if (canCreateBug)
+                                            {
+                                                <a asp-controller="Bug" asp-action="Create"
+                                                   asp-route-changeRequestId="@Model.Project.Id"
+                                                   asp-route-title="@finding.Title"
+                                                   asp-route-description="@finding.Description"
+                                                   asp-route-moduleImpacted="@finding.Category"
+                                                   class="cr-action cr-action-primary"><i class="bi bi-bug"></i> Create Bug</a>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    <nav class="cr-pagination" id="fixFirstPagination" aria-label="Fix First pagination">
+                        <span class="cr-page-summary" id="fixFirstPageSummary"></span>
+                        <div class="cr-page-controls" id="fixFirstPageControls"></div>
+                    </nav>
+                }
+            </section>
+
+            <div>
+                <section class="cr-panel">
+                    <div class="cr-panel-head"><div class="cr-panel-title"><i class="bi bi-activity" style="color:#059669"></i> Scan Summary</div></div>
+                    <div class="cr-summary">
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-github"></i> Repository</span><span class="cr-summary-value">@Model.RepositoryName</span></div>
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-file-code"></i> Source files</span><span class="cr-summary-value">@Model.SourceFileCount</span></div>
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-boxes"></i> Modules</span><span class="cr-summary-value">@Model.ModuleCount</span></div>
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-link-45deg"></i> Technologies</span><span class="cr-summary-value">@Model.DependencyCount</span></div>
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-bug"></i> Open bugs</span><span class="cr-summary-value">@Model.OpenBugCount</span></div>
+                        <div class="cr-summary-row"><span class="cr-summary-key"><i class="bi bi-x-circle"></i> Failed QA</span><span class="cr-summary-value">@Model.FailedTestCount</span></div>
+                    </div>
+                </section>
+
+                <section class="cr-panel">
+                    <div class="cr-panel-head"><div class="cr-panel-title"><i class="bi bi-diagram-3" style="color:#7c3aed"></i> SOLID Review</div></div>
+                    <div class="cr-solid">
+                        @foreach (var check in Model.SolidChecks)
+                        {
+                            <div class="cr-solid-row"><div class="cr-solid-code">@check.Principle</div><div><div class="cr-solid-name">@check.Name</div><div class="cr-solid-status">@check.Status</div></div></div>
+                        }
+                    </div>
+                    <div class="cr-note"><i class="bi bi-info-circle me-1"></i> @(Model.UsedCodexSourceScan ? $"These conclusions come from the latest read-only Codex source scan of {Model.CodexAnalyzedFileCount} file(s)." : "SOLID conclusions require a Full Codex Scan; the structure scan does not guess source-level compliance.")</div>
+                </section>
+            </div>
+        </div>
+
+        <section class="cr-panel">
+            <div class="cr-panel-head">
+                <div class="cr-panel-title"><i class="bi bi-shield-lock" style="color:#0369a1"></i> OWASP Top 10:2025 Analysis <span style="color:#a1a1aa">(@Model.OwaspAssessments.Count)</span></div>
+                @if (Model.OwaspAssessments.Count > 0)
+                {
+                    <div class="cr-scan-meta">
+                        <span class="cr-chip">Fail: @Model.OwaspAssessments.Count(item => item.Status == "Fail")</span>
+                        <span class="cr-chip">Warning: @Model.OwaspAssessments.Count(item => item.Status == "Warning")</span>
+                        <span class="cr-chip">Pass: @Model.OwaspAssessments.Count(item => item.Status == "Pass")</span>
+                    </div>
+                }
+            </div>
+            @if (Model.OwaspAssessments.Count == 0)
+            {
+                <div class="cr-empty">
+                    <i class="bi bi-shield-lock"></i>
+                    <div class="cr-empty-title">No OWASP analysis available</div>
+                    <div class="cr-empty-text">@(Model.UsedCodexSourceScan ? "The stored scan predates OWASP analysis. Run Full Codex Scan again to assess all ten 2025 categories." : "Run Full Codex Scan to perform an evidence-based OWASP Top 10:2025 source review.")</div>
+                </div>
+            }
+            else
+            {
+                <div class="cr-owasp-grid">
+                    @foreach (var item in Model.OwaspAssessments)
+                    {
+                        var statusClass = $"is-{item.Status.ToLowerInvariant().Replace(' ', '-')}";
+                        <article class="cr-owasp-card @statusClass">
+                            <div class="cr-owasp-head">
+                                <div>
+                                    <div class="cr-owasp-id">@item.Id</div>
+                                    <div class="cr-owasp-name">@item.Name</div>
+                                </div>
+                                <span class="cr-owasp-status @statusClass">@item.Status</span>
+                            </div>
+                            <div class="cr-owasp-summary">@item.Summary</div>
+                            @if (!string.IsNullOrWhiteSpace(item.Evidence))
+                            {
+                                <div class="cr-owasp-detail"><strong>Evidence:</strong> @item.Evidence</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Recommendation))
+                            {
+                                <div class="cr-owasp-detail"><strong>Recommendation:</strong> @item.Recommendation</div>
+                            }
+                            <div class="cr-owasp-foot">
+                                <span>Confidence: @item.Confidence%</span>
+                                @if (!string.IsNullOrWhiteSpace(item.Location))
+                                {
+                                    <span class="cr-owasp-location" title="@item.Location">@item.Location</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.CodeUrl))
+                                {
+                                    <a class="cr-owasp-link" href="@item.CodeUrl" target="_blank" rel="noopener">View code</a>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+                <div class="cr-note"><i class="bi bi-info-circle me-1"></i> This is a source-only assessment, not a penetration test or validation of deployed infrastructure. Unknown items require runtime or operational verification. <a href="https://owasp.org/Top10/" target="_blank" rel="noopener">OWASP Top 10:2025</a></div>
+            }
+        </section>
+
+        <section class="cr-panel">
+            <div class="cr-panel-head">
+                <div class="cr-panel-title"><i class="bi bi-boxes" style="color:#2563eb"></i> Related Modules <span style="color:#a1a1aa">(@Model.RelatedModules.Count)</span></div>
+            </div>
+            @if (Model.RelatedModules.Count == 0)
+            {
+                <div class="cr-empty"><i class="bi bi-box"></i><div class="cr-empty-title">No related modules detected</div><div class="cr-empty-text">Add affected modules to features, bugs, or QA cases, or import repository features.</div></div>
+            }
+            else
+            {
+                <div class="cr-modules">
+                    @foreach (var module in Model.RelatedModules)
+                    {
+                        var moduleClass = module.Status == "Ready" ? "is-ready" : module.Status == "At Risk" ? "is-risk" : "";
+                        <article class="cr-module">
+                            <div class="cr-module-head">
+                                <div class="cr-module-name">@module.Name</div>
+                                <span class="cr-module-status @moduleClass">@module.Status</span>
+                            </div>
+                            <div class="cr-module-score">
+                                <div class="cr-module-track" role="progressbar" aria-label="@module.Name readiness" aria-valuenow="@module.Score" aria-valuemin="0" aria-valuemax="100"><div class="cr-module-fill @moduleClass" style="width:@module.Score%"></div></div>
+                                <span class="cr-module-score-value">@module.Score%</span>
+                            </div>
+                            <div class="cr-module-metrics">
+                                <div class="cr-module-metric"><strong>@module.IncompleteFeatureCount/@module.FeatureCount</strong><span>Incomplete</span></div>
+                                <div class="cr-module-metric"><strong>@module.OpenBugCount</strong><span>Open Bugs</span></div>
+                                <div class="cr-module-metric"><strong>@module.FailedTestCount/@module.TestCount</strong><span>Failed Tests</span></div>
+                            </div>
+                            <div class="cr-module-source">@module.RepositorySignalCount repository signal(s) &middot; @module.PendingTestCount pending QA</div>
+                            @if (module.EvidencePaths.Count > 0)
+                            {
+                                <div class="cr-module-evidence">
+                                    <i class="bi bi-file-code"></i>
+                                    <span title="@module.EvidencePaths[0]">@module.EvidencePaths[0]</span>
+                                    @if (!string.IsNullOrWhiteSpace(module.CodeUrl))
+                                    {
+                                        <a href="@module.CodeUrl" target="_blank" rel="noopener">View</a>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="cr-panel">
+            <div class="cr-panel-head">
+                <div class="cr-panel-title"><i class="bi bi-puzzle" style="color:#7c3aed"></i> Design Patterns Used <span style="color:#a1a1aa">(@Model.DesignPatterns.Count)</span></div>
+                <div class="cr-scan-meta">Source-backed patterns from the latest Full Codex Scan</div>
+            </div>
+            @if (Model.DesignPatterns.Count == 0)
+            {
+                <div class="cr-empty">
+                    <i class="bi bi-puzzle"></i>
+                    <div class="cr-empty-title">No design-pattern evidence available</div>
+                    <div class="cr-empty-text">@(Model.UsedCodexSourceScan ? "The stored scan predates design-pattern detection. Run Full Codex Scan again to populate this section." : "Run Full Codex Scan to identify implemented patterns from source evidence.")</div>
+                </div>
+            }
+            else
+            {
+                <div class="cr-patterns">
+                    @foreach (var pattern in Model.DesignPatterns)
+                    {
+                        var patternStatusClass = pattern.Status == "Implemented" ? "is-implemented" : "is-partial";
+                        <article class="cr-pattern">
+                            <div class="cr-pattern-head">
+                                <div>
+                                    <div class="cr-pattern-category">@pattern.Category</div>
+                                    <div class="cr-pattern-name">@pattern.Name</div>
+                                </div>
+                                <span class="cr-pattern-status @patternStatusClass">@pattern.Status</span>
+                            </div>
+                            <div class="cr-pattern-summary">@pattern.Summary</div>
+                            <div class="cr-pattern-confidence">Confidence: @pattern.Confidence%</div>
+                            @if (pattern.EvidenceFiles.Count > 0)
+                            {
+                                <div class="cr-pattern-files">
+                                    @foreach (var evidence in pattern.EvidenceFiles)
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(evidence.CodeUrl))
+                                        {
+                                            <a class="cr-pattern-file" href="@evidence.CodeUrl" target="_blank" rel="noopener" title="@evidence.Path"><i class="bi bi-file-code"></i><span>@evidence.Path</span></a>
+                                        }
+                                        else
+                                        {
+                                            <span class="cr-pattern-file" title="@evidence.Path"><i class="bi bi-file-code"></i><span>@evidence.Path</span></span>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <div class="cr-bottom">
+            <section class="cr-panel">
+                <div class="cr-panel-head"><div class="cr-panel-title"><i class="bi bi-bezier2" style="color:#059669"></i> Architecture Flow</div></div>
+                <div class="cr-layers">
+                    @foreach (var layer in Model.ArchitectureLayers)
+                    {
+                        <div class="cr-layer"><div class="cr-layer-icon"><i class="bi @layer.Icon"></i></div><div class="cr-layer-name">@layer.Name</div><div class="cr-layer-desc">@layer.Description</div><div class="cr-layer-count">@layer.FileCount file(s)</div></div>
+                    }
+                </div>
+            </section>
+
+            <section class="cr-panel">
+                <div class="cr-panel-head"><div class="cr-panel-title"><i class="bi bi-hourglass-split" style="color:#d97706"></i> Incomplete Work</div></div>
+                <div class="cr-incomplete">
+                    <div class="cr-stat"><div class="cr-stat-value">@Model.IncompleteFeatureCount</div><div class="cr-stat-label">Features</div></div>
+                    <div class="cr-stat"><div class="cr-stat-value">@Model.OpenBugCount</div><div class="cr-stat-label">Open Bugs</div></div>
+                    <div class="cr-stat"><div class="cr-stat-value">@Model.PendingTestCount</div><div class="cr-stat-label">Pending QA</div></div>
+                    <div class="cr-stat"><div class="cr-stat-value">@Model.FailedTestCount</div><div class="cr-stat-label">Failed QA</div></div>
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+<script>
+    (() => {
+        const rows = Array.from(document.querySelectorAll('[data-fix-first-row]'));
+        const pagination = document.getElementById('fixFirstPagination');
+        const summary = document.getElementById('fixFirstPageSummary');
+        const controls = document.getElementById('fixFirstPageControls');
+        const pageSize = 10;
+
+        if (!pagination || !summary || !controls || rows.length === 0) return;
+
+        const pageCount = Math.ceil(rows.length / pageSize);
+        let currentPage = 1;
+
+        const addButton = (label, page, options = {}) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `cr-page-button${options.active ? ' is-active' : ''}`;
+            button.textContent = label;
+            button.disabled = Boolean(options.disabled);
+            if (options.active) button.setAttribute('aria-current', 'page');
+            button.setAttribute('aria-label', options.ariaLabel || `Go to page ${page}`);
+            button.addEventListener('click', () => renderPage(page));
+            controls.appendChild(button);
+        };
+
+        const renderPage = page => {
+            currentPage = Math.min(Math.max(page, 1), pageCount);
+            const start = (currentPage - 1) * pageSize;
+            const end = Math.min(start + pageSize, rows.length);
+
+            rows.forEach((row, index) => {
+                row.hidden = index < start || index >= end;
+            });
+
+            summary.textContent = `Showing ${start + 1}–${end} of ${rows.length} findings`;
+            controls.replaceChildren();
+            addButton('Previous', currentPage - 1, {
+                disabled: currentPage === 1,
+                ariaLabel: 'Go to previous page'
+            });
+            for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+                addButton(String(pageNumber), pageNumber, { active: pageNumber === currentPage });
+            }
+            addButton('Next', currentPage + 1, {
+                disabled: currentPage === pageCount,
+                ariaLabel: 'Go to next page'
+            });
+        };
+
+        pagination.hidden = pageCount <= 1;
+        renderPage(1);
+    })();
+</script>
+
+@if (sourceScanRunning)
+{
+    <script>
+        (() => {
+            const statusUrl = '@Url.Action("GetCodeReadinessScanStatus", "ChangeRequest", new { id = Model.Project.Id })';
+            const statusNode = document.getElementById('deepScanStatus');
+            const messageNode = document.getElementById('deepScanMessage');
+            const terminal = new Set(['Completed', 'Failed']);
+            const poll = async () => {
+                try {
+                    const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                    if (!response.ok) return;
+                    const state = await response.json();
+                    if (statusNode) statusNode.textContent = `${state.status}.`;
+                    if (messageNode) messageNode.textContent = state.message || '';
+                    if (terminal.has(state.status)) {
+                        window.location.reload();
+                        return;
+                    }
+                } catch (_) {
+                    // A temporary polling error should not interrupt the background scan.
+                }
+                window.setTimeout(poll, 3000);
+            };
+            window.setTimeout(poll, 1500);
+        })();
+    </script>
+}

@@ -16,11 +16,16 @@ public class SystemSettingsService : ISystemSettingsService
 
     private readonly ApplicationDbContext _db;
     private readonly IMemoryCache _cache;
+    private readonly ICodexModelCatalogService _codexModelCatalog;
 
-    public SystemSettingsService(ApplicationDbContext db, IMemoryCache cache)
+    public SystemSettingsService(
+        ApplicationDbContext db,
+        IMemoryCache cache,
+        ICodexModelCatalogService codexModelCatalog)
     {
         _db = db;
         _cache = cache;
+        _codexModelCatalog = codexModelCatalog;
     }
 
     public async Task<SettingsPageViewModel> BuildSettingsPageAsync(string? activeMenu = null)
@@ -32,20 +37,47 @@ public class SystemSettingsService : ISystemSettingsService
             .ToList();
 
         var pref = await GetOrCreatePreferenceAsync(trackChanges: false);
-        return new SettingsPageViewModel
+        var normalizedMenu = NormalizeActiveMenu(activeMenu);
+        var page = new SettingsPageViewModel
         {
-            ActiveMenu = NormalizeActiveMenu(activeMenu),
+            ActiveMenu = normalizedMenu,
             Modules = modules,
             BellNotificationSoundEnabled = pref.BellNotificationSoundEnabled,
             BellNotificationSoundOption = NormalizeSoundOption(pref.BellNotificationSoundOption),
-            ProVersion = BuildProVersionSettings(pref)
+            ProVersion = BuildProVersionSettings(pref),
+            CodexAi = BuildCodexAiSettings(pref)
         };
+
+        if (normalizedMenu == "CodexAi")
+        {
+            var catalog = await _codexModelCatalog.GetModelsAsync();
+            page.CodexModelCatalogMessage = catalog.Message;
+            page.CodexModels = catalog.Models.Select(ToViewModel).ToList();
+            if (!page.CodexModels.Any(model => model.Id.Equals(page.CodexAi.Model, StringComparison.OrdinalIgnoreCase)))
+            {
+                page.CodexModels.Insert(0, new CodexModelOptionViewModel
+                {
+                    Id = page.CodexAi.Model,
+                    DisplayName = $"{page.CodexAi.Model} (saved)",
+                    DefaultReasoningEffort = page.CodexAi.ReasoningEffort,
+                    SupportedReasoningEfforts = CodexAiDefaults.ReasoningEfforts.ToList()
+                });
+            }
+        }
+
+        return page;
     }
 
     public async Task<ProVersionSettingsViewModel> GetProVersionSettingsAsync()
     {
         var pref = await GetOrCreatePreferenceAsync(trackChanges: false);
         return BuildProVersionSettings(pref);
+    }
+
+    public async Task<CodexAiSettingsViewModel> GetCodexAiSettingsAsync()
+    {
+        var pref = await GetOrCreatePreferenceAsync(trackChanges: false);
+        return BuildCodexAiSettings(pref);
     }
 
     public async Task SaveModulePermissionsAsync(IReadOnlyCollection<ModulePermissionEditItemViewModel> modules)
@@ -96,6 +128,16 @@ public class SystemSettingsService : ISystemSettingsService
         pref.FreeFeatureLimit = NormalizeLimit(model.FreeFeatureLimit, ProVersionDefaults.FreeFeatureLimit);
         pref.EnableCodexAgents = model.EnableCodexAgents;
         pref.AllowCodexForFreePlan = model.AllowCodexForFreePlan;
+        pref.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        _cache.Remove(PreferenceCacheKey);
+    }
+
+    public async Task SaveCodexAiSettingsAsync(CodexAiSettingsViewModel model)
+    {
+        var pref = await GetOrCreatePreferenceAsync(trackChanges: true);
+        pref.CodexModel = NormalizeModel(model.Model);
+        pref.CodexReasoningEffort = NormalizeReasoningEffort(model.ReasoningEffort);
         pref.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         _cache.Remove(PreferenceCacheKey);
@@ -215,6 +257,8 @@ public class SystemSettingsService : ISystemSettingsService
             FreeFeatureLimit = ProVersionDefaults.FreeFeatureLimit,
             EnableCodexAgents = true,
             AllowCodexForFreePlan = false,
+            CodexModel = CodexAiDefaults.Model,
+            CodexReasoningEffort = CodexAiDefaults.ReasoningEffort,
             UpdatedAt = DateTime.UtcNow
         };
 
@@ -259,7 +303,53 @@ public class SystemSettingsService : ISystemSettingsService
             return "BellNotification";
         if (string.Equals(activeMenu, "ProVersion", StringComparison.OrdinalIgnoreCase))
             return "ProVersion";
+        if (string.Equals(activeMenu, "CodexAi", StringComparison.OrdinalIgnoreCase))
+            return "CodexAi";
         return "ModulePermission";
+    }
+
+    private static CodexAiSettingsViewModel BuildCodexAiSettings(SystemPreference pref)
+    {
+        return new CodexAiSettingsViewModel
+        {
+            Model = NormalizeModel(pref.CodexModel),
+            ReasoningEffort = NormalizeReasoningEffort(pref.CodexReasoningEffort)
+        };
+    }
+
+    private static CodexModelOptionViewModel ToViewModel(CodexModelCatalogItem model) => new()
+    {
+        Id = model.Id,
+        DisplayName = model.DisplayName,
+        DefaultReasoningEffort = NormalizeReasoningEffort(model.DefaultReasoningEffort),
+        SupportedReasoningEfforts = model.SupportedReasoningEfforts
+            .Select(NormalizeReasoningEffort)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList(),
+        IsDefault = model.IsDefault,
+        UpgradeModel = model.UpgradeModel
+    };
+
+    private static string NormalizeModel(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return CodexAiDefaults.Model;
+
+        var trimmed = model.Trim();
+        return trimmed.Length <= 100 && trimmed.All(character =>
+            char.IsLetterOrDigit(character) || character is '.' or '_' or ':' or '-')
+            ? trimmed
+            : CodexAiDefaults.Model;
+    }
+
+    private static string NormalizeReasoningEffort(string? effort)
+    {
+        if (string.IsNullOrWhiteSpace(effort))
+            return CodexAiDefaults.ReasoningEffort;
+
+        return CodexAiDefaults.ReasoningEfforts.FirstOrDefault(value =>
+                   value.Equals(effort.Trim(), StringComparison.OrdinalIgnoreCase))
+               ?? CodexAiDefaults.ReasoningEffort;
     }
 
     private static ProVersionSettingsViewModel BuildProVersionSettings(SystemPreference pref)

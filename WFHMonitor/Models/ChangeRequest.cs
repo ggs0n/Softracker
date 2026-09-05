@@ -49,6 +49,15 @@ public enum ProjectBugScanStatus
     Failed
 }
 
+public enum CodeReadinessScanStatus
+{
+    None,
+    Queued,
+    InProgress,
+    Completed,
+    Failed
+}
+
 public class ChangeRequest
 {
     public int Id { get; set; }
@@ -133,6 +142,22 @@ public class ChangeRequest
     public string? ProjectHealthComplexity { get; set; }
 
     public DateTime? ProjectHealthAnalyzedAt { get; set; }
+
+    public CodeReadinessScanStatus CodeReadinessScanStatus { get; set; } = CodeReadinessScanStatus.None;
+
+    [MaxLength(100)]
+    public string? CodeReadinessScanAgentId { get; set; }
+
+    [MaxLength(500)]
+    public string? CodeReadinessScanMessage { get; set; }
+
+    [MaxLength(64)]
+    public string? CodeReadinessScanCommitSha { get; set; }
+
+    public string? CodeReadinessScanResultJson { get; set; }
+
+    public DateTime? CodeReadinessScanStartedAt { get; set; }
+    public DateTime? CodeReadinessScanCompletedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

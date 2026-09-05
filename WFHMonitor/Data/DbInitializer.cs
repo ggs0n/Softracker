@@ -108,6 +108,20 @@ public static class DbInitializer
                 ALTER TABLE [ChangeRequests] ADD [ProjectHealthComplexity] nvarchar(30) NULL;
             IF COL_LENGTH('ChangeRequests', 'ProjectHealthAnalyzedAt') IS NULL
                 ALTER TABLE [ChangeRequests] ADD [ProjectHealthAnalyzedAt] datetime2 NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanStatus') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanStatus] nvarchar(20) NOT NULL CONSTRAINT [DF_ChangeRequests_CodeReadinessScanStatus] DEFAULT 'None';
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanAgentId') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanAgentId] nvarchar(100) NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanMessage') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanMessage] nvarchar(500) NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanCommitSha') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanCommitSha] nvarchar(64) NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanResultJson') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanResultJson] nvarchar(max) NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanStartedAt') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanStartedAt] datetime2 NULL;
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanCompletedAt') IS NULL
+                ALTER TABLE [ChangeRequests] ADD [CodeReadinessScanCompletedAt] datetime2 NULL;
             IF COL_LENGTH('ProjectFeatures', 'Status') IS NULL
                 ALTER TABLE [ProjectFeatures] ADD [Status] nvarchar(20) NOT NULL CONSTRAINT [DF_ProjectFeatures_Status] DEFAULT 'Draft';
             IF COL_LENGTH('ProjectFeatures', 'Priority') IS NULL
@@ -690,6 +704,8 @@ public static class DbInitializer
                     [FreeFeatureLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeFeatureLimit] DEFAULT 2,
                     [EnableCodexAgents] bit NOT NULL CONSTRAINT [DF_SystemPreferences_EnableCodexAgents] DEFAULT 1,
                     [AllowCodexForFreePlan] bit NOT NULL CONSTRAINT [DF_SystemPreferences_AllowCodexForFreePlan] DEFAULT 0,
+                    [CodexModel] nvarchar(100) NOT NULL CONSTRAINT [DF_SystemPreferences_CodexModel] DEFAULT 'gpt-5.6-sol',
+                    [CodexReasoningEffort] nvarchar(20) NOT NULL CONSTRAINT [DF_SystemPreferences_CodexReasoningEffort] DEFAULT 'low',
                     [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_SystemPreferences_UpdatedAt] DEFAULT SYSUTCDATETIME(),
                     CONSTRAINT [PK_SystemPreferences] PRIMARY KEY ([Id])
                 );
@@ -747,6 +763,15 @@ public static class DbInitializer
                     N'COLUMN';
             END
 
+            IF COL_LENGTH('ChangeRequests', 'CodeReadinessScanStatus') IS NOT NULL
+            BEGIN
+                UPDATE [ChangeRequests]
+                SET [CodeReadinessScanStatus] = 'Failed',
+                    [CodeReadinessScanMessage] = 'The previous source scan was interrupted when the application stopped.',
+                    [CodeReadinessScanCompletedAt] = SYSUTCDATETIME()
+                WHERE [CodeReadinessScanStatus] IN ('Queued', 'InProgress');
+            END
+
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
                AND COL_LENGTH('dbo.SystemPreferences', 'EnableCodexAgents') IS NULL
                AND COL_LENGTH('dbo.SystemPreferences', 'EnableAiAutomation') IS NOT NULL
@@ -800,12 +825,30 @@ public static class DbInitializer
 
         await db.Database.ExecuteSqlRawAsync("""
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'CodexModel') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [CodexModel] nvarchar(100) NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_CodexModel] DEFAULT 'gpt-5.6-sol';
+            END
+
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'CodexReasoningEffort') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [CodexReasoningEffort] nvarchar(20) NOT NULL
+                    CONSTRAINT [DF_SystemPreferences_CodexReasoningEffort] DEFAULT 'low';
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM [dbo].[SystemPreferences] WHERE [Id] = 1)
             BEGIN
                 INSERT INTO [dbo].[SystemPreferences]
-                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [EnableCodexAgents], [AllowCodexForFreePlan], [UpdatedAt])
+                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [EnableCodexAgents], [AllowCodexForFreePlan], [CodexModel], [CodexReasoningEffort], [UpdatedAt])
                 VALUES
-                    (1, 1, 'classic', 2, 2, 2, 1, 0, SYSUTCDATETIME());
+                    (1, 1, 'classic', 2, 2, 2, 1, 0, 'gpt-5.6-sol', 'low', SYSUTCDATETIME());
             END
             """);
 

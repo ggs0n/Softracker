@@ -61,6 +61,9 @@ public class GitHubOAuthService : IGitHubOAuthService
         return await GetAccessTokenForUserAsync(userId);
     }
 
+    public Task<string?> GetUserAccessTokenAsync(string userId) =>
+        GetAccessTokenForUserAsync(userId);
+
     public Task<string> BuildAuthorizeUrlAsync(string userId, string? returnUrl)
     {
         if (!IsOAuthConfigured())

@@ -22,6 +22,7 @@ public interface IGitHubOAuthService
     bool IsOAuthConfigured();
     Task<bool> IsConnectedAsync(string userId);
     Task<string?> GetCurrentUserAccessTokenAsync();
+    Task<string?> GetUserAccessTokenAsync(string userId);
     Task<string> BuildAuthorizeUrlAsync(string userId, string? returnUrl);
     Task<GitHubOAuthCallbackResult> CompleteAuthorizationAsync(string code, string state, string currentUserId);
     Task DisconnectAsync(string userId);

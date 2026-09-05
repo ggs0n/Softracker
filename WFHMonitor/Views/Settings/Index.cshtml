@@ -4,6 +4,7 @@
     var isModulePermissionMenu = string.Equals(Model.ActiveMenu, "ModulePermission", StringComparison.OrdinalIgnoreCase);
     var isBellNotificationMenu = string.Equals(Model.ActiveMenu, "BellNotification", StringComparison.OrdinalIgnoreCase);
     var isProVersionMenu = string.Equals(Model.ActiveMenu, "ProVersion", StringComparison.OrdinalIgnoreCase);
+    var isCodexAiMenu = string.Equals(Model.ActiveMenu, "CodexAi", StringComparison.OrdinalIgnoreCase);
     var soundOptions = new (string Value, string Label)[]
     {
         ("classic", "Classic Bell"),
@@ -39,6 +40,16 @@
             <span>
                 <strong>Bell Notification</strong>
                 <small>Enable or disable notification sound</small>
+            </span>
+        </a>
+
+        <a asp-action="Index"
+           asp-route-menu="CodexAi"
+           class="settings-menu-item @(isCodexAiMenu ? "active" : "")">
+            <i class="bi bi-cpu"></i>
+            <span>
+                <strong>Codex AI</strong>
+                <small>Softracker-only model and reasoning</small>
             </span>
         </a>
 
@@ -155,6 +166,71 @@
                             </button>
                             <button type="submit" class="dp-btn-primary">
                                 <i class="bi bi-check2-circle"></i> Save Bell Notification
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+
+        @if (isCodexAiMenu)
+        {
+            <div class="card">
+                <div class="card-header bg-light d-flex align-items-center justify-content-between gap-2">
+                    <span class="fw-semibold"><i class="bi bi-cpu me-2"></i>Codex AI</span>
+                    <form asp-action="RefreshCodexModels" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh models
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info py-2 small">
+                        <i class="bi bi-shield-check me-1"></i>
+                        These choices are stored inside Softracker and passed only to Softracker runs.
+                        They do not edit <code>~/.codex/config.toml</code> or your VS Code Codex settings.
+                    </div>
+
+                    <form asp-action="SaveCodexAi" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ActiveMenu" value="CodexAi" />
+
+                        <div class="mb-3">
+                            <label asp-for="CodexAi.Model" class="form-label fw-semibold">Model</label>
+                            <select asp-for="CodexAi.Model" class="form-select" id="codexModelSelect">
+                                @foreach (var option in Model.CodexModels)
+                                {
+                                    var suffix = option.IsDefault ? " · Codex recommended" : string.Empty;
+                                    var upgrade = string.IsNullOrWhiteSpace(option.UpgradeModel) ? string.Empty : $" · Upgrade: {option.UpgradeModel}";
+                                    <option value="@option.Id"
+                                            data-efforts="@string.Join(',', option.SupportedReasoningEfforts)"
+                                            data-default-effort="@option.DefaultReasoningEffort">
+                                        @option.DisplayName (@option.Id)@suffix@upgrade
+                                    </option>
+                                }
+                            </select>
+                            <span asp-validation-for="CodexAi.Model" class="text-danger small"></span>
+                            <div class="text-muted small mt-1">@Model.CodexModelCatalogMessage</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="CodexAi.ReasoningEffort" class="form-label fw-semibold">Reasoning effort</label>
+                            <select asp-for="CodexAi.ReasoningEffort" class="form-select" id="codexReasoningSelect">
+                                @foreach (var effort in WFHMonitor.Models.CodexAiDefaults.ReasoningEfforts)
+                                {
+                                    <option value="@effort">@effort</option>
+                                }
+                            </select>
+                            <span asp-validation-for="CodexAi.ReasoningEffort" class="text-danger small"></span>
+                            <div class="text-muted small mt-1">
+                                Low is faster and uses fewer reasoning tokens. High and xhigh can improve difficult reviews but take longer and consume more tokens.
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="dp-btn-primary">
+                                <i class="bi bi-check2-circle"></i> Save Codex AI
                             </button>
                         </div>
                     </form>
@@ -283,6 +359,39 @@
                 const selected = soundOptionSelect ? soundOptionSelect.value : 'classic';
                 playSoundProfile(selected);
             });
+        })();
+
+        (function () {
+            const modelSelect = document.getElementById('codexModelSelect');
+            const reasoningSelect = document.getElementById('codexReasoningSelect');
+            if (!modelSelect || !reasoningSelect) return;
+
+            function updateReasoningOptions() {
+                const selected = modelSelect.options[modelSelect.selectedIndex];
+                const supported = (selected.dataset.efforts || '')
+                    .split(',')
+                    .map(value => value.trim().toLowerCase())
+                    .filter(Boolean);
+
+                let currentIsSupported = false;
+                Array.from(reasoningSelect.options).forEach(option => {
+                    const isSupported = supported.length === 0 || supported.includes(option.value.toLowerCase());
+                    option.hidden = !isSupported;
+                    option.disabled = !isSupported;
+                    if (isSupported && option.selected) currentIsSupported = true;
+                });
+
+                if (!currentIsSupported) {
+                    const preferred = (selected.dataset.defaultEffort || 'low').toLowerCase();
+                    const next = Array.from(reasoningSelect.options)
+                        .find(option => !option.disabled && option.value.toLowerCase() === preferred)
+                        || Array.from(reasoningSelect.options).find(option => !option.disabled);
+                    if (next) reasoningSelect.value = next.value;
+                }
+            }
+
+            modelSelect.addEventListener('change', updateReasoningOptions);
+            updateReasoningOptions();
         })();
     </script>
 }
