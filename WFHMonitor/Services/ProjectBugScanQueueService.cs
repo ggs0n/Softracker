@@ -22,18 +22,18 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ProjectBugScanQueueService> _logger;
-    private readonly OpenClawSettings _openClawSettings;
+    private readonly CodexSettings _codexSettings;
     private readonly IWebHostEnvironment _environment;
 
     public ProjectBugScanQueueService(
         IServiceScopeFactory scopeFactory,
         ILogger<ProjectBugScanQueueService> logger,
-        IOptions<OpenClawSettings> openClawSettings,
+        IOptions<CodexSettings> codexSettings,
         IWebHostEnvironment environment)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _codexSettings = codexSettings.Value ?? new CodexSettings();
         _environment = environment;
     }
 
@@ -65,7 +65,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
+        var codex = scope.ServiceProvider.GetRequiredService<ICodexBugScanService>();
         var bugService = scope.ServiceProvider.GetRequiredService<IBugService>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
@@ -88,44 +88,44 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
         }
 
         var proSettings = await systemSettings.GetProVersionSettingsAsync();
-        if (!proSettings.EnableOpenClawAgents)
+        if (!proSettings.EnableCodexAgents)
         {
             project.BugScanStatus = ProjectBugScanStatus.Failed;
             project.BugScanLastRunAt = DateTime.UtcNow;
-            project.BugScanLastMessage = "OpenClaw agents are temporarily disabled by admin.";
+            project.BugScanLastMessage = "Codex agents are temporarily disabled by admin.";
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
 
-        var hasOpenClawAccess = HasActiveProAccess(requester)
-            || proSettings.AllowOpenClawForFreePlan;
-        if (!hasOpenClawAccess)
+        var hasCodexAccess = HasActiveProAccess(requester)
+            || proSettings.AllowCodexForFreePlan;
+        if (!hasCodexAccess)
         {
             project.BugScanStatus = ProjectBugScanStatus.Failed;
             project.BugScanLastRunAt = DateTime.UtcNow;
-            project.BugScanLastMessage = "Find Bugs (OpenClaw) is available for Pro plan only.";
+            project.BugScanLastMessage = "Find Bugs (Codex) is available for Pro plan only.";
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
 
-        var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var configuredScanAgentIds = CodexBugScanService.GetConfiguredAgentIds(_codexSettings);
         var selectedScanAgentId = item.ScanAgentId.Trim();
         if (configuredScanAgentIds.Count > 0 &&
             !configuredScanAgentIds.Any(a => a.Equals(selectedScanAgentId, StringComparison.OrdinalIgnoreCase)))
         {
             project.BugScanStatus = ProjectBugScanStatus.Failed;
             project.BugScanLastRunAt = DateTime.UtcNow;
-            project.BugScanLastMessage = "Selected OpenClaw scan agent is not allowed by configuration.";
+            project.BugScanLastMessage = "Selected Codex scan agent is not allowed by configuration.";
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
 
-        var openClawAgentUserId = await ResolveOpenClawAgentUserIdAsync(userManager);
-        if (string.IsNullOrWhiteSpace(openClawAgentUserId))
+        var codexAgentUserId = await ResolveCodexAgentUserIdAsync(userManager);
+        if (string.IsNullOrWhiteSpace(codexAgentUserId))
         {
             project.BugScanStatus = ProjectBugScanStatus.Failed;
             project.BugScanLastRunAt = DateTime.UtcNow;
-            project.BugScanLastMessage = "OpenClaw agent user not found. Create an Agent user first.";
+            project.BugScanLastMessage = "Codex agent user not found. Create an Agent user first.";
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -142,7 +142,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
             .ToListAsync(cancellationToken);
         var knownTitles = existingTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var scanResult = await openClaw.ScanProjectAsync(project, selectedScanAgentId, cancellationToken);
+        var scanResult = await codex.ScanProjectAsync(project, selectedScanAgentId, cancellationToken);
         if (!scanResult.Succeeded)
         {
             project.BugScanStatus = ProjectBugScanStatus.Failed;
@@ -154,7 +154,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
 
         var findings = scanResult.Findings
             .Where(f => knownTitles.Add(f.Title))
-            .Take(openClaw.MaxFindingsPerScan)
+            .Take(codex.MaxFindingsPerScan)
             .ToList();
         var agentResponsePaths = GetCandidateScreenshotPaths(scanResult.AgentResponseText);
         var fallbackScreenshotSource = GetConfiguredScreenshotFiles();
@@ -205,7 +205,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
                 Status = BugStatus.New,
                 AssigneeType = BugAssigneeType.Agent,
                 AgentStatus = BugAgentStatus.Queued,
-                AssignedAgentId = openClawAgentUserId,
+                AssignedAgentId = codexAgentUserId,
                 ChangeRequestId = project.Id,
                 ChangeRequestReferenceText = project.CrNumber
             };
@@ -224,7 +224,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
                         ? finding.ScreenshotPaths
                         : (IReadOnlyList<string>)combinedFallback;
                 var importLimitPerBug = finding.ScreenshotPaths.Count > 0
-                    ? Math.Clamp(_openClawSettings.FeatureScreenshotImportMaxFiles, 1, 20)
+                    ? Math.Clamp(_codexSettings.FeatureScreenshotImportMaxFiles, 1, 20)
                     : 1;
 
                 var importResult = await TryImportBugScreenshotsAsync(
@@ -403,15 +403,15 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
         }
     }
 
-    private static async Task<string?> ResolveOpenClawAgentUserIdAsync(UserManager<ApplicationUser> userManager)
+    private static async Task<string?> ResolveCodexAgentUserIdAsync(UserManager<ApplicationUser> userManager)
     {
         var agents = await userManager.GetUsersInRoleAsync("Agent");
         var preferred = agents
             .OrderBy(a => a.FullName)
             .FirstOrDefault(a =>
-                (a.FullName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.UserName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Email?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false));
+                (a.FullName?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.UserName?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Email?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false));
 
         return preferred?.Id ?? agents.OrderBy(a => a.FullName).FirstOrDefault()?.Id;
     }
@@ -447,17 +447,17 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
     {
         var folders = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(_openClawSettings.FeatureScreenshotImportDirectory))
-            folders.Add(_openClawSettings.FeatureScreenshotImportDirectory.Trim());
+        if (!string.IsNullOrWhiteSpace(_codexSettings.FeatureScreenshotImportDirectory))
+            folders.Add(_codexSettings.FeatureScreenshotImportDirectory.Trim());
 
-        if (_openClawSettings.FeatureScreenshotImportDirectories is not null)
+        if (_codexSettings.FeatureScreenshotImportDirectories is not null)
         {
-            folders.AddRange(_openClawSettings.FeatureScreenshotImportDirectories
+            folders.AddRange(_codexSettings.FeatureScreenshotImportDirectories
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(path => path.Trim()));
         }
 
-        folders.AddRange(GetAutoOpenClawScreenshotFolders());
+        folders.AddRange(GetAutoCodexScreenshotFolders());
 
         var uniqueFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedFolders = new List<string>();
@@ -478,7 +478,7 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
             };
         }
 
-        var lookbackMinutes = Math.Clamp(_openClawSettings.FeatureScreenshotImportLookbackMinutes, 1, 24 * 60);
+        var lookbackMinutes = Math.Clamp(_codexSettings.FeatureScreenshotImportLookbackMinutes, 1, 24 * 60);
         var minWriteTime = DateTime.UtcNow.AddMinutes(-lookbackMinutes);
         var existingFolders = resolvedFolders.Where(Directory.Exists).ToList();
         var files = existingFolders
@@ -548,25 +548,25 @@ public sealed class ProjectBugScanQueueService : BackgroundService, IProjectBugS
         return files;
     }
 
-    private static IEnumerable<string> GetAutoOpenClawScreenshotFolders()
+    private static IEnumerable<string> GetAutoCodexScreenshotFolders()
     {
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(userProfile))
             return [];
 
-        var openClawRoot = Path.Combine(userProfile, ".openclaw");
-        if (!Directory.Exists(openClawRoot))
+        var codexRoot = Path.Combine(userProfile, ".codex");
+        if (!Directory.Exists(codexRoot))
             return [];
 
         var discovered = new List<string>();
-        var mediaBrowserFolder = Path.Combine(openClawRoot, "media", "browser");
+        var mediaBrowserFolder = Path.Combine(codexRoot, "media", "browser");
         if (Directory.Exists(mediaBrowserFolder))
             discovered.Add(mediaBrowserFolder);
 
         try
         {
             discovered.AddRange(Directory
-                .EnumerateDirectories(openClawRoot, "Fix Screenshot", SearchOption.AllDirectories)
+                .EnumerateDirectories(codexRoot, "Fix Screenshot", SearchOption.AllDirectories)
                 .ToList());
             return discovered;
         }

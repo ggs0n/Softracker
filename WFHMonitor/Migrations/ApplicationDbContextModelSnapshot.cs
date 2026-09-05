@@ -1133,7 +1133,7 @@ namespace WFHMonitor.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("AllowOpenClawForFreePlan")
+                    b.Property<bool>("AllowCodexForFreePlan")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
@@ -1150,7 +1150,7 @@ namespace WFHMonitor.Migrations
                         .HasColumnType("nvarchar(30)")
                         .HasDefaultValue("classic");
 
-                    b.Property<bool>("EnableOpenClawAgents")
+                    b.Property<bool>("EnableCodexAgents")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);

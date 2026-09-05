@@ -18,21 +18,21 @@ public class QaController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ISystemSettingsService _settingsService;
-    private readonly IQaOpenClawQueueService _qaOpenClawQueueService;
-    private readonly OpenClawSettings _openClawSettings;
+    private readonly IQaCodexQueueService _qaCodexQueueService;
+    private readonly CodexSettings _codexSettings;
 
     public QaController(
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager,
         ISystemSettingsService settingsService,
-        IQaOpenClawQueueService qaOpenClawQueueService,
-        IOptions<OpenClawSettings> openClawSettings)
+        IQaCodexQueueService qaCodexQueueService,
+        IOptions<CodexSettings> codexSettings)
     {
         _db = db;
         _userManager = userManager;
         _settingsService = settingsService;
-        _qaOpenClawQueueService = qaOpenClawQueueService;
-        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _qaCodexQueueService = qaCodexQueueService;
+        _codexSettings = codexSettings.Value ?? new CodexSettings();
     }
 
     public async Task<IActionResult> Index(string? category, string? status, int? projectId, string? tab, string? scanAgentId)
@@ -104,7 +104,7 @@ public class QaController : Controller
             .OrderByDescending(m => m.Total)
             .ToList();
 
-        var scanAgentOptions = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings)
+        var scanAgentOptions = CodexBugScanService.GetConfiguredAgentIds(_codexSettings)
             .Select(agentId => new SelectOptionItem
             {
                 Value = agentId,
@@ -132,7 +132,7 @@ public class QaController : Controller
             FilterProjectId = projectId,
             ActiveTab = activeTab,
             SelectedScanAgentId = selectedScanAgentId,
-            OpenClawScanAgentOptions = scanAgentOptions
+            CodexScanAgentOptions = scanAgentOptions
         };
 
         return View(vm);
@@ -335,9 +335,9 @@ public class QaController : Controller
 
         try
         {
-            await _qaOpenClawQueueService.EnqueueAsync(
-                new QaOpenClawQueueItem(
-                    QaOpenClawQueueOperation.ScanAndGenerate,
+            await _qaCodexQueueService.EnqueueAsync(
+                new QaCodexQueueItem(
+                    QaCodexQueueOperation.ScanAndGenerate,
                     userId,
                     ProjectId: projectId,
                     ScanAgentId: scanAgentId,
@@ -345,8 +345,8 @@ public class QaController : Controller
                 HttpContext.RequestAborted);
 
             TempData["Success"] = useSecurityPrompt
-                ? "OpenClaw security scan queued. Bugs will be added in the background."
-                : "OpenClaw scan queued. Bugs will be added in the background.";
+                ? "Codex security scan queued. Bugs will be added in the background."
+                : "Codex scan queued. Bugs will be added in the background.";
         }
         catch (Exception ex)
         {
@@ -377,15 +377,15 @@ public class QaController : Controller
 
         try
         {
-            await _qaOpenClawQueueService.EnqueueAsync(
-                new QaOpenClawQueueItem(
-                    QaOpenClawQueueOperation.AutoGenerate,
+            await _qaCodexQueueService.EnqueueAsync(
+                new QaCodexQueueItem(
+                    QaCodexQueueOperation.AutoGenerate,
                     userId,
                     ProjectId: projectId,
                     ScanAgentId: scanAgentId),
                 HttpContext.RequestAborted);
 
-            TempData["Success"] = "OpenClaw auto-generate queued. Test cases will be created in the background.";
+            TempData["Success"] = "Codex auto-generate queued. Test cases will be created in the background.";
         }
         catch (Exception ex)
         {
@@ -420,9 +420,9 @@ public class QaController : Controller
 
         try
         {
-            await _qaOpenClawQueueService.EnqueueAsync(
-                new QaOpenClawQueueItem(
-                    QaOpenClawQueueOperation.AutoGenerate,
+            await _qaCodexQueueService.EnqueueAsync(
+                new QaCodexQueueItem(
+                    QaCodexQueueOperation.AutoGenerate,
                     userId,
                     ProjectId: projectId,
                     ScanAgentId: scanAgentId),
@@ -430,19 +430,19 @@ public class QaController : Controller
 
             if (normalizedMode == "generate_and_scan")
             {
-                await _qaOpenClawQueueService.EnqueueAsync(
-                    new QaOpenClawQueueItem(
-                        QaOpenClawQueueOperation.ScanAndGenerate,
+                await _qaCodexQueueService.EnqueueAsync(
+                    new QaCodexQueueItem(
+                        QaCodexQueueOperation.ScanAndGenerate,
                         userId,
                         ProjectId: projectId,
                         ScanAgentId: scanAgentId),
                     HttpContext.RequestAborted);
 
-                TempData["Success"] = "OpenClaw queued: generated test cases and auto-scan-all.";
+                TempData["Success"] = "Codex queued: generated test cases and auto-scan-all.";
             }
             else
             {
-                TempData["Success"] = "OpenClaw queued: generate-only flow.";
+                TempData["Success"] = "Codex queued: generate-only flow.";
             }
         }
         catch (Exception ex)
@@ -480,16 +480,16 @@ public class QaController : Controller
         {
             if (normalizedMode == "full_pass")
             {
-                await _qaOpenClawQueueService.EnqueueAsync(
-                    new QaOpenClawQueueItem(
-                        QaOpenClawQueueOperation.ScanAndGenerate,
+                await _qaCodexQueueService.EnqueueAsync(
+                    new QaCodexQueueItem(
+                        QaCodexQueueOperation.ScanAndGenerate,
                         userId,
                         ProjectId: projectId,
                         ScanAgentId: scanAgentId,
                         UseSecurityPrompt: true),
                     HttpContext.RequestAborted);
 
-                TempData["Success"] = "OpenClaw security scan queued for full project pass.";
+                TempData["Success"] = "Codex security scan queued for full project pass.";
             }
             else
             {
@@ -508,9 +508,9 @@ public class QaController : Controller
 
                 foreach (var id in taggedCaseIds)
                 {
-                    await _qaOpenClawQueueService.EnqueueAsync(
-                        new QaOpenClawQueueItem(
-                            QaOpenClawQueueOperation.ScanModule,
+                    await _qaCodexQueueService.EnqueueAsync(
+                        new QaCodexQueueItem(
+                            QaCodexQueueOperation.ScanModule,
                             userId,
                             TestCaseId: id,
                             ScanAgentId: scanAgentId,
@@ -518,7 +518,7 @@ public class QaController : Controller
                         HttpContext.RequestAborted);
                 }
 
-                TempData["Success"] = $"OpenClaw security scan queued for {taggedCaseIds.Count} security-tagged test case(s).";
+                TempData["Success"] = $"Codex security scan queued for {taggedCaseIds.Count} security-tagged test case(s).";
             }
         }
         catch (Exception ex)
@@ -547,14 +547,14 @@ public class QaController : Controller
 
         try
         {
-            await _qaOpenClawQueueService.EnqueueAsync(
-                new QaOpenClawQueueItem(
-                    QaOpenClawQueueOperation.ScanModule,
+            await _qaCodexQueueService.EnqueueAsync(
+                new QaCodexQueueItem(
+                    QaCodexQueueOperation.ScanModule,
                     userId,
                     TestCaseId: id),
                 HttpContext.RequestAborted);
 
-            TempData["Success"] = "OpenClaw module scan queued. Bugs will be added in the background.";
+            TempData["Success"] = "Codex module scan queued. Bugs will be added in the background.";
         }
         catch (Exception ex)
         {

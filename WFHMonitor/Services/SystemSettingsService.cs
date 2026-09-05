@@ -94,8 +94,8 @@ public class SystemSettingsService : ISystemSettingsService
         pref.FreeProjectLimit = NormalizeLimit(model.FreeProjectLimit, ProVersionDefaults.FreeProjectLimit);
         pref.FreeBugLimit = NormalizeLimit(model.FreeBugLimit, ProVersionDefaults.FreeBugLimit);
         pref.FreeFeatureLimit = NormalizeLimit(model.FreeFeatureLimit, ProVersionDefaults.FreeFeatureLimit);
-        pref.EnableOpenClawAgents = model.EnableOpenClawAgents;
-        pref.AllowOpenClawForFreePlan = model.AllowOpenClawForFreePlan;
+        pref.EnableCodexAgents = model.EnableCodexAgents;
+        pref.AllowCodexForFreePlan = model.AllowCodexForFreePlan;
         pref.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         _cache.Remove(PreferenceCacheKey);
@@ -213,8 +213,8 @@ public class SystemSettingsService : ISystemSettingsService
             FreeProjectLimit = ProVersionDefaults.FreeProjectLimit,
             FreeBugLimit = ProVersionDefaults.FreeBugLimit,
             FreeFeatureLimit = ProVersionDefaults.FreeFeatureLimit,
-            EnableOpenClawAgents = true,
-            AllowOpenClawForFreePlan = false,
+            EnableCodexAgents = true,
+            AllowCodexForFreePlan = false,
             UpdatedAt = DateTime.UtcNow
         };
 
@@ -269,8 +269,8 @@ public class SystemSettingsService : ISystemSettingsService
             FreeProjectLimit = NormalizeLimit(pref.FreeProjectLimit, ProVersionDefaults.FreeProjectLimit),
             FreeBugLimit = NormalizeLimit(pref.FreeBugLimit, ProVersionDefaults.FreeBugLimit),
             FreeFeatureLimit = NormalizeLimit(pref.FreeFeatureLimit, ProVersionDefaults.FreeFeatureLimit),
-            EnableOpenClawAgents = pref.EnableOpenClawAgents,
-            AllowOpenClawForFreePlan = pref.AllowOpenClawForFreePlan
+            EnableCodexAgents = pref.EnableCodexAgents,
+            AllowCodexForFreePlan = pref.AllowCodexForFreePlan
         };
     }
 

@@ -380,7 +380,7 @@
                                                     <div class="dropdown-menu dropdown-menu-end qa-overflow-menu" aria-labelledby="@overflowMenuId">
                                                         @if (tc.ChangeRequestId.HasValue)
                                                         {
-                                                            <form asp-action="ScanModule" method="post" class="d-block" onsubmit="return confirm('@scanLabel using OpenClaw?')">
+                                                            <form asp-action="ScanModule" method="post" class="d-block" onsubmit="return confirm('@scanLabel using Codex?')">
                                                                 @Html.AntiForgeryToken()
                                                                 <input type="hidden" name="id" value="@tc.Id" />
                                                                 <button type="submit" class="dropdown-item">
@@ -576,18 +576,18 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">OpenClaw Agent</label>
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Codex Agent</label>
                         <select name="scanAgentId" class="form-select" style="font-size:.84rem">
-                            @if (Model.OpenClawScanAgentOptions.Any())
+                            @if (Model.CodexScanAgentOptions.Any())
                             {
-                                @foreach (var option in Model.OpenClawScanAgentOptions)
+                                @foreach (var option in Model.CodexScanAgentOptions)
                                 {
                                     <option value="@option.Value" selected="@(option.Value == Model.SelectedScanAgentId ? "selected" : null)">@option.Text</option>
                                 }
                             }
                             else
                             {
-                                <option value="">Default (main)</option>
+                                <option value="">Default Codex model</option>
                             }
                         </select>
                     </div>
@@ -596,7 +596,7 @@
                             <input type="radio" name="mode" value="generate_and_scan" checked />
                             <span style="font-size:.78rem;color:var(--text-primary)">
                                 <strong>Generate + auto-scan all</strong> (Recommended)
-                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Creates test cases, then runs project-wide OpenClaw bug scan automatically.</span>
+                                <span style="display:block;color:var(--text-muted);font-size:.7rem;margin-top:2px">Creates test cases, then runs project-wide Codex bug scan automatically.</span>
                             </span>
                         </label>
                     </div>
@@ -640,18 +640,18 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">OpenClaw Agent</label>
+                        <label class="form-label" style="font-size:.76rem;font-weight:600;color:var(--text-secondary)">Codex Agent</label>
                         <select name="scanAgentId" class="form-select" style="font-size:.84rem">
-                            @if (Model.OpenClawScanAgentOptions.Any())
+                            @if (Model.CodexScanAgentOptions.Any())
                             {
-                                @foreach (var option in Model.OpenClawScanAgentOptions)
+                                @foreach (var option in Model.CodexScanAgentOptions)
                                 {
                                     <option value="@option.Value" selected="@(option.Value == Model.SelectedScanAgentId ? "selected" : null)">@option.Text</option>
                                 }
                             }
                             else
                             {
-                                <option value="">Default (main)</option>
+                                <option value="">Default Codex model</option>
                             }
                         </select>
                     </div>

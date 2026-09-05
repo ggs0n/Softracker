@@ -1,12 +1,12 @@
 @model WFHMonitor.Models.BugReport
 @{
     ViewData["Title"] = Model.Title;
-    var openClawFixAgentOptions = ViewBag.OpenClawFixAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    var codexFixAgentOptions = ViewBag.CodexFixAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var appAgentOptions = ViewBag.AgentUserOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
-    var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
+    var isCodexEnabled = ViewBag.IsCodexEnabled as bool? ?? true;
     var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     var canEditPrLink = (User.IsInRole("Admin") || User.IsInRole("Tester")) ||
         (!string.IsNullOrWhiteSpace(currentUserId) &&
@@ -474,8 +474,8 @@
                 </div>
             </div>
 
-            @* OpenClaw Fix Agent *@
-            @if (isOpenClawEnabled)
+            @* Codex Fix Agent *@
+            @if (isCodexEnabled)
             {
                 @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
                 {
@@ -483,7 +483,7 @@
                         <div class="bd-section-head">
                             <div class="bd-section-left">
                                 <div class="bd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
-                                <div class="bd-section-label">OpenClaw Agent</div>
+                                <div class="bd-section-label">Codex Agent</div>
                             </div>
                         </div>
                         <div class="bd-section-body">
@@ -492,7 +492,7 @@
                                 <div style="margin-bottom:10px">
                                     <div class="bd-stitle">Fix Agent</div>
                                     <select name="fixAgentId" class="bd-scan-select">
-                                        @foreach (var option in openClawFixAgentOptions)
+                                        @foreach (var option in codexFixAgentOptions)
                                         {
                                             <option value="@option.Value">@option.Text</option>
                                         }
@@ -514,7 +514,7 @@
                                     }
                                     else
                                     {
-                                        <span><i class="bi bi-wrench-adjustable-circle"></i> Fix Bug (OpenClaw)</span>
+                                        <span><i class="bi bi-wrench-adjustable-circle"></i> Fix Bug (Codex)</span>
                                     }
                                 </button>
                                 <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">Manual trigger. Click to queue fix with selected agent.</div>
@@ -528,7 +528,7 @@
                         <div class="bd-section-head">
                             <div class="bd-section-left">
                                 <div class="bd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
-                                <div class="bd-section-label">OpenClaw Agent</div>
+                                <div class="bd-section-label">Codex Agent</div>
                             </div>
                         </div>
                         <div class="bd-section-body" style="text-align:center">

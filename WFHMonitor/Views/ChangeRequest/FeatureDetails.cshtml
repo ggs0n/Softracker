@@ -4,14 +4,14 @@
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
     var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
-    var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
+    var isCodexEnabled = ViewBag.IsCodexEnabled as bool? ?? true;
     var canAgentPickup = User.IsInRole("Agent") &&
         (string.IsNullOrWhiteSpace(Model.AssignedDeveloperId) || string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal));
     var canManageFeatureEvidence = User.IsInRole("Admin") ||
         (!string.IsNullOrWhiteSpace(currentUserId) &&
          (User.IsInRole("Developer") || User.IsInRole("Agent")) &&
          string.Equals(Model.AssignedDeveloperId, currentUserId, StringComparison.Ordinal));
-    var openClawFeatureAgentOptions = ViewBag.OpenClawFeatureAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    var codexFeatureAgentOptions = ViewBag.CodexFeatureAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var agentOptions = ViewBag.AgentUserOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
@@ -172,13 +172,13 @@
                 </div>
             </div>
             <div class="fd-hero-actions">
-                @if (isOpenClawEnabled && User.IsInRole("Agent"))
+                @if (isCodexEnabled && User.IsInRole("Agent"))
                 {
                     <form asp-action="PickupFeature" method="post" style="display:inline">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="featureId" value="@Model.Id" />
                         <input type="hidden" name="returnUrl" value="@returnUrl" />
-                        <input type="hidden" name="featureAgentId" value="@(openClawFeatureAgentOptions.FirstOrDefault()?.Value ?? "main")" />
+                        <input type="hidden" name="featureAgentId" value="@(codexFeatureAgentOptions.FirstOrDefault()?.Value ?? "default")" />
                         @if (canAgentPickup)
                         {
                             <button type="submit" class="fd-btn-pickup" @(hasProAccess ? null : "disabled")>
@@ -415,8 +415,8 @@
                 </div>
             </div>
 
-            @* OpenClaw Agent (Admin + Pro) *@
-            @if (isOpenClawEnabled)
+            @* Codex Agent (Admin + Pro) *@
+            @if (isCodexEnabled)
             {
                 @if (User.IsInRole("Admin") && hasProAccess)
                 {
@@ -424,7 +424,7 @@
                         <div class="fd-section-head">
                             <div class="fd-section-left">
                                 <div class="fd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
-                                <div class="fd-section-label">OpenClaw Agent</div>
+                                <div class="fd-section-label">Codex Agent</div>
                             </div>
                         </div>
                         <div class="fd-section-body">
@@ -435,7 +435,7 @@
                                 <div style="margin-bottom:10px">
                                     <div class="fd-stitle">Feature Agent</div>
                                     <select name="featureAgentId" class="fd-scan-select">
-                                        @foreach (var option in openClawFeatureAgentOptions)
+                                        @foreach (var option in codexFeatureAgentOptions)
                                         {
                                             <option value="@option.Value">@option.Text</option>
                                         }
@@ -458,10 +458,10 @@
                                     }
                                     else
                                     {
-                                        <span><i class="bi bi-person-check"></i> Assign + Run OpenClaw</span>
+                                        <span><i class="bi bi-person-check"></i> Assign + Run Codex</span>
                                     }
                                 </button>
-                                <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">Manual trigger. Assign agent and queue OpenClaw feature implementation.</div>
+                                <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">Manual trigger. Assign agent and queue Codex feature implementation.</div>
                             </form>
                         </div>
                     </div>
@@ -472,7 +472,7 @@
                         <div class="fd-section-head">
                             <div class="fd-section-left">
                                 <div class="fd-section-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cpu"></i></div>
-                                <div class="fd-section-label">OpenClaw Agent</div>
+                                <div class="fd-section-label">Codex Agent</div>
                             </div>
                         </div>
                         <div class="fd-section-body" style="text-align:center">

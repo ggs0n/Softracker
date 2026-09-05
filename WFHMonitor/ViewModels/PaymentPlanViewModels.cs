@@ -20,7 +20,7 @@ public class PaymentPlansViewModel
     public int FreeProjectLimit { get; set; } = ProVersionDefaults.FreeProjectLimit;
     public int FreeBugLimit { get; set; } = ProVersionDefaults.FreeBugLimit;
     public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
-    public bool AllowOpenClawForFreePlan { get; set; }
+    public bool AllowCodexForFreePlan { get; set; }
 
     public bool HasProAccess => IsProSubscriptionActive &&
                                 (!ProSubscriptionEndsAt.HasValue || ProSubscriptionEndsAt.Value > DateTime.UtcNow);

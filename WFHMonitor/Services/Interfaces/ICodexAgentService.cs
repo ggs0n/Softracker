@@ -2,40 +2,40 @@ using WFHMonitor.Models;
 
 namespace WFHMonitor.Services.Interfaces;
 
-public interface IOpenClawBugScanService
+public interface ICodexBugScanService
 {
     int MaxFindingsPerScan { get; }
 
-    Task<OpenClawBugScanResult> ScanProjectAsync(
+    Task<CodexBugScanResult> ScanProjectAsync(
         ChangeRequest project,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default,
         bool useSecurityPrompt = false);
 
-    Task<OpenClawBugScanResult> ScanModuleAsync(
+    Task<CodexBugScanResult> ScanModuleAsync(
         ChangeRequest project,
         string moduleName,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default,
         bool useSecurityPrompt = false);
 
-    Task<OpenClawBugFixResult> FixBugAsync(
+    Task<CodexBugFixResult> FixBugAsync(
         BugReport bug,
         string? fixAgentId = null,
         CancellationToken cancellationToken = default);
 
-    Task<OpenClawFeatureImplementResult> ImplementFeatureAsync(
+    Task<CodexFeatureImplementResult> ImplementFeatureAsync(
         ProjectFeature feature,
         ChangeRequest? project = null,
         string? featureAgentId = null,
         CancellationToken cancellationToken = default);
 
-    Task<OpenClawTestCaseGenResult> GenerateTestCasesAsync(
+    Task<CodexTestCaseGenResult> GenerateTestCasesAsync(
         ChangeRequest project,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default);
 
-    Task<OpenClawProjectHealthResult> AnalyzeProjectHealthAsync(
+    Task<CodexProjectHealthResult> AnalyzeProjectHealthAsync(
         ChangeRequest project,
         int totalBugs,
         int openBugs,
@@ -47,26 +47,26 @@ public interface IOpenClawBugScanService
         CancellationToken cancellationToken = default);
 }
 
-public sealed record OpenClawTestCaseGenResult(
+public sealed record CodexTestCaseGenResult(
     bool Succeeded,
     string Error,
-    IReadOnlyList<OpenClawGeneratedTestCase> TestCases,
+    IReadOnlyList<CodexGeneratedTestCase> TestCases,
     string AgentResponseText);
 
-public sealed record OpenClawGeneratedTestCase(
+public sealed record CodexGeneratedTestCase(
     string Name,
     string Description,
     string Module,
     string Category,
     string Environment);
 
-public sealed record OpenClawBugScanResult(
+public sealed record CodexBugScanResult(
     bool Succeeded,
     string Error,
-    IReadOnlyList<OpenClawBugFinding> Findings,
+    IReadOnlyList<CodexBugFinding> Findings,
     string AgentResponseText);
 
-public sealed record OpenClawBugFinding(
+public sealed record CodexBugFinding(
     string Title,
     string Description,
     string Workflow,
@@ -75,18 +75,18 @@ public sealed record OpenClawBugFinding(
     string Severity,
     IReadOnlyList<string> ScreenshotPaths);
 
-public sealed record OpenClawBugFixResult(
+public sealed record CodexBugFixResult(
     bool Succeeded,
     string Error,
     string FixPlan,
     string? PullRequestUrl);
 
-public sealed record OpenClawFeatureImplementResult(
+public sealed record CodexFeatureImplementResult(
     bool Succeeded,
     string Error,
     string ImplementationPlan);
 
-public sealed record OpenClawProjectHealthResult(
+public sealed record CodexProjectHealthResult(
     bool Succeeded,
     string Error,
     int Score,

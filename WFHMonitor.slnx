@@ -1,2 +1,4 @@
 <Solution>
+  <Project Path="WFHMonitor/WFHMonitor.csproj" />
+  <Project Path="WFHMonitor.Tests/WFHMonitor.Tests.csproj" />
 </Solution>

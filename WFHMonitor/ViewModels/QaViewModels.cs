@@ -28,9 +28,9 @@ public class QaIndexViewModel
     // UI state
     public string ActiveTab { get; set; } = "tests";
 
-    // OpenClaw scan options
+    // Codex scan options
     public string SelectedScanAgentId { get; set; } = string.Empty;
-    public List<SelectOptionItem> OpenClawScanAgentOptions { get; set; } = new();
+    public List<SelectOptionItem> CodexScanAgentOptions { get; set; } = new();
 }
 
 public class QaTestCaseDetailsViewModel

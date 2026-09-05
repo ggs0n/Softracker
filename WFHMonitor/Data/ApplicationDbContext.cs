@@ -402,10 +402,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(s => s.FreeFeatureLimit)
                 .HasDefaultValue(ProVersionDefaults.FreeFeatureLimit);
 
-            e.Property(s => s.EnableOpenClawAgents)
+            e.Property(s => s.EnableCodexAgents)
                 .HasDefaultValue(true);
 
-            e.Property(s => s.AllowOpenClawForFreePlan)
+            e.Property(s => s.AllowCodexForFreePlan)
                 .HasDefaultValue(false);
         });
 

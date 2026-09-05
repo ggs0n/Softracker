@@ -56,7 +56,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
+        var codex = scope.ServiceProvider.GetRequiredService<ICodexBugScanService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
@@ -68,14 +68,14 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
             return;
 
         var settings = await systemSettings.GetProVersionSettingsAsync();
-        if (!settings.EnableOpenClawAgents)
+        if (!settings.EnableCodexAgents)
         {
             bug.AgentStatus = BugAgentStatus.Failed;
             bug.UpdatedAt = DateTime.UtcNow;
             db.BugActivities.Add(new BugActivity
             {
                 BugReportId = bug.Id,
-                Action = TrimActivityText("OpenClaw fix aborted: OpenClaw agents are disabled by admin."),
+                Action = TrimActivityText("Codex fix aborted: Codex agents are disabled by admin."),
                 OldStatus = bug.Status,
                 NewStatus = bug.Status,
                 OldAssignedDeveloperId = bug.AssignedDeveloperId,
@@ -94,7 +94,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         db.BugActivities.Add(new BugActivity
         {
             BugReportId = bug.Id,
-            Action = TrimActivityText($"OpenClaw fix started ({item.FixAgentId})"),
+            Action = TrimActivityText($"Codex fix started ({item.FixAgentId})"),
             OldStatus = bug.Status,
             NewStatus = bug.Status,
             OldAssignedDeveloperId = oldAssignedId,
@@ -102,7 +102,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        var fixResult = await openClaw.FixBugAsync(bug, item.FixAgentId, cancellationToken);
+        var fixResult = await codex.FixBugAsync(bug, item.FixAgentId, cancellationToken);
         if (!fixResult.Succeeded)
         {
             bug.AgentStatus = BugAgentStatus.Failed;
@@ -110,7 +110,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
             db.BugActivities.Add(new BugActivity
             {
                 BugReportId = bug.Id,
-                Action = TrimActivityText($"OpenClaw fix failed: {fixResult.Error}"),
+                Action = TrimActivityText($"Codex fix failed: {fixResult.Error}"),
                 OldStatus = bug.Status,
                 NewStatus = bug.Status,
                 OldAssignedDeveloperId = bug.AssignedDeveloperId,
@@ -121,7 +121,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         }
 
         var generatedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'");
-        var fixBlock = $"[OpenClaw Fix Plan - {item.FixAgentId} - {generatedAt}]\n{fixResult.FixPlan.Trim()}";
+        var fixBlock = $"[Codex Fix Plan - {item.FixAgentId} - {generatedAt}]\n{fixResult.FixPlan.Trim()}";
         bug.Workflow = AppendTextWithLimit(bug.Workflow, fixBlock, 4000);
         var resolvedPullRequestUrl = ResolvePullRequestUrl(fixResult, bug.ChangeRequest?.GitHubRepoUrl);
         if (!string.IsNullOrWhiteSpace(resolvedPullRequestUrl))
@@ -135,8 +135,8 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
             BugReportId = bug.Id,
             Action = TrimActivityText(
                 string.IsNullOrWhiteSpace(resolvedPullRequestUrl)
-                    ? $"OpenClaw fix completed ({item.FixAgentId})"
-                    : $"OpenClaw fix completed ({item.FixAgentId}) with PR link"),
+                    ? $"Codex fix completed ({item.FixAgentId})"
+                    : $"Codex fix completed ({item.FixAgentId}) with PR link"),
             OldStatus = bug.Status,
             NewStatus = bug.Status,
             OldAssignedDeveloperId = bug.AssignedDeveloperId,
@@ -171,7 +171,7 @@ public sealed class BugFixQueueService : BackgroundService, IBugFixQueueService
         return text.Length <= 200 ? text : text[..200].Trim();
     }
 
-    private static string? ResolvePullRequestUrl(OpenClawBugFixResult fixResult, string? repositoryUrl)
+    private static string? ResolvePullRequestUrl(CodexBugFixResult fixResult, string? repositoryUrl)
     {
         var direct = NormalizePullRequestUrl(fixResult.PullRequestUrl);
         if (!string.IsNullOrWhiteSpace(direct))

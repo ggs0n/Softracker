@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -9,11 +8,10 @@ using WFHMonitor.Services.Interfaces;
 
 namespace WFHMonitor.Services;
 
-public class OpenClawSettings
+public class CodexSettings
 {
-    public string CliPath { get; set; } = "openclaw";
-    public string GatewayUrl { get; set; } = string.Empty;
-    public string BugScanAgentId { get; set; } = "main";
+    public string CliPath { get; set; } = "codex";
+    public string BugScanAgentId { get; set; } = string.Empty;
     public List<string> BugScanAgentIds { get; set; } = [];
     public string BugFixAgentId { get; set; } = string.Empty;
     public List<string> BugFixAgentIds { get; set; } = [];
@@ -141,26 +139,26 @@ public class OpenClawSettings
     ];
 }
 
-public sealed class OpenClawBugScanService : IOpenClawBugScanService
+public sealed class CodexBugScanService : ICodexBugScanService
 {
     private const int DefaultTimeoutSeconds = 120;
     private const int DefaultFindingsPerScan = 8;
     private const int HardMaxFindings = 20;
 
-    private readonly OpenClawSettings _settings;
-    private readonly ILogger<OpenClawBugScanService> _logger;
+    private readonly CodexSettings _settings;
+    private readonly ILogger<CodexBugScanService> _logger;
 
-    public OpenClawBugScanService(
-        IOptions<OpenClawSettings> settings,
-        ILogger<OpenClawBugScanService> logger)
+    public CodexBugScanService(
+        IOptions<CodexSettings> settings,
+        ILogger<CodexBugScanService> logger)
     {
-        _settings = settings.Value ?? new OpenClawSettings();
+        _settings = settings.Value ?? new CodexSettings();
         _logger = logger;
     }
 
     public int MaxFindingsPerScan => NormalizeFindingsLimit(_settings.MaxFindingsPerScan);
 
-    public async Task<OpenClawBugScanResult> ScanProjectAsync(
+    public async Task<CodexBugScanResult> ScanProjectAsync(
         ChangeRequest project,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default,
@@ -169,7 +167,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentNullException.ThrowIfNull(project);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
@@ -186,24 +184,24 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return Failed($"OpenClaw scan failed: OpenClaw CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return Failed($"Codex scan failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
 
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return Failed("OpenClaw scan failed: unable to start OpenClaw process.");
+                return Failed("Codex scan failed: unable to start Codex process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw process from path {CliPath}", resolvedCliPath);
-            return Failed($"OpenClaw scan failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex process from path {CliPath}", resolvedCliPath);
+            return Failed($"Codex scan failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -218,7 +216,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return Failed($"OpenClaw scan timed out after {timeoutSeconds} seconds.");
+            return Failed($"Codex scan timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -227,20 +225,20 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (process.ExitCode != 0)
         {
             _logger.LogWarning(
-                "OpenClaw process exited with code {ExitCode}. stderr: {StdErr}",
+                "Codex process exited with code {ExitCode}. stderr: {StdErr}",
                 process.ExitCode,
                 TrimTo(stderr, 400));
 
             var errorDetails = !string.IsNullOrWhiteSpace(stderr)
                 ? TrimTo(stderr, 220)
-                : "OpenClaw command returned a non-zero exit code.";
-            return Failed($"OpenClaw scan failed: {errorDetails}");
+                : "Codex command returned a non-zero exit code.";
+            return Failed($"Codex scan failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return Failed("OpenClaw scan failed: command returned empty output.");
+            return Failed("Codex scan failed: command returned empty output.");
 
-        if (!TryParseOpenClawResponse(stdout, out var agentText, out var responseError))
+        if (!TryParseCodexResponse(stdout, out var agentText, out var responseError))
         {
             var directFindings = ParseFindingsFromRawCandidates(stdout, findingsLimit);
             if (directFindings.Count == 0 && !string.IsNullOrWhiteSpace(stderr))
@@ -251,36 +249,36 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             if (directFindings.Count > 0)
             {
                 _logger.LogInformation(
-                    "OpenClaw response envelope parse failed but direct finding extraction succeeded ({Count} findings).",
+                    "Codex response envelope parse failed but direct finding extraction succeeded ({Count} findings).",
                     directFindings.Count);
-                return new OpenClawBugScanResult(true, string.Empty, directFindings, stdout);
+                return new CodexBugScanResult(true, string.Empty, directFindings, stdout);
             }
 
             _logger.LogWarning(
-                "Unable to parse OpenClaw response. stdout: {StdOut}; stderr: {StdErr}",
+                "Unable to parse Codex response. stdout: {StdOut}; stderr: {StdErr}",
                 TrimTo(stdout, 400),
                 TrimTo(stderr, 400));
             var preview = TrimTo(StripAnsi(stdout), 180);
             var previewMessage = string.IsNullOrWhiteSpace(preview) ? string.Empty : $" Output preview: {preview}";
-            return Failed($"OpenClaw scan failed: {responseError}.{previewMessage}");
+            return Failed($"Codex scan failed: {responseError}.{previewMessage}");
         }
 
         if (string.IsNullOrWhiteSpace(agentText))
-            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+            return new CodexBugScanResult(true, string.Empty, [], stdout);
 
         var findings = ParseFindings(agentText, findingsLimit);
         if (findings.Count == 0)
         {
             _logger.LogInformation(
-                "OpenClaw scan returned no parseable findings for project {CrNumber}.",
+                "Codex scan returned no parseable findings for project {CrNumber}.",
                 project.CrNumber);
-            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+            return new CodexBugScanResult(true, string.Empty, [], stdout);
         }
 
-        return new OpenClawBugScanResult(true, string.Empty, findings, stdout);
+        return new CodexBugScanResult(true, string.Empty, findings, stdout);
     }
 
-    public async Task<OpenClawBugScanResult> ScanModuleAsync(
+    public async Task<CodexBugScanResult> ScanModuleAsync(
         ChangeRequest project,
         string moduleName,
         string? scanAgentId = null,
@@ -291,7 +289,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleName);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
@@ -308,23 +306,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return Failed($"OpenClaw scan failed: OpenClaw CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return Failed($"Codex scan failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return Failed("OpenClaw scan failed: unable to start OpenClaw process.");
+                return Failed("Codex scan failed: unable to start Codex process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw module scan process from path {CliPath}", resolvedCliPath);
-            return Failed($"OpenClaw scan failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex module scan process from path {CliPath}", resolvedCliPath);
+            return Failed($"Codex scan failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -339,7 +337,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return Failed($"OpenClaw module scan timed out after {timeoutSeconds} seconds.");
+            return Failed($"Codex module scan timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -348,18 +346,18 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (process.ExitCode != 0)
         {
             _logger.LogWarning(
-                "OpenClaw module scan exited with code {ExitCode}. stderr: {StdErr}",
+                "Codex module scan exited with code {ExitCode}. stderr: {StdErr}",
                 process.ExitCode, TrimTo(stderr, 400));
             var errorDetails = !string.IsNullOrWhiteSpace(stderr)
                 ? TrimTo(stderr, 220)
-                : "OpenClaw command returned a non-zero exit code.";
-            return Failed($"OpenClaw scan failed: {errorDetails}");
+                : "Codex command returned a non-zero exit code.";
+            return Failed($"Codex scan failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return Failed("OpenClaw scan failed: command returned empty output.");
+            return Failed("Codex scan failed: command returned empty output.");
 
-        if (!TryParseOpenClawResponse(stdout, out var agentText, out var responseError))
+        if (!TryParseCodexResponse(stdout, out var agentText, out var responseError))
         {
             var directFindings = ParseFindingsFromRawCandidates(stdout, findingsLimit);
             if (directFindings.Count == 0 && !string.IsNullOrWhiteSpace(stderr))
@@ -370,32 +368,32 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             if (directFindings.Count > 0)
             {
                 _logger.LogInformation(
-                    "OpenClaw module scan response parse failed but direct extraction succeeded ({Count} findings).",
+                    "Codex module scan response parse failed but direct extraction succeeded ({Count} findings).",
                     directFindings.Count);
-                return new OpenClawBugScanResult(true, string.Empty, directFindings, stdout);
+                return new CodexBugScanResult(true, string.Empty, directFindings, stdout);
             }
 
             var preview = TrimTo(StripAnsi(stdout), 180);
             var previewMessage = string.IsNullOrWhiteSpace(preview) ? string.Empty : $" Output preview: {preview}";
-            return Failed($"OpenClaw scan failed: {responseError}.{previewMessage}");
+            return Failed($"Codex scan failed: {responseError}.{previewMessage}");
         }
 
         if (string.IsNullOrWhiteSpace(agentText))
-            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+            return new CodexBugScanResult(true, string.Empty, [], stdout);
 
         var findings = ParseFindings(agentText, findingsLimit);
         if (findings.Count == 0)
         {
             _logger.LogInformation(
-                "OpenClaw module scan returned no parseable findings for project {CrNumber} module {Module}.",
+                "Codex module scan returned no parseable findings for project {CrNumber} module {Module}.",
                 project.CrNumber, moduleName);
-            return new OpenClawBugScanResult(true, string.Empty, [], stdout);
+            return new CodexBugScanResult(true, string.Empty, [], stdout);
         }
 
-        return new OpenClawBugScanResult(true, string.Empty, findings, stdout);
+        return new CodexBugScanResult(true, string.Empty, findings, stdout);
     }
 
-    public async Task<OpenClawTestCaseGenResult> GenerateTestCasesAsync(
+    public async Task<CodexTestCaseGenResult> GenerateTestCasesAsync(
         ChangeRequest project,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default)
@@ -403,7 +401,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentNullException.ThrowIfNull(project);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
@@ -416,23 +414,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return FailedTestCaseGen($"OpenClaw failed: CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return FailedTestCaseGen($"Codex failed: CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return FailedTestCaseGen("OpenClaw failed: unable to start process.");
+                return FailedTestCaseGen("Codex failed: unable to start process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw test case gen process from path {CliPath}", resolvedCliPath);
-            return FailedTestCaseGen($"OpenClaw failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex test case gen process from path {CliPath}", resolvedCliPath);
+            return FailedTestCaseGen($"Codex failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -447,7 +445,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return FailedTestCaseGen($"OpenClaw test case generation timed out after {timeoutSeconds} seconds.");
+            return FailedTestCaseGen($"Codex test case generation timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -455,36 +453,36 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("OpenClaw test case gen exited with code {ExitCode}. stderr: {StdErr}",
+            _logger.LogWarning("Codex test case gen exited with code {ExitCode}. stderr: {StdErr}",
                 process.ExitCode, TrimTo(stderr, 400));
             var errorDetails = !string.IsNullOrWhiteSpace(stderr) ? TrimTo(stderr, 220) : "Non-zero exit code.";
-            return FailedTestCaseGen($"OpenClaw failed: {errorDetails}");
+            return FailedTestCaseGen($"Codex failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return FailedTestCaseGen("OpenClaw failed: empty output.");
+            return FailedTestCaseGen("Codex failed: empty output.");
 
         // Try envelope parse first, then raw
         string? agentText = null;
-        if (TryParseOpenClawResponse(stdout, out var envelopeText, out _))
+        if (TryParseCodexResponse(stdout, out var envelopeText, out _))
             agentText = envelopeText;
         else
             agentText = stdout;
 
         if (string.IsNullOrWhiteSpace(agentText))
-            return new OpenClawTestCaseGenResult(true, string.Empty, [], stdout);
+            return new CodexTestCaseGenResult(true, string.Empty, [], stdout);
 
         var testCases = ParseGeneratedTestCases(agentText, maxTestCases);
         if (testCases.Count == 0)
         {
-            _logger.LogInformation("OpenClaw test case gen returned no parseable test cases for project {CrNumber}.", project.CrNumber);
-            return new OpenClawTestCaseGenResult(true, string.Empty, [], stdout);
+            _logger.LogInformation("Codex test case gen returned no parseable test cases for project {CrNumber}.", project.CrNumber);
+            return new CodexTestCaseGenResult(true, string.Empty, [], stdout);
         }
 
-        return new OpenClawTestCaseGenResult(true, string.Empty, testCases, stdout);
+        return new CodexTestCaseGenResult(true, string.Empty, testCases, stdout);
     }
 
-    public async Task<OpenClawProjectHealthResult> AnalyzeProjectHealthAsync(
+    public async Task<CodexProjectHealthResult> AnalyzeProjectHealthAsync(
         ChangeRequest project,
         int totalBugs,
         int openBugs,
@@ -498,7 +496,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentNullException.ThrowIfNull(project);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedAgentId(scanAgentId, _settings);
         var timeoutSeconds = Math.Clamp(NormalizeTimeout(_settings.TimeoutSeconds), 20, 90);
@@ -517,23 +515,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return FailedProjectHealth($"OpenClaw failed: CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return FailedProjectHealth($"Codex failed: CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return FailedProjectHealth("OpenClaw failed: unable to start process.");
+                return FailedProjectHealth("Codex failed: unable to start process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw project health process from path {CliPath}", resolvedCliPath);
-            return FailedProjectHealth($"OpenClaw failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex project health process from path {CliPath}", resolvedCliPath);
+            return FailedProjectHealth($"Codex failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -548,7 +546,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return FailedProjectHealth($"OpenClaw project health analysis timed out after {timeoutSeconds} seconds.");
+            return FailedProjectHealth($"Codex project health analysis timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -556,23 +554,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("OpenClaw project health exited with code {ExitCode}. stderr: {StdErr}",
+            _logger.LogWarning("Codex project health exited with code {ExitCode}. stderr: {StdErr}",
                 process.ExitCode, TrimTo(stderr, 400));
             var errorDetails = !string.IsNullOrWhiteSpace(stderr) ? TrimTo(stderr, 220) : "Non-zero exit code.";
-            return FailedProjectHealth($"OpenClaw failed: {errorDetails}");
+            return FailedProjectHealth($"Codex failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return FailedProjectHealth("OpenClaw failed: empty output.");
+            return FailedProjectHealth("Codex failed: empty output.");
 
         string? agentText = null;
-        if (TryParseOpenClawResponse(stdout, out var envelopeText, out _))
+        if (TryParseCodexResponse(stdout, out var envelopeText, out _))
             agentText = envelopeText;
         else
             agentText = stdout;
 
         if (string.IsNullOrWhiteSpace(agentText))
-            return FailedProjectHealth("OpenClaw failed: empty health response.");
+            return FailedProjectHealth("Codex failed: empty health response.");
 
         var parsed = ParseProjectHealth(agentText, complexityScore);
         if (!parsed.Succeeded)
@@ -581,7 +579,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return parsed with { AgentResponseText = stdout };
     }
 
-    public async Task<OpenClawBugFixResult> FixBugAsync(
+    public async Task<CodexBugFixResult> FixBugAsync(
         BugReport bug,
         string? fixAgentId = null,
         CancellationToken cancellationToken = default)
@@ -589,7 +587,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentNullException.ThrowIfNull(bug);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedFixAgentId(fixAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
@@ -601,23 +599,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return FailedFix($"OpenClaw fix failed: OpenClaw CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return FailedFix($"Codex fix failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return FailedFix("OpenClaw fix failed: unable to start OpenClaw process.");
+                return FailedFix("Codex fix failed: unable to start Codex process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw fix process from path {CliPath}", resolvedCliPath);
-            return FailedFix($"OpenClaw fix failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex fix process from path {CliPath}", resolvedCliPath);
+            return FailedFix($"Codex fix failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -632,7 +630,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return FailedFix($"OpenClaw fix timed out after {timeoutSeconds} seconds.");
+            return FailedFix($"Codex fix timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -642,15 +640,15 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var errorDetails = !string.IsNullOrWhiteSpace(stderr)
                 ? TrimTo(stderr, 220)
-                : "OpenClaw command returned a non-zero exit code.";
-            return FailedFix($"OpenClaw fix failed: {errorDetails}");
+                : "Codex command returned a non-zero exit code.";
+            return FailedFix($"Codex fix failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return FailedFix("OpenClaw fix failed: command returned empty output.");
+            return FailedFix("Codex fix failed: command returned empty output.");
 
         string fixPlan;
-        if (TryParseOpenClawResponse(stdout, out var agentText, out _))
+        if (TryParseCodexResponse(stdout, out var agentText, out _))
         {
             fixPlan = agentText;
         }
@@ -663,16 +661,16 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             fixPlan = StripAnsi(stderr).Trim();
 
         if (string.IsNullOrWhiteSpace(fixPlan))
-            return FailedFix("OpenClaw fix failed: empty fix response.");
+            return FailedFix("Codex fix failed: empty fix response.");
 
         var pullRequestUrl = ExtractPullRequestUrl(fixPlan)
             ?? ExtractPullRequestUrl(stdout)
             ?? ExtractPullRequestUrl(stderr);
         var normalizedFixPlan = TrimTo(fixPlan, 3500);
-        return new OpenClawBugFixResult(true, string.Empty, normalizedFixPlan, pullRequestUrl);
+        return new CodexBugFixResult(true, string.Empty, normalizedFixPlan, pullRequestUrl);
     }
 
-    public async Task<OpenClawFeatureImplementResult> ImplementFeatureAsync(
+    public async Task<CodexFeatureImplementResult> ImplementFeatureAsync(
         ProjectFeature feature,
         ChangeRequest? project = null,
         string? featureAgentId = null,
@@ -681,7 +679,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         ArgumentNullException.ThrowIfNull(feature);
 
         var configuredCliPath = string.IsNullOrWhiteSpace(_settings.CliPath)
-            ? "openclaw"
+            ? "codex"
             : _settings.CliPath.Trim();
         var agentId = ResolveRequestedFeatureAgentId(featureAgentId, _settings);
         var timeoutSeconds = NormalizeTimeout(_settings.TimeoutSeconds);
@@ -693,23 +691,23 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var recommendedPath = GetRecommendedWindowsCliPath();
             var hint = string.IsNullOrWhiteSpace(recommendedPath)
-                ? "Set OpenClaw:CliPath to your OpenClaw executable path."
-                : $"Set OpenClaw:CliPath to '{recommendedPath}'.";
-            return FailedFeature($"OpenClaw feature run failed: OpenClaw CLI not found. {hint}");
+                ? "Set Codex:CliPath to your Codex executable path."
+                : $"Set Codex:CliPath to '{recommendedPath}'.";
+            return FailedFeature($"Codex feature run failed: Codex CLI not found. {hint}");
         }
 
-        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt, timeoutSeconds, _settings.GatewayUrl);
+        var startInfo = BuildProcessStartInfo(resolvedCliPath, agentId, prompt);
         using var process = new Process { StartInfo = startInfo };
 
         try
         {
             if (!process.Start())
-                return FailedFeature("OpenClaw feature run failed: unable to start OpenClaw process.");
+                return FailedFeature("Codex feature run failed: unable to start Codex process.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to start OpenClaw feature process from path {CliPath}", resolvedCliPath);
-            return FailedFeature($"OpenClaw feature run failed: cannot start '{resolvedCliPath}'.");
+            _logger.LogWarning(ex, "Failed to start Codex feature process from path {CliPath}", resolvedCliPath);
+            return FailedFeature($"Codex feature run failed: cannot start '{resolvedCliPath}'.");
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -724,7 +722,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         catch (OperationCanceledException)
         {
             TryKill(process);
-            return FailedFeature($"OpenClaw feature run timed out after {timeoutSeconds} seconds.");
+            return FailedFeature($"Codex feature run timed out after {timeoutSeconds} seconds.");
         }
 
         var stdout = (await stdoutTask).Trim();
@@ -734,15 +732,15 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         {
             var errorDetails = !string.IsNullOrWhiteSpace(stderr)
                 ? TrimTo(stderr, 220)
-                : "OpenClaw command returned a non-zero exit code.";
-            return FailedFeature($"OpenClaw feature run failed: {errorDetails}");
+                : "Codex command returned a non-zero exit code.";
+            return FailedFeature($"Codex feature run failed: {errorDetails}");
         }
 
         if (string.IsNullOrWhiteSpace(stdout))
-            return FailedFeature("OpenClaw feature run failed: command returned empty output.");
+            return FailedFeature("Codex feature run failed: command returned empty output.");
 
         string implementationPlan;
-        if (TryParseOpenClawResponse(stdout, out var agentText, out _))
+        if (TryParseCodexResponse(stdout, out var agentText, out _))
         {
             implementationPlan = agentText;
         }
@@ -755,9 +753,9 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             implementationPlan = StripAnsi(stderr).Trim();
 
         if (string.IsNullOrWhiteSpace(implementationPlan))
-            return FailedFeature("OpenClaw feature run failed: empty response.");
+            return FailedFeature("Codex feature run failed: empty response.");
 
-        return new OpenClawFeatureImplementResult(true, string.Empty, TrimTo(implementationPlan, 3500));
+        return new CodexFeatureImplementResult(true, string.Empty, TrimTo(implementationPlan, 3500));
     }
 
     private static int NormalizeTimeout(int configuredTimeoutSeconds)
@@ -768,7 +766,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return Math.Clamp(configuredTimeoutSeconds, 10, 900);
     }
 
-    private static string ResolveAdditionalInstructions(OpenClawSettings settings)
+    private static string ResolveAdditionalInstructions(CodexSettings settings)
     {
         var instructions = new List<string>();
 
@@ -785,7 +783,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
-    private static string ResolveSecurityScanAdditionalInstructions(OpenClawSettings settings)
+    private static string ResolveSecurityScanAdditionalInstructions(CodexSettings settings)
     {
         var instructions = new List<string>();
 
@@ -802,7 +800,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
-    private static string ResolveFixAdditionalInstructions(OpenClawSettings settings)
+    private static string ResolveFixAdditionalInstructions(CodexSettings settings)
     {
         var instructions = new List<string>();
 
@@ -819,7 +817,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
-    private static string ResolveFeatureAdditionalInstructions(OpenClawSettings settings)
+    private static string ResolveFeatureAdditionalInstructions(CodexSettings settings)
     {
         var instructions = new List<string>();
 
@@ -836,7 +834,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
-    private static string ResolveTestCaseGenAdditionalInstructions(OpenClawSettings settings)
+    private static string ResolveTestCaseGenAdditionalInstructions(CodexSettings settings)
     {
         var instructions = new List<string>();
 
@@ -853,7 +851,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return string.Join("\n", instructions);
     }
 
-    private static string ResolveRequestedAgentId(string? scanAgentId, OpenClawSettings settings)
+    private static string ResolveRequestedAgentId(string? scanAgentId, CodexSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(scanAgentId))
             return scanAgentId.Trim();
@@ -862,10 +860,10 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (configured.Count > 0)
             return configured[0];
 
-        return "main";
+        return string.Empty;
     }
 
-    private static string ResolveRequestedFixAgentId(string? fixAgentId, OpenClawSettings settings)
+    private static string ResolveRequestedFixAgentId(string? fixAgentId, CodexSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(fixAgentId))
             return fixAgentId.Trim();
@@ -874,10 +872,10 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (configured.Count > 0)
             return configured[0];
 
-        return "main";
+        return string.Empty;
     }
 
-    private static string ResolveRequestedFeatureAgentId(string? featureAgentId, OpenClawSettings settings)
+    private static string ResolveRequestedFeatureAgentId(string? featureAgentId, CodexSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(featureAgentId))
             return featureAgentId.Trim();
@@ -886,10 +884,10 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (configured.Count > 0)
             return configured[0];
 
-        return "main";
+        return string.Empty;
     }
 
-    public static IReadOnlyList<string> GetConfiguredAgentIds(OpenClawSettings settings)
+    public static IReadOnlyList<string> GetConfiguredAgentIds(CodexSettings settings)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -928,7 +926,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return result;
     }
 
-    public static IReadOnlyList<string> GetConfiguredFixAgentIds(OpenClawSettings settings)
+    public static IReadOnlyList<string> GetConfiguredFixAgentIds(CodexSettings settings)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -973,13 +971,10 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             }
         }
 
-        if (result.Count == 0)
-            result.Add("main");
-
         return result;
     }
 
-    public static IReadOnlyList<string> GetConfiguredFeatureAgentIds(OpenClawSettings settings)
+    public static IReadOnlyList<string> GetConfiguredFeatureAgentIds(CodexSettings settings)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1024,35 +1019,43 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             }
         }
 
-        if (result.Count == 0)
-            result.Add("main");
-
         return result;
     }
 
     private static ProcessStartInfo BuildProcessStartInfo(
         string resolvedCliPath,
-        string agentId,
-        string prompt,
-        int timeoutSeconds,
-        string? configuredGatewayUrl = null)
+        string model,
+        string prompt)
     {
-        var args = new[]
+        var args = new List<string>
         {
-            "agent",
-            "--agent",
-            agentId,
-            "--message",
-            prompt,
-            "--json",
-            "--timeout",
-            timeoutSeconds.ToString(CultureInfo.InvariantCulture)
+            "exec",
+            "--ephemeral",
+            "--color",
+            "never",
+            "--sandbox",
+            "workspace-write",
+            "--skip-git-repo-check"
         };
 
+        if (!string.IsNullOrWhiteSpace(model) &&
+            !model.Equals("main", StringComparison.OrdinalIgnoreCase) &&
+            !model.Equals("default", StringComparison.OrdinalIgnoreCase))
+        {
+            args.Add("--model");
+            args.Add(model.Trim());
+        }
+
+        args.Add(prompt);
+
         var usePowerShellHost = resolvedCliPath.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase);
+        var useCommandHost = resolvedCliPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
+            resolvedCliPath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
         var startInfo = new ProcessStartInfo
         {
-            FileName = usePowerShellHost ? "powershell" : resolvedCliPath,
+            FileName = usePowerShellHost
+                ? "powershell"
+                : useCommandHost ? "cmd.exe" : resolvedCliPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -1068,17 +1071,16 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             startInfo.ArgumentList.Add("-File");
             startInfo.ArgumentList.Add(resolvedCliPath);
         }
+        else if (useCommandHost)
+        {
+            startInfo.ArgumentList.Add("/d");
+            startInfo.ArgumentList.Add("/s");
+            startInfo.ArgumentList.Add("/c");
+            startInfo.ArgumentList.Add(resolvedCliPath);
+        }
 
         foreach (var arg in args)
             startInfo.ArgumentList.Add(arg);
-
-        var gatewayUrl = configuredGatewayUrl?.Trim();
-        if (!string.IsNullOrWhiteSpace(gatewayUrl))
-        {
-            // Keep both names to support different OpenClaw CLI env conventions.
-            startInfo.Environment["OPENCLAW_GATEWAY_URL"] = gatewayUrl;
-            startInfo.Environment["OPENCLAW_BASE_URL"] = gatewayUrl;
-        }
 
         return startInfo;
     }
@@ -1087,7 +1089,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var defaultCommand = string.IsNullOrWhiteSpace(configuredCliPath)
-            ? "openclaw"
+            ? "codex"
             : configuredCliPath.Trim();
 
         var explicitCommandFallback = defaultCommand;
@@ -1118,7 +1120,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
     private static IEnumerable<string> EnumerateCliCandidates(string configuredCliPath)
     {
-        var envCliPath = Environment.GetEnvironmentVariable("OPENCLAW_CLI_PATH")?.Trim();
+        var envCliPath = Environment.GetEnvironmentVariable("CODEX_CLI_PATH")?.Trim();
         if (!string.IsNullOrWhiteSpace(envCliPath))
             yield return envCliPath;
 
@@ -1133,19 +1135,31 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
 
         if (!string.IsNullOrWhiteSpace(appData))
         {
-            yield return Path.Combine(appData, "npm", "openclaw.cmd");
-            yield return Path.Combine(appData, "npm", "openclaw.ps1");
-            yield return Path.Combine(appData, "npm", "openclaw.exe");
+            yield return Path.Combine(appData, "npm", "codex.cmd");
+            yield return Path.Combine(appData, "npm", "codex.ps1");
+            yield return Path.Combine(appData, "npm", "codex.exe");
         }
 
         if (!string.IsNullOrWhiteSpace(userProfile))
         {
-            yield return Path.Combine(userProfile, "AppData", "Roaming", "npm", "openclaw.cmd");
-            yield return Path.Combine(userProfile, "AppData", "Roaming", "npm", "openclaw.ps1");
+            yield return Path.Combine(userProfile, "AppData", "Roaming", "npm", "codex.cmd");
+            yield return Path.Combine(userProfile, "AppData", "Roaming", "npm", "codex.ps1");
+
+            var extensionsDirectory = Path.Combine(userProfile, ".vscode", "extensions");
+            if (Directory.Exists(extensionsDirectory))
+            {
+                foreach (var executable in Directory
+                    .EnumerateFiles(extensionsDirectory, "codex.exe", SearchOption.AllDirectories)
+                    .Where(path => path.Contains("openai.chatgpt-", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase))
+                {
+                    yield return executable;
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(localAppData))
-            yield return Path.Combine(localAppData, "pnpm", "openclaw.cmd");
+            yield return Path.Combine(localAppData, "pnpm", "codex.cmd");
     }
 
     private static string NormalizePathCandidate(string candidate)
@@ -1165,7 +1179,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         if (string.IsNullOrWhiteSpace(appData))
             return string.Empty;
 
-        var path = Path.Combine(appData, "npm", "openclaw.cmd");
+        var path = Path.Combine(appData, "npm", "codex.cmd");
         return File.Exists(path) ? path : string.Empty;
     }
 
@@ -1226,7 +1240,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
-    private static bool TryParseOpenClawResponse(
+    private static bool TryParseCodexResponse(
         string rawOutput,
         out string responseText,
         out string error)
@@ -1316,7 +1330,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return true;
     }
 
-    private static List<OpenClawBugFinding> ParseFindings(string agentText, int maxFindings)
+    private static List<CodexBugFinding> ParseFindings(string agentText, int maxFindings)
     {
         var cleaned = StripCodeFence(agentText);
         if (!TryParseJsonDocument(cleaned, out var json))
@@ -1342,7 +1356,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 return [];
             }
 
-            var results = new List<OpenClawBugFinding>();
+            var results = new List<CodexBugFinding>();
             var seenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var findingElement in findingsElement.EnumerateArray())
@@ -1368,7 +1382,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 var screenshotPaths = ParseScreenshotPaths(findingElement, description, workflow, steps);
 
                 if (string.IsNullOrWhiteSpace(description))
-                    description = "Generated by OpenClaw scan.";
+                    description = "Generated by Codex scan.";
                 if (string.IsNullOrWhiteSpace(workflow))
                     workflow = "Review project flow and run targeted validation for this issue.";
                 if (string.IsNullOrWhiteSpace(steps))
@@ -1378,7 +1392,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 if (string.IsNullOrWhiteSpace(severity))
                     severity = "Medium";
 
-                results.Add(new OpenClawBugFinding(
+                results.Add(new CodexBugFinding(
                     title,
                     description,
                     workflow,
@@ -1395,7 +1409,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
-    private static List<OpenClawGeneratedTestCase> ParseGeneratedTestCases(string agentText, int maxItems)
+    private static List<CodexGeneratedTestCase> ParseGeneratedTestCases(string agentText, int maxItems)
     {
         var cleaned = StripCodeFence(agentText);
         if (!TryParseJsonDocument(cleaned, out var json))
@@ -1421,7 +1435,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 return [];
             }
 
-            var results = new List<OpenClawGeneratedTestCase>();
+            var results = new List<CodexGeneratedTestCase>();
             var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var item in testCasesElement.EnumerateArray())
@@ -1447,7 +1461,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 if (string.IsNullOrWhiteSpace(environment))
                     environment = "Dev";
 
-                results.Add(new OpenClawGeneratedTestCase(name, description, module, category, environment));
+                results.Add(new CodexGeneratedTestCase(name, description, module, category, environment));
 
                 if (results.Count >= maxItems)
                     break;
@@ -1457,11 +1471,11 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
-    private static OpenClawProjectHealthResult ParseProjectHealth(string agentText, int complexityScore)
+    private static CodexProjectHealthResult ParseProjectHealth(string agentText, int complexityScore)
     {
         var cleaned = StripCodeFence(agentText);
         if (!TryParseJsonDocument(cleaned, out var json))
-            return FailedProjectHealth("OpenClaw returned non-JSON health output.");
+            return FailedProjectHealth("Codex returned non-JSON health output.");
 
         using (json)
         {
@@ -1474,7 +1488,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
             }
 
             if (root.ValueKind != JsonValueKind.Object)
-                return FailedProjectHealth("OpenClaw health output schema is invalid.");
+                return FailedProjectHealth("Codex health output schema is invalid.");
 
             var rawScore = root.TryGetProperty("score", out var scoreEl) && scoreEl.ValueKind == JsonValueKind.Number && scoreEl.TryGetInt32(out var s)
                 ? s
@@ -1508,7 +1522,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
                 }
             }
 
-            return new OpenClawProjectHealthResult(
+            return new CodexProjectHealthResult(
                 true,
                 string.Empty,
                 score,
@@ -1520,7 +1534,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
     }
 
-    private static List<OpenClawBugFinding> ParseFindingsFromRawCandidates(string raw, int maxFindings)
+    private static List<CodexBugFinding> ParseFindingsFromRawCandidates(string raw, int maxFindings)
     {
         var candidates = new List<string>();
         var normalized = StripAnsi(raw).Trim();
@@ -1559,7 +1573,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         int repositoryFeatureCount,
         int timelineDays,
         int complexityScore,
-        OpenClawSettings settings)
+        CodexSettings settings)
     {
         var features = project.Features
             .Select(f => f.Name?.Trim())
@@ -1617,7 +1631,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return Regex.Replace(raw, @"\s+", " ").Trim();
     }
 
-    private static string BuildPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+    private static string BuildPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, CodexSettings settings)
     {
         var features = project.Features
             .Select(f => f.Name?.Trim())
@@ -1668,12 +1682,12 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         }
 
         var raw = TrimTo(sb.ToString(), 5000);
-        // openclaw.cmd can lose multi-line argument content on Windows; send one-line prompt.
+        // Command wrappers can lose multi-line argument content on Windows; send a one-line prompt.
         var singleLine = Regex.Replace(raw, @"\s+", " ").Trim();
         return singleLine;
     }
 
-    private static string BuildSecurityPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+    private static string BuildSecurityPrompt(ChangeRequest project, int findingsLimit, string additionalInstructions, CodexSettings settings)
     {
         var features = project.Features
             .Select(f => f.Name?.Trim())
@@ -1735,7 +1749,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
     }
 
     private static string BuildSecurityModuleScanPrompt(
-        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, CodexSettings settings)
     {
         var description = TrimTo(project.Description, 1200);
         var tech = TrimTo(project.TechnologyStack, 400);
@@ -1780,7 +1794,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
     }
 
     private static string BuildModuleScanPrompt(
-        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, OpenClawSettings settings)
+        ChangeRequest project, string moduleName, int findingsLimit, string additionalInstructions, CodexSettings settings)
     {
         var description = TrimTo(project.Description, 1200);
         var tech = TrimTo(project.TechnologyStack, 400);
@@ -1824,7 +1838,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
     }
 
     private static string BuildTestCaseGenPrompt(
-        ChangeRequest project, int maxTestCases, string additionalInstructions, OpenClawSettings settings)
+        ChangeRequest project, int maxTestCases, string additionalInstructions, CodexSettings settings)
     {
         var features = project.Features
             .Select(f => f.Name?.Trim())
@@ -1887,7 +1901,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return singleLine;
     }
 
-    private static string BuildFixPrompt(BugReport bug, string additionalInstructions, OpenClawSettings settings)
+    private static string BuildFixPrompt(BugReport bug, string additionalInstructions, CodexSettings settings)
     {
         var sb = new StringBuilder();
         sb.AppendLine(settings.BugFixSystemRole);
@@ -2063,7 +2077,7 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return results;
     }
 
-    private static string BuildFeaturePrompt(ProjectFeature feature, ChangeRequest? project, string additionalInstructions, OpenClawSettings settings)
+    private static string BuildFeaturePrompt(ProjectFeature feature, ChangeRequest? project, string additionalInstructions, CodexSettings settings)
     {
         var sb = new StringBuilder();
         sb.AppendLine(settings.FeatureImplementSystemRole);
@@ -2355,18 +2369,18 @@ public sealed class OpenClawBugScanService : IOpenClawBugScanService
         return text[..maxLength].Trim();
     }
 
-    private static OpenClawBugScanResult Failed(string error) =>
+    private static CodexBugScanResult Failed(string error) =>
         new(false, error, [], string.Empty);
 
-    private static OpenClawBugFixResult FailedFix(string error) =>
+    private static CodexBugFixResult FailedFix(string error) =>
         new(false, error, string.Empty, null);
 
-    private static OpenClawFeatureImplementResult FailedFeature(string error) =>
+    private static CodexFeatureImplementResult FailedFeature(string error) =>
         new(false, error, string.Empty);
 
-    private static OpenClawTestCaseGenResult FailedTestCaseGen(string error) =>
+    private static CodexTestCaseGenResult FailedTestCaseGen(string error) =>
         new(false, error, [], string.Empty);
 
-    private static OpenClawProjectHealthResult FailedProjectHealth(string error) =>
+    private static CodexProjectHealthResult FailedProjectHealth(string error) =>
         new(false, error, 0, string.Empty, string.Empty, "Medium", [], string.Empty);
 }

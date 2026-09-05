@@ -47,8 +47,8 @@ builder.Services.Configure<ProjectMonitoringSettings>(
     builder.Configuration.GetSection("ProjectMonitoring"));
 builder.Services.Configure<StripeBillingSettings>(
     builder.Configuration.GetSection("StripeBilling"));
-builder.Services.Configure<OpenClawSettings>(
-    builder.Configuration.GetSection("OpenClaw"));
+builder.Services.Configure<CodexSettings>(
+    builder.Configuration.GetSection("Codex"));
 builder.Services.AddHttpClient<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
 builder.Services.AddHttpClient<IStripeBillingService, StripeBillingService>();
@@ -56,7 +56,8 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
 builder.Services.AddScoped<IDeveloperSummaryService, DeveloperSummaryService>();
 builder.Services.AddScoped<IBugService, BugService>();
-builder.Services.AddScoped<IOpenClawBugScanService, OpenClawBugScanService>();
+builder.Services.AddScoped<ICodexBugScanService, CodexBugScanService>();
+builder.Services.AddSingleton<ICodexAuthService, CodexAuthService>();
 builder.Services.AddSingleton<BugFixQueueService>();
 builder.Services.AddSingleton<IBugFixQueueService>(sp => sp.GetRequiredService<BugFixQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BugFixQueueService>());
@@ -66,9 +67,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FeatureAgentQueueS
 builder.Services.AddSingleton<ProjectBugScanQueueService>();
 builder.Services.AddSingleton<IProjectBugScanQueueService>(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
-builder.Services.AddSingleton<QaOpenClawQueueService>();
-builder.Services.AddSingleton<IQaOpenClawQueueService>(sp => sp.GetRequiredService<QaOpenClawQueueService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<QaOpenClawQueueService>());
+builder.Services.AddSingleton<QaCodexQueueService>();
+builder.Services.AddSingleton<IQaCodexQueueService>(sp => sp.GetRequiredService<QaCodexQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<QaCodexQueueService>());
 builder.Services.AddScoped<IUserRoleCacheService, UserRoleCacheService>();
 builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();

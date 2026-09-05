@@ -1,15 +1,15 @@
-﻿@model WFHMonitor.Models.ChangeRequest
+@model WFHMonitor.Models.ChangeRequest
 @{
     ViewData["Title"] = Model.CrNumber;
     var resolvedRepoOwner = ViewBag.ResolvedGitHubOwner as string;
     var resolvedRepoName = ViewBag.ResolvedGitHubRepo as string;
     var resolvedRepoBranch = ViewBag.ResolvedGitHubBranch as string;
     var linkedBugs = ViewBag.LinkedBugs as IList<WFHMonitor.Models.BugReport> ?? new List<WFHMonitor.Models.BugReport>();
-    var openClawScanAgentOptions = ViewBag.OpenClawScanAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    var codexScanAgentOptions = ViewBag.CodexScanAgentOptions as IList<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
         ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var projectHealth = ViewBag.ProjectHealth as WFHMonitor.ViewModels.ProjectHealthViewModel;
     var hasProAccess = ViewBag.HasProAccess as bool? ?? false;
-    var isOpenClawEnabled = ViewBag.IsOpenClawEnabled as bool? ?? true;
+    var isCodexEnabled = ViewBag.IsCodexEnabled as bool? ?? true;
     var isBugScanQueued = Model.BugScanStatus == WFHMonitor.Models.ProjectBugScanStatus.Queued;
     var isBugScanProcessing = Model.BugScanStatus == WFHMonitor.Models.ProjectBugScanStatus.InProgress;
     var isBugScanRunning = isBugScanQueued || isBugScanProcessing;
@@ -529,14 +529,14 @@
                         <div class="pd-section-label">Linked Bugs <span class="pd-badge-count">@linkedBugs.Count</span></div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px">
-                        @if (isOpenClawEnabled)
+                        @if (isCodexEnabled)
                         {
                             @if (hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
                             {
                                 <form asp-action="FindBugs" asp-route-id="@Model.Id" method="post" style="display:flex;align-items:center;gap:6px">
                                     @Html.AntiForgeryToken()
                                     <select name="scanAgentId" class="pd-scan-select">
-                                        @foreach (var option in openClawScanAgentOptions)
+                                        @foreach (var option in codexScanAgentOptions)
                                         {
                                             <option value="@option.Value" selected="@(option.Value == Model.BugScanAgentId ? "selected" : null)">
                                                 @option.Text
@@ -568,7 +568,7 @@
                         }
                     </div>
                 </div>
-                @if (isOpenClawEnabled)
+                @if (isCodexEnabled)
                 {
                     <div class="pd-scan-bar">
                         <div style="display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;color:#52525b">
@@ -694,20 +694,20 @@
                         <div class="pd-section-icon" style="background:#ecfeff;color:#0e7490"><i class="bi bi-heart-pulse"></i></div>
                         <div class="pd-section-label">Project Health</div>
                     </div>
-                    @if (isOpenClawEnabled && hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
+                    @if (isCodexEnabled && hasProAccess && (User.IsInRole("Admin") || User.IsInRole("Tester") || User.IsInRole("Developer")))
                     {
                         <form asp-action="AnalyzeHealth" method="post" style="display:flex;align-items:center;gap:6px">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@Model.Id" />
                             <select name="scanAgentId" class="pd-scan-select">
-                                @foreach (var option in openClawScanAgentOptions)
+                                @foreach (var option in codexScanAgentOptions)
                                 {
-                                    <option value="@option.Value" selected="@(option.Value == (ViewBag.HealthOpenClawAgentId as string) ? "selected" : null)">
+                                    <option value="@option.Value" selected="@(option.Value == (ViewBag.HealthCodexAgentId as string) ? "selected" : null)">
                                         @option.Text
                                     </option>
                                 }
                             </select>
-                            <button type="submit" class="pd-scan-btn" title="Analyze with OpenClaw">
+                            <button type="submit" class="pd-scan-btn" title="Analyze with Codex">
                                 <i class="bi bi-cpu"></i> Analyze
                             </button>
                         </form>
@@ -745,16 +745,16 @@
                     @if (!string.IsNullOrWhiteSpace(health.Error))
                     {
                         <div style="font-size:.72rem;color:#b45309;margin-top:8px">
-                            <i class="bi bi-exclamation-triangle"></i> OpenClaw health analysis fallback used: @health.Error
+                            <i class="bi bi-exclamation-triangle"></i> Codex health analysis fallback used: @health.Error
                         </div>
                     }
                     @if (health.AnalyzedAtUtc.HasValue)
                     {
                         <div style="font-size:.7rem;color:#a1a1aa;margin-top:8px">
                             Updated @health.AnalyzedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")
-                            @if (health.UsedOpenClaw)
+                            @if (health.UsedCodex)
                             {
-                                <span>&middot; OpenClaw analyzed</span>
+                                <span>&middot; Codex analyzed</span>
                             }
                         </div>
                     }
@@ -950,7 +950,7 @@
 </div>
 
 @section Scripts {
-    @if (isOpenClawEnabled && isBugScanRunning)
+    @if (isCodexEnabled && isBugScanRunning)
     {
         <script>
             setTimeout(function () {

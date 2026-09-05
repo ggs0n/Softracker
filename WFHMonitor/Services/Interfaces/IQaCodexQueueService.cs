@@ -1,19 +1,19 @@
 namespace WFHMonitor.Services.Interfaces;
 
-public interface IQaOpenClawQueueService
+public interface IQaCodexQueueService
 {
-    Task EnqueueAsync(QaOpenClawQueueItem item, CancellationToken cancellationToken = default);
+    Task EnqueueAsync(QaCodexQueueItem item, CancellationToken cancellationToken = default);
 }
 
-public enum QaOpenClawQueueOperation
+public enum QaCodexQueueOperation
 {
     ScanAndGenerate,
     AutoGenerate,
     ScanModule
 }
 
-public sealed record QaOpenClawQueueItem(
-    QaOpenClawQueueOperation Operation,
+public sealed record QaCodexQueueItem(
+    QaCodexQueueOperation Operation,
     string RequestedByUserId,
     int? ProjectId = null,
     int? TestCaseId = null,

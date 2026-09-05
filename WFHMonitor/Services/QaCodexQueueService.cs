@@ -7,9 +7,9 @@ using WFHMonitor.ViewModels;
 
 namespace WFHMonitor.Services;
 
-public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueueService
+public sealed class QaCodexQueueService : BackgroundService, IQaCodexQueueService
 {
-    private readonly Channel<QaOpenClawQueueItem> _queue = Channel.CreateBounded<QaOpenClawQueueItem>(
+    private readonly Channel<QaCodexQueueItem> _queue = Channel.CreateBounded<QaCodexQueueItem>(
         new BoundedChannelOptions(50)
         {
             SingleReader = true,
@@ -18,28 +18,28 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         });
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<QaOpenClawQueueService> _logger;
+    private readonly ILogger<QaCodexQueueService> _logger;
 
-    public QaOpenClawQueueService(
+    public QaCodexQueueService(
         IServiceScopeFactory scopeFactory,
-        ILogger<QaOpenClawQueueService> logger)
+        ILogger<QaCodexQueueService> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
-    public Task EnqueueAsync(QaOpenClawQueueItem item, CancellationToken cancellationToken = default)
+    public Task EnqueueAsync(QaCodexQueueItem item, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(item.RequestedByUserId))
-            throw new ArgumentException("Invalid QA OpenClaw queue item.");
+            throw new ArgumentException("Invalid QA Codex queue item.");
 
-        if (item.Operation is QaOpenClawQueueOperation.ScanAndGenerate or QaOpenClawQueueOperation.AutoGenerate)
+        if (item.Operation is QaCodexQueueOperation.ScanAndGenerate or QaCodexQueueOperation.AutoGenerate)
         {
             if (!item.ProjectId.HasValue || item.ProjectId.Value <= 0)
                 throw new ArgumentException("ProjectId is required for this operation.");
         }
 
-        if (item.Operation == QaOpenClawQueueOperation.ScanModule)
+        if (item.Operation == QaCodexQueueOperation.ScanModule)
         {
             if (!item.TestCaseId.HasValue || item.TestCaseId.Value <= 0)
                 throw new ArgumentException("TestCaseId is required for module scan.");
@@ -58,34 +58,34 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "QA OpenClaw queue failed for operation {Operation}.", item.Operation);
+                _logger.LogError(ex, "QA Codex queue failed for operation {Operation}.", item.Operation);
                 await TryNotifyAsync(
                     item.RequestedByUserId,
-                    "OpenClaw QA failed",
-                    "OpenClaw QA job failed unexpectedly. Please retry.",
+                    "Codex QA failed",
+                    "Codex QA job failed unexpectedly. Please retry.",
                     "/Qa/Index");
             }
         }
     }
 
-    private async Task ProcessItemAsync(QaOpenClawQueueItem item, CancellationToken cancellationToken)
+    private async Task ProcessItemAsync(QaCodexQueueItem item, CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
+        var codex = scope.ServiceProvider.GetRequiredService<ICodexBugScanService>();
         var bugService = scope.ServiceProvider.GetRequiredService<IBugService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
         switch (item.Operation)
         {
-            case QaOpenClawQueueOperation.ScanAndGenerate:
-                await ProcessScanAndGenerateAsync(db, openClaw, bugService, notificationService, item, cancellationToken);
+            case QaCodexQueueOperation.ScanAndGenerate:
+                await ProcessScanAndGenerateAsync(db, codex, bugService, notificationService, item, cancellationToken);
                 break;
-            case QaOpenClawQueueOperation.AutoGenerate:
-                await ProcessAutoGenerateAsync(db, openClaw, notificationService, item, cancellationToken);
+            case QaCodexQueueOperation.AutoGenerate:
+                await ProcessAutoGenerateAsync(db, codex, notificationService, item, cancellationToken);
                 break;
-            case QaOpenClawQueueOperation.ScanModule:
-                await ProcessScanModuleAsync(db, openClaw, bugService, notificationService, item, cancellationToken);
+            case QaCodexQueueOperation.ScanModule:
+                await ProcessScanModuleAsync(db, codex, bugService, notificationService, item, cancellationToken);
                 break;
         }
     }
@@ -95,10 +95,10 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
 
     private async Task ProcessScanAndGenerateAsync(
         ApplicationDbContext db,
-        IOpenClawBugScanService openClaw,
+        ICodexBugScanService codex,
         IBugService bugService,
         INotificationService notificationService,
-        QaOpenClawQueueItem item,
+        QaCodexQueueItem item,
         CancellationToken cancellationToken)
     {
         var projectId = item.ProjectId!.Value;
@@ -112,7 +112,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan failed",
+                "Codex scan failed",
                 "QA scan failed because the selected project no longer exists.",
                 "/Qa/Index");
             return;
@@ -122,12 +122,12 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         if (string.IsNullOrWhiteSpace(createdById))
             return;
 
-        var result = await openClaw.ScanProjectAsync(
+        var result = await codex.ScanProjectAsync(
             project,
             NormalizeAgentId(item.ScanAgentId),
             cancellationToken,
             item.UseSecurityPrompt);
-        var scanLabel = item.UseSecurityPrompt ? "OpenClaw security scan" : "OpenClaw scan";
+        var scanLabel = item.UseSecurityPrompt ? "Codex security scan" : "Codex scan";
         if (!result.Succeeded)
         {
             await NotifyAsync(
@@ -228,9 +228,9 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
 
     private async Task ProcessAutoGenerateAsync(
         ApplicationDbContext db,
-        IOpenClawBugScanService openClaw,
+        ICodexBugScanService codex,
         INotificationService notificationService,
-        QaOpenClawQueueItem item,
+        QaCodexQueueItem item,
         CancellationToken cancellationToken)
     {
         var projectId = item.ProjectId!.Value;
@@ -244,7 +244,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw auto-generate failed",
+                "Codex auto-generate failed",
                 "QA auto-generate failed because the selected project no longer exists.",
                 "/Qa/Index");
             return;
@@ -254,14 +254,14 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         if (string.IsNullOrWhiteSpace(createdById))
             return;
 
-        var result = await openClaw.GenerateTestCasesAsync(project, NormalizeAgentId(item.ScanAgentId), cancellationToken);
+        var result = await codex.GenerateTestCasesAsync(project, NormalizeAgentId(item.ScanAgentId), cancellationToken);
         if (!result.Succeeded)
         {
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw auto-generate failed",
-                $"OpenClaw auto-generate failed for {project.CrNumber}: {TrimTo(result.Error, 600)}",
+                "Codex auto-generate failed",
+                $"Codex auto-generate failed for {project.CrNumber}: {TrimTo(result.Error, 600)}",
                 $"/Qa/Index?projectId={project.Id}");
             return;
         }
@@ -271,8 +271,8 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw auto-generate completed",
-                $"OpenClaw analyzed {project.CrNumber} but generated no test cases.",
+                "Codex auto-generate completed",
+                $"Codex analyzed {project.CrNumber} but generated no test cases.",
                 $"/Qa/Index?projectId={project.Id}");
             return;
         }
@@ -308,17 +308,17 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         await NotifyAsync(
             notificationService,
             item.RequestedByUserId,
-            "OpenClaw auto-generate completed",
-            $"OpenClaw generated {result.TestCases.Count} module-level test case(s) for {project.CrNumber}.",
+            "Codex auto-generate completed",
+            $"Codex generated {result.TestCases.Count} module-level test case(s) for {project.CrNumber}.",
             $"/Qa/Index?projectId={project.Id}");
     }
 
     private async Task ProcessScanModuleAsync(
         ApplicationDbContext db,
-        IOpenClawBugScanService openClaw,
+        ICodexBugScanService codex,
         IBugService bugService,
         INotificationService notificationService,
-        QaOpenClawQueueItem item,
+        QaCodexQueueItem item,
         CancellationToken cancellationToken)
     {
         var testCaseId = item.TestCaseId!.Value;
@@ -332,7 +332,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan failed",
+                "Codex scan failed",
                 "QA scan failed because the selected test case no longer exists.",
                 "/Qa/Index");
             return;
@@ -343,7 +343,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
             await NotifyAsync(
                 notificationService,
                 item.RequestedByUserId,
-                "OpenClaw scan failed",
+                "Codex scan failed",
                 $"Test case {testCase.TestNumber} has no linked project.",
                 "/Qa/Index");
             return;
@@ -355,19 +355,19 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
 
         var hasModule = !string.IsNullOrWhiteSpace(testCase.Module);
         var result = hasModule
-            ? await openClaw.ScanModuleAsync(
+            ? await codex.ScanModuleAsync(
                 testCase.ChangeRequest,
                 testCase.Module!,
                 NormalizeAgentId(item.ScanAgentId),
                 cancellationToken,
                 item.UseSecurityPrompt)
-            : await openClaw.ScanProjectAsync(
+            : await codex.ScanProjectAsync(
                 testCase.ChangeRequest,
                 NormalizeAgentId(item.ScanAgentId),
                 cancellationToken,
                 item.UseSecurityPrompt);
 
-        var operationLabel = item.UseSecurityPrompt ? "OpenClaw security scan" : "OpenClaw scan";
+        var operationLabel = item.UseSecurityPrompt ? "Codex security scan" : "Codex scan";
 
         if (!result.Succeeded)
         {
@@ -551,7 +551,7 @@ public sealed class QaOpenClawQueueService : BackgroundService, IQaOpenClawQueue
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed sending QA OpenClaw notification to user {UserId}.", userId);
+            _logger.LogWarning(ex, "Failed sending QA Codex notification to user {UserId}.", userId);
         }
     }
 

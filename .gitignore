@@ -25,10 +25,10 @@ packages/
 !**/packages/repositories.config
 
 ## Secrets — never commit these
+appsettings.json
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Secrets.json
-appsettings.json
 *.pfx
 *.p12
 

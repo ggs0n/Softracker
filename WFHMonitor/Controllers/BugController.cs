@@ -20,7 +20,7 @@ public class BugController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IBugService _bugService;
     private readonly IBugFixQueueService _bugFixQueue;
-    private readonly OpenClawSettings _openClawSettings;
+    private readonly CodexSettings _codexSettings;
     private readonly ISystemSettingsService _systemSettingsService;
     private readonly IUserRoleCacheService _userRoleCache;
 
@@ -31,7 +31,7 @@ public class BugController : Controller
         IBugFixQueueService bugFixQueue,
         ISystemSettingsService systemSettingsService,
         IUserRoleCacheService userRoleCache,
-        IOptions<OpenClawSettings> openClawSettings)
+        IOptions<CodexSettings> codexSettings)
     {
         _db = db;
         _userManager = userManager;
@@ -39,7 +39,7 @@ public class BugController : Controller
         _bugFixQueue = bugFixQueue;
         _systemSettingsService = systemSettingsService;
         _userRoleCache = userRoleCache;
-        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _codexSettings = codexSettings.Value ?? new CodexSettings();
     }
 
     public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -96,11 +96,11 @@ public class BugController : Controller
             if (!CanAccessBugByTeam(bug, currentUser))
                 return Forbid();
 
-            ViewBag.OpenClawFixAgentOptions = GetOpenClawFixAgentOptions();
+            ViewBag.CodexFixAgentOptions = GetCodexFixAgentOptions();
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
             var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-            ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
-            ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
+            ViewBag.IsCodexEnabled = planSettings.EnableCodexAgents;
+            ViewBag.HasProAccess = currentUser is not null && HasCodexAccess(currentUser, planSettings);
 
             return View(bug);
         }
@@ -298,15 +298,15 @@ public class BugController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        if (!planSettings.EnableOpenClawAgents)
+        if (!planSettings.EnableCodexAgents)
         {
-            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            TempData["Error"] = "Codex agents are temporarily disabled by admin.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        if (currentUser == null || !HasCodexAccess(currentUser, planSettings))
         {
-            TempData["Error"] = "Fix Bug (OpenClaw) is available for Pro plan only.";
+            TempData["Error"] = "Fix Bug (Codex) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
         }
 
@@ -323,19 +323,19 @@ public class BugController : Controller
                 return Forbid();
         }
 
-        var configuredFixAgentIds = OpenClawBugScanService.GetConfiguredFixAgentIds(_openClawSettings);
+        var configuredFixAgentIds = CodexBugScanService.GetConfiguredFixAgentIds(_codexSettings);
         var selectedFixAgentId = string.IsNullOrWhiteSpace(fixAgentId)
-            ? configuredFixAgentIds.FirstOrDefault() ?? "main"
+            ? configuredFixAgentIds.FirstOrDefault() ?? "default"
             : fixAgentId.Trim();
         if (configuredFixAgentIds.Count > 0 &&
             !configuredFixAgentIds.Any(a => a.Equals(selectedFixAgentId, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["Error"] = "Selected OpenClaw fix agent is not allowed by configuration.";
+            TempData["Error"] = "Selected Codex fix agent is not allowed by configuration.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         var assignToAgentId = string.IsNullOrWhiteSpace(assignedAgentId)
-            ? await ResolveOpenClawAssigneeAgentIdAsync()
+            ? await ResolveCodexAssigneeAgentIdAsync()
             : assignedAgentId.Trim();
         if (string.IsNullOrWhiteSpace(assignToAgentId))
         {
@@ -365,8 +365,8 @@ public class BugController : Controller
         {
             BugReportId = bug.Id,
             Action = wasAgentProcessing
-                ? $"OpenClaw fix manually re-queued ({selectedFixAgentId})"
-                : $"OpenClaw fix queued ({selectedFixAgentId})",
+                ? $"Codex fix manually re-queued ({selectedFixAgentId})"
+                : $"Codex fix queued ({selectedFixAgentId})",
             OldStatus = oldStatus,
             NewStatus = bug.Status,
             OldAssignedDeveloperId = oldAssignedId,
@@ -382,8 +382,8 @@ public class BugController : Controller
             HttpContext.RequestAborted);
 
         TempData["Success"] = wasAgentProcessing
-            ? $"OpenClaw fix re-queued with '{selectedFixAgentId}'."
-            : $"OpenClaw fix queued with '{selectedFixAgentId}'.";
+            ? $"Codex fix re-queued with '{selectedFixAgentId}'."
+            : $"Codex fix queued with '{selectedFixAgentId}'.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -532,9 +532,9 @@ public class BugController : Controller
         return RedirectToLocal(returnUrl, bugId);
     }
 
-    private List<SelectListItem> GetOpenClawFixAgentOptions()
+    private List<SelectListItem> GetCodexFixAgentOptions()
     {
-        var configured = OpenClawBugScanService.GetConfiguredFixAgentIds(_openClawSettings);
+        var configured = CodexBugScanService.GetConfiguredFixAgentIds(_codexSettings);
         return configured
             .Select(id => new SelectListItem(id, id))
             .ToList();
@@ -553,7 +553,7 @@ public class BugController : Controller
             .ToList();
     }
 
-    private async Task<string?> ResolveOpenClawAssigneeAgentIdAsync()
+    private async Task<string?> ResolveCodexAssigneeAgentIdAsync()
     {
         var currentUser = await _userManager.GetUserAsync(User);
         var currentCompany = NormalizeCompanyName(currentUser?.CompanyName);
@@ -563,9 +563,9 @@ public class BugController : Controller
         var preferred = agents
             .OrderBy(a => a.FullName)
             .FirstOrDefault(a =>
-                (a.FullName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.UserName?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Email?.Contains("openclaw", StringComparison.OrdinalIgnoreCase) ?? false));
+                (a.FullName?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.UserName?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Email?.Contains("codex", StringComparison.OrdinalIgnoreCase) ?? false));
 
         return preferred?.Id ?? agents.OrderBy(a => a.FullName).FirstOrDefault()?.Id;
     }
@@ -591,9 +591,9 @@ public class BugController : Controller
         return !user.ProSubscriptionEndsAt.HasValue || user.ProSubscriptionEndsAt.Value > DateTime.UtcNow;
     }
 
-    private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
-        settings.EnableOpenClawAgents &&
-        (HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan);
+    private static bool HasCodexAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
+        settings.EnableCodexAgents &&
+        (HasActiveProAccess(user) || settings.AllowCodexForFreePlan);
 
     private static bool IsCompanyAllowed(string? currentCompanyName, params string?[] recordCompanyCandidates)
     {

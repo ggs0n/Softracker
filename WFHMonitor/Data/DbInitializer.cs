@@ -688,8 +688,8 @@ public static class DbInitializer
                     [FreeProjectLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeProjectLimit] DEFAULT 2,
                     [FreeBugLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeBugLimit] DEFAULT 2,
                     [FreeFeatureLimit] int NOT NULL CONSTRAINT [DF_SystemPreferences_FreeFeatureLimit] DEFAULT 2,
-                    [EnableOpenClawAgents] bit NOT NULL CONSTRAINT [DF_SystemPreferences_EnableOpenClawAgents] DEFAULT 1,
-                    [AllowOpenClawForFreePlan] bit NOT NULL CONSTRAINT [DF_SystemPreferences_AllowOpenClawForFreePlan] DEFAULT 0,
+                    [EnableCodexAgents] bit NOT NULL CONSTRAINT [DF_SystemPreferences_EnableCodexAgents] DEFAULT 1,
+                    [AllowCodexForFreePlan] bit NOT NULL CONSTRAINT [DF_SystemPreferences_AllowCodexForFreePlan] DEFAULT 0,
                     [UpdatedAt] datetime2 NOT NULL CONSTRAINT [DF_SystemPreferences_UpdatedAt] DEFAULT SYSUTCDATETIME(),
                     CONSTRAINT [PK_SystemPreferences] PRIMARY KEY ([Id])
                 );
@@ -738,21 +738,63 @@ public static class DbInitializer
 
         await db.Database.ExecuteSqlRawAsync("""
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
-               AND COL_LENGTH('SystemPreferences', 'EnableOpenClawAgents') IS NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'EnableCodexAgents') IS NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'EnableOpenClawAgents') IS NOT NULL
             BEGIN
-                ALTER TABLE [dbo].[SystemPreferences]
-                    ADD [EnableOpenClawAgents] bit NOT NULL
-                    CONSTRAINT [DF_SystemPreferences_EnableOpenClawAgents] DEFAULT 1;
+                EXEC sp_rename
+                    N'[dbo].[SystemPreferences].[EnableOpenClawAgents]',
+                    N'EnableCodexAgents',
+                    N'COLUMN';
+            END
+
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'EnableCodexAgents') IS NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'EnableAiAutomation') IS NOT NULL
+            BEGIN
+                EXEC sp_rename
+                    N'[dbo].[SystemPreferences].[EnableAiAutomation]',
+                    N'EnableCodexAgents',
+                    N'COLUMN';
+            END
+
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'AllowCodexForFreePlan') IS NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'AllowOpenClawForFreePlan') IS NOT NULL
+            BEGIN
+                EXEC sp_rename
+                    N'[dbo].[SystemPreferences].[AllowOpenClawForFreePlan]',
+                    N'AllowCodexForFreePlan',
+                    N'COLUMN';
+            END
+
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'AllowCodexForFreePlan') IS NULL
+               AND COL_LENGTH('dbo.SystemPreferences', 'AllowAiAutomationForFreePlan') IS NOT NULL
+            BEGIN
+                EXEC sp_rename
+                    N'[dbo].[SystemPreferences].[AllowAiAutomationForFreePlan]',
+                    N'AllowCodexForFreePlan',
+                    N'COLUMN';
             END
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
             IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
-               AND COL_LENGTH('SystemPreferences', 'AllowOpenClawForFreePlan') IS NULL
+               AND COL_LENGTH('SystemPreferences', 'EnableCodexAgents') IS NULL
             BEGIN
                 ALTER TABLE [dbo].[SystemPreferences]
-                    ADD [AllowOpenClawForFreePlan] bit NOT NULL
-                    CONSTRAINT [DF_SystemPreferences_AllowOpenClawForFreePlan] DEFAULT 0;
+                    ADD [EnableCodexAgents] bit NOT NULL
+                    DEFAULT 1;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'[dbo].[SystemPreferences]', N'U') IS NOT NULL
+               AND COL_LENGTH('SystemPreferences', 'AllowCodexForFreePlan') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[SystemPreferences]
+                    ADD [AllowCodexForFreePlan] bit NOT NULL
+                    DEFAULT 0;
             END
             """);
 
@@ -761,7 +803,7 @@ public static class DbInitializer
                AND NOT EXISTS (SELECT 1 FROM [dbo].[SystemPreferences] WHERE [Id] = 1)
             BEGIN
                 INSERT INTO [dbo].[SystemPreferences]
-                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [EnableOpenClawAgents], [AllowOpenClawForFreePlan], [UpdatedAt])
+                    ([Id], [BellNotificationSoundEnabled], [BellNotificationSoundOption], [FreeProjectLimit], [FreeBugLimit], [FreeFeatureLimit], [EnableCodexAgents], [AllowCodexForFreePlan], [UpdatedAt])
                 VALUES
                     (1, 1, 'classic', 2, 2, 2, 1, 0, SYSUTCDATETIME());
             END

@@ -40,8 +40,8 @@ public class ChangeRequestController : Controller
     private readonly IProjectBugScanQueueService _projectBugScanQueueService;
     private readonly IFeatureAgentQueueService _featureAgentQueueService;
     private readonly INotificationService _notificationService;
-    private readonly IOpenClawBugScanService _openClawBugScanService;
-    private readonly OpenClawSettings _openClawSettings;
+    private readonly ICodexBugScanService _codexBugScanService;
+    private readonly CodexSettings _codexSettings;
     private readonly ISystemSettingsService _systemSettingsService;
     private readonly IUserRoleCacheService _userRoleCache;
     private readonly IWebHostEnvironment env;
@@ -53,10 +53,10 @@ public class ChangeRequestController : Controller
         IProjectBugScanQueueService projectBugScanQueueService,
         IFeatureAgentQueueService featureAgentQueueService,
         INotificationService notificationService,
-        IOpenClawBugScanService openClawBugScanService,
+        ICodexBugScanService codexBugScanService,
         ISystemSettingsService systemSettingsService,
         IUserRoleCacheService userRoleCache,
-        Microsoft.Extensions.Options.IOptions<OpenClawSettings> openClawSettings,
+        Microsoft.Extensions.Options.IOptions<CodexSettings> codexSettings,
         IWebHostEnvironment env)
     {
         _db = db;
@@ -65,10 +65,10 @@ public class ChangeRequestController : Controller
         _projectBugScanQueueService = projectBugScanQueueService;
         _featureAgentQueueService = featureAgentQueueService;
         _notificationService = notificationService;
-        _openClawBugScanService = openClawBugScanService;
+        _codexBugScanService = codexBugScanService;
         _systemSettingsService = systemSettingsService;
         _userRoleCache = userRoleCache;
-        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _codexSettings = codexSettings.Value ?? new CodexSettings();
         this.env = env;
     }
 
@@ -143,9 +143,9 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.GetUserAsync(User);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
-        ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
-        ViewBag.OpenClawFeatureAgentOptions = GetOpenClawFeatureAgentOptions();
+        ViewBag.IsCodexEnabled = planSettings.EnableCodexAgents;
+        ViewBag.HasProAccess = currentUser is not null && HasCodexAccess(currentUser, planSettings);
+        ViewBag.CodexFeatureAgentOptions = GetCodexFeatureAgentOptions();
         if (User.IsInRole("Admin") || User.IsInRole("Agent"))
             ViewBag.AgentUserOptions = await GetAgentUserOptionsAsync();
 
@@ -395,15 +395,15 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        if (!planSettings.EnableOpenClawAgents)
+        if (!planSettings.EnableCodexAgents)
         {
-            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            TempData["Error"] = "Codex agents are temporarily disabled by admin.";
             return RedirectFeatureLocal(returnUrl, featureId);
         }
 
-        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        if (currentUser == null || !HasCodexAccess(currentUser, planSettings))
         {
-            TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
+            TempData["Error"] = "Feature Agent (Codex) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
         }
 
@@ -413,14 +413,14 @@ public class ChangeRequestController : Controller
         if (!await CanViewProjectAsync(feature.ChangeRequestId))
             return Forbid();
 
-        var configuredFeatureAgentIds = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
+        var configuredFeatureAgentIds = CodexBugScanService.GetConfiguredFeatureAgentIds(_codexSettings);
         var selectedFeatureAgentId = string.IsNullOrWhiteSpace(featureAgentId)
-            ? configuredFeatureAgentIds.FirstOrDefault() ?? "main"
+            ? configuredFeatureAgentIds.FirstOrDefault() ?? "default"
             : featureAgentId.Trim();
         if (configuredFeatureAgentIds.Count > 0 &&
             !configuredFeatureAgentIds.Any(a => a.Equals(selectedFeatureAgentId, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["Error"] = "Selected OpenClaw feature agent is not allowed by configuration.";
+            TempData["Error"] = "Selected Codex feature agent is not allowed by configuration.";
             return RedirectFeatureLocal(returnUrl, featureId);
         }
 
@@ -471,8 +471,8 @@ public class ChangeRequestController : Controller
             HttpContext.RequestAborted);
 
         TempData["Success"] = wasAgentProcessing
-            ? $"OpenClaw feature run re-queued with '{selectedFeatureAgentId}'."
-            : $"OpenClaw feature run queued with '{selectedFeatureAgentId}'.";
+            ? $"Codex feature run re-queued with '{selectedFeatureAgentId}'."
+            : $"Codex feature run queued with '{selectedFeatureAgentId}'.";
         return RedirectFeatureLocal(returnUrl, featureId);
     }
 
@@ -486,15 +486,15 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        if (!planSettings.EnableOpenClawAgents)
+        if (!planSettings.EnableCodexAgents)
         {
-            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            TempData["Error"] = "Codex agents are temporarily disabled by admin.";
             return RedirectFeatureLocal(returnUrl, featureId);
         }
 
-        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        if (currentUser == null || !HasCodexAccess(currentUser, planSettings))
         {
-            TempData["Error"] = "Feature Agent (OpenClaw) is available for Pro plan only.";
+            TempData["Error"] = "Feature Agent (Codex) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
         }
 
@@ -511,14 +511,14 @@ public class ChangeRequestController : Controller
         if (!await CanEditFeatureProjectAsync(feature.ChangeRequestId))
             return Forbid();
 
-        var configuredFeatureAgentIds = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
+        var configuredFeatureAgentIds = CodexBugScanService.GetConfiguredFeatureAgentIds(_codexSettings);
         var selectedFeatureAgentId = string.IsNullOrWhiteSpace(featureAgentId)
-            ? configuredFeatureAgentIds.FirstOrDefault() ?? "main"
+            ? configuredFeatureAgentIds.FirstOrDefault() ?? "default"
             : featureAgentId.Trim();
         if (configuredFeatureAgentIds.Count > 0 &&
             !configuredFeatureAgentIds.Any(a => a.Equals(selectedFeatureAgentId, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["Error"] = "Selected OpenClaw feature agent is not allowed by configuration.";
+            TempData["Error"] = "Selected Codex feature agent is not allowed by configuration.";
             return RedirectFeatureLocal(returnUrl, featureId);
         }
 
@@ -633,11 +633,11 @@ public class ChangeRequestController : Controller
         ViewBag.ResolvedGitHubOwner = owner;
         ViewBag.ResolvedGitHubRepo = repo;
         ViewBag.ResolvedGitHubBranch = branch;
-        ViewBag.OpenClawScanAgentOptions = GetOpenClawScanAgentOptions();
+        ViewBag.CodexScanAgentOptions = GetCodexScanAgentOptions();
         var currentUser = await _userManager.GetUserAsync(User);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        ViewBag.IsOpenClawEnabled = planSettings.EnableOpenClawAgents;
-        ViewBag.HasProAccess = currentUser is not null && HasOpenClawAccess(currentUser, planSettings);
+        ViewBag.IsCodexEnabled = planSettings.EnableCodexAgents;
+        ViewBag.HasProAccess = currentUser is not null && HasCodexAccess(currentUser, planSettings);
 
         var totalBugCount = linkedBugs.Count;
         var openBugCount = linkedBugs.Count(b => b.Status != BugStatus.Complete);
@@ -655,11 +655,11 @@ public class ChangeRequestController : Controller
             complexityScore,
             timelineDays);
 
-        var canUseOpenClawHealth = planSettings.EnableOpenClawAgents &&
+        var canUseCodexHealth = planSettings.EnableCodexAgents &&
             currentUser is not null &&
-            HasOpenClawAccess(currentUser, planSettings);
-        ViewBag.CanUseOpenClawHealth = canUseOpenClawHealth;
-        ViewBag.HealthOpenClawAgentId = cr.BugScanAgentId;
+            HasCodexAccess(currentUser, planSettings);
+        ViewBag.CanUseCodexHealth = canUseCodexHealth;
+        ViewBag.HealthCodexAgentId = cr.BugScanAgentId;
 
         if (cr.ProjectHealthScore.HasValue && !string.IsNullOrWhiteSpace(cr.ProjectHealthLabel))
         {
@@ -675,12 +675,12 @@ public class ChangeRequestController : Controller
                     : cr.ProjectHealthComplexity!,
                 Factors = DeserializeHealthFactors(cr.ProjectHealthFactorsJson),
                 AnalyzedAtUtc = cr.ProjectHealthAnalyzedAt,
-                UsedOpenClaw = true
+                UsedCodex = true
             };
         }
-        else if (canUseOpenClawHealth)
+        else if (canUseCodexHealth)
         {
-            fallbackHealth.Summary = "Health score shown from live signals. Click Analyze to run OpenClaw and enrich insights.";
+            fallbackHealth.Summary = "Health score shown from live signals. Click Analyze to run Codex and enrich insights.";
         }
 
         ViewBag.ProjectHealth = fallbackHealth;
@@ -1256,26 +1256,26 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        if (!planSettings.EnableOpenClawAgents)
+        if (!planSettings.EnableCodexAgents)
         {
-            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            TempData["Error"] = "Codex agents are temporarily disabled by admin.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        if (currentUser == null || !HasCodexAccess(currentUser, planSettings))
         {
-            TempData["Error"] = "Find Bugs (OpenClaw) is available for Pro plan only.";
+            TempData["Error"] = "Find Bugs (Codex) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
         }
 
-        var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var configuredScanAgentIds = CodexBugScanService.GetConfiguredAgentIds(_codexSettings);
         var selectedScanAgentId = string.IsNullOrWhiteSpace(scanAgentId)
-            ? configuredScanAgentIds.FirstOrDefault() ?? "main"
+            ? configuredScanAgentIds.FirstOrDefault() ?? "default"
             : scanAgentId.Trim();
         if (configuredScanAgentIds.Count > 0 &&
             !configuredScanAgentIds.Any(a => a.Equals(selectedScanAgentId, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["Error"] = "Selected OpenClaw scan agent is not allowed by configuration.";
+            TempData["Error"] = "Selected Codex scan agent is not allowed by configuration.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -1331,26 +1331,26 @@ public class ChangeRequestController : Controller
 
         var currentUser = await _userManager.FindByIdAsync(userId);
         var planSettings = await _systemSettingsService.GetProVersionSettingsAsync();
-        if (!planSettings.EnableOpenClawAgents)
+        if (!planSettings.EnableCodexAgents)
         {
-            TempData["Error"] = "OpenClaw agents are temporarily disabled by admin.";
+            TempData["Error"] = "Codex agents are temporarily disabled by admin.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (currentUser == null || !HasOpenClawAccess(currentUser, planSettings))
+        if (currentUser == null || !HasCodexAccess(currentUser, planSettings))
         {
-            TempData["Error"] = "Project Health analysis (OpenClaw) is available for Pro plan only.";
+            TempData["Error"] = "Project Health analysis (Codex) is available for Pro plan only.";
             return RedirectToAction("Index", "Payment");
         }
 
-        var configuredScanAgentIds = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var configuredScanAgentIds = CodexBugScanService.GetConfiguredAgentIds(_codexSettings);
         var selectedScanAgentId = string.IsNullOrWhiteSpace(scanAgentId)
-            ? configuredScanAgentIds.FirstOrDefault() ?? "main"
+            ? configuredScanAgentIds.FirstOrDefault() ?? "default"
             : scanAgentId.Trim();
         if (configuredScanAgentIds.Count > 0 &&
             !configuredScanAgentIds.Any(a => a.Equals(selectedScanAgentId, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["Error"] = "Selected OpenClaw scan agent is not allowed by configuration.";
+            TempData["Error"] = "Selected Codex scan agent is not allowed by configuration.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -1368,7 +1368,7 @@ public class ChangeRequestController : Controller
 
         try
         {
-            var healthResult = await _openClawBugScanService.AnalyzeProjectHealthAsync(
+            var healthResult = await _codexBugScanService.AnalyzeProjectHealthAsync(
                 project,
                 totalBugCount,
                 openBugCount,
@@ -1617,9 +1617,9 @@ public class ChangeRequestController : Controller
         return !user.ProSubscriptionEndsAt.HasValue || user.ProSubscriptionEndsAt.Value > DateTime.UtcNow;
     }
 
-    private static bool HasOpenClawAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
-        settings.EnableOpenClawAgents &&
-        (HasActiveProAccess(user) || settings.AllowOpenClawForFreePlan);
+    private static bool HasCodexAccess(ApplicationUser user, ProVersionSettingsViewModel settings) =>
+        settings.EnableCodexAgents &&
+        (HasActiveProAccess(user) || settings.AllowCodexForFreePlan);
 
     private static (string ModuleKey, bool RequiresModify)? ResolvePermissionCheck(string actionName)
     {
@@ -2028,7 +2028,7 @@ public class ChangeRequestController : Controller
             Complexity = complexity,
             Factors = factors,
             AnalyzedAtUtc = project.ProjectHealthAnalyzedAt,
-            UsedOpenClaw = false
+            UsedCodex = false
         };
     }
 
@@ -2072,22 +2072,22 @@ public class ChangeRequestController : Controller
         }
     }
 
-    private List<SelectListItem> GetOpenClawScanAgentOptions()
+    private List<SelectListItem> GetCodexScanAgentOptions()
     {
-        var configured = OpenClawBugScanService.GetConfiguredAgentIds(_openClawSettings);
+        var configured = CodexBugScanService.GetConfiguredAgentIds(_codexSettings);
         if (configured.Count == 0)
-            configured = ["main"];
+            configured = ["default"];
 
         return configured
             .Select(id => new SelectListItem(id, id))
             .ToList();
     }
 
-    private List<SelectListItem> GetOpenClawFeatureAgentOptions()
+    private List<SelectListItem> GetCodexFeatureAgentOptions()
     {
-        var configured = OpenClawBugScanService.GetConfiguredFeatureAgentIds(_openClawSettings);
+        var configured = CodexBugScanService.GetConfiguredFeatureAgentIds(_codexSettings);
         if (configured.Count == 0)
-            configured = ["main"];
+            configured = ["default"];
 
         return configured
             .Select(id => new SelectListItem(id, id))

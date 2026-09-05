@@ -149,6 +149,6 @@ public class ProjectHealthViewModel
     public string Complexity { get; set; } = "Medium";
     public List<string> Factors { get; set; } = new();
     public DateTime? AnalyzedAtUtc { get; set; }
-    public bool UsedOpenClaw { get; set; }
+    public bool UsedCodex { get; set; }
     public string? Error { get; set; }
 }

@@ -21,18 +21,18 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<FeatureAgentQueueService> _logger;
-    private readonly OpenClawSettings _openClawSettings;
+    private readonly CodexSettings _codexSettings;
     private readonly IWebHostEnvironment _environment;
 
     public FeatureAgentQueueService(
         IServiceScopeFactory scopeFactory,
         ILogger<FeatureAgentQueueService> logger,
-        IOptions<OpenClawSettings> openClawSettings,
+        IOptions<CodexSettings> codexSettings,
         IWebHostEnvironment environment)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _openClawSettings = openClawSettings.Value ?? new OpenClawSettings();
+        _codexSettings = codexSettings.Value ?? new CodexSettings();
         _environment = environment;
     }
 
@@ -63,7 +63,7 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var openClaw = scope.ServiceProvider.GetRequiredService<IOpenClawBugScanService>();
+        var codex = scope.ServiceProvider.GetRequiredService<ICodexBugScanService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
@@ -75,13 +75,13 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
             return;
 
         var settings = await systemSettings.GetProVersionSettingsAsync();
-        if (!settings.EnableOpenClawAgents)
+        if (!settings.EnableCodexAgents)
         {
             feature.AgentStatus = FeatureAgentStatus.Failed;
             feature.AgentLastRunAt = DateTime.UtcNow;
             feature.AgentImplementationPlan = AppendTextWithLimit(
                 feature.AgentImplementationPlan,
-                $"[OpenClaw Feature Run Failed - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\nOpenClaw agents are temporarily disabled by admin.",
+                $"[Codex Feature Run Failed - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\nCodex agents are temporarily disabled by admin.",
                 4000);
             await db.SaveChangesAsync(cancellationToken);
             return;
@@ -95,14 +95,14 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var result = await openClaw.ImplementFeatureAsync(feature, feature.ChangeRequest, item.FeatureAgentId, cancellationToken);
+        var result = await codex.ImplementFeatureAsync(feature, feature.ChangeRequest, item.FeatureAgentId, cancellationToken);
         if (!result.Succeeded)
         {
             feature.AgentStatus = FeatureAgentStatus.Failed;
             feature.AgentLastRunAt = DateTime.UtcNow;
             feature.AgentImplementationPlan = AppendTextWithLimit(
                 feature.AgentImplementationPlan,
-                $"[OpenClaw Feature Run Failed - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\n{result.Error}",
+                $"[Codex Feature Run Failed - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\n{result.Error}",
                 4000);
             await db.SaveChangesAsync(cancellationToken);
             return;
@@ -117,7 +117,7 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
 
         feature.AgentImplementationPlan = AppendTextWithLimit(
             feature.AgentImplementationPlan,
-            $"[OpenClaw Feature Plan - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\n{result.ImplementationPlan.Trim()}",
+            $"[Codex Feature Plan - {item.FeatureAgentId} - {DateTime.UtcNow:yyyy-MM-dd HH:mm UTC}]\n{result.ImplementationPlan.Trim()}",
             4000);
         var importedScreenshotCount = await TryImportFeatureScreenshotsAsync(
             db,
@@ -214,7 +214,7 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
 
         var imported = 0;
         var seenSourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var maxFiles = Math.Clamp(_openClawSettings.FeatureScreenshotImportMaxFiles, 1, 20);
+        var maxFiles = Math.Clamp(_codexSettings.FeatureScreenshotImportMaxFiles, 1, 20);
 
         foreach (var source in candidates)
         {
@@ -259,17 +259,17 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
     {
         var folders = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(_openClawSettings.FeatureScreenshotImportDirectory))
-            folders.Add(_openClawSettings.FeatureScreenshotImportDirectory.Trim());
+        if (!string.IsNullOrWhiteSpace(_codexSettings.FeatureScreenshotImportDirectory))
+            folders.Add(_codexSettings.FeatureScreenshotImportDirectory.Trim());
 
-        if (_openClawSettings.FeatureScreenshotImportDirectories is not null)
+        if (_codexSettings.FeatureScreenshotImportDirectories is not null)
         {
-            folders.AddRange(_openClawSettings.FeatureScreenshotImportDirectories
+            folders.AddRange(_codexSettings.FeatureScreenshotImportDirectories
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(path => path.Trim()));
         }
 
-        folders.AddRange(GetAutoOpenClawScreenshotFolders());
+        folders.AddRange(GetAutoCodexScreenshotFolders());
 
         var uniqueFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedFolders = new List<string>();
@@ -283,7 +283,7 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
         if (resolvedFolders.Count == 0)
             return [];
 
-        var lookbackMinutes = Math.Clamp(_openClawSettings.FeatureScreenshotImportLookbackMinutes, 1, 24 * 60);
+        var lookbackMinutes = Math.Clamp(_codexSettings.FeatureScreenshotImportLookbackMinutes, 1, 24 * 60);
         var minWriteTime = DateTime.UtcNow.AddMinutes(-lookbackMinutes);
 
         return resolvedFolders
@@ -349,20 +349,20 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
         return files;
     }
 
-    private static IEnumerable<string> GetAutoOpenClawScreenshotFolders()
+    private static IEnumerable<string> GetAutoCodexScreenshotFolders()
     {
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(userProfile))
             return [];
 
-        var openClawRoot = Path.Combine(userProfile, ".openclaw");
-        if (!Directory.Exists(openClawRoot))
+        var codexRoot = Path.Combine(userProfile, ".codex");
+        if (!Directory.Exists(codexRoot))
             return [];
 
         try
         {
             return Directory
-                .EnumerateDirectories(openClawRoot, "Fix Screenshot", SearchOption.AllDirectories)
+                .EnumerateDirectories(codexRoot, "Fix Screenshot", SearchOption.AllDirectories)
                 .ToList();
         }
         catch

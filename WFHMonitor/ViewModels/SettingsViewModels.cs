@@ -55,6 +55,6 @@ public class ProVersionSettingsViewModel
     [Range(0, 10000)]
     public int FreeFeatureLimit { get; set; } = ProVersionDefaults.FreeFeatureLimit;
 
-    public bool EnableOpenClawAgents { get; set; } = true;
-    public bool AllowOpenClawForFreePlan { get; set; }
+    public bool EnableCodexAgents { get; set; } = true;
+    public bool AllowCodexForFreePlan { get; set; }
 }

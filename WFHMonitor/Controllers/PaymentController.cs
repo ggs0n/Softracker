@@ -63,7 +63,7 @@ public class PaymentController : Controller
             FreeProjectLimit = proSettings.FreeProjectLimit,
             FreeBugLimit = proSettings.FreeBugLimit,
             FreeFeatureLimit = proSettings.FreeFeatureLimit,
-            AllowOpenClawForFreePlan = proSettings.AllowOpenClawForFreePlan
+            AllowCodexForFreePlan = proSettings.AllowCodexForFreePlan
         };
 
         ViewData["Title"] = "Subscription";
