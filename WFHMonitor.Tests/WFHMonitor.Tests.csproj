@@ -21,7 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\WFHMonitor\WFHMonitor.csproj" />
+    <ProjectReference Include="..\WFHMonitor.ApiService\WFHMonitor.ApiService.csproj" />
+    <ProjectReference Include="..\WFHMonitor.AutomationService\WFHMonitor.AutomationService.csproj" />
   </ItemGroup>
 
 </Project>

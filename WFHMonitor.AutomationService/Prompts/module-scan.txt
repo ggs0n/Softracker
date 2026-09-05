@@ -1,0 +1,3 @@
+Inspect only the requested module in the available repository and identify high-confidence software defects.
+Do not report defects in unrelated modules. Focus on reproducible, actionable behavior and include concrete evidence.
+Do not modify files or use network access. Return only the JSON object required by the output schema.

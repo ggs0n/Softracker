@@ -1,0 +1,3 @@
+Inspect the supplied project and available repository for exploitable or high-confidence security defects.
+Prioritize authentication bypass, injection, sensitive-data exposure, broken access control, secret leakage, unsafe file handling, and insecure defaults. Do not report speculative concerns.
+Do not modify files or use network access. Return only the JSON object required by the output schema.

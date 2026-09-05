@@ -1,0 +1,7 @@
+Create a concise, practical software system-design blueprint from the supplied brief.
+Map every major module to a concrete deployment service and runtime. Include starter relational schemas, a rough monthly USD infrastructure cost, scaling and security advice, risks, and actionable next steps.
+Describe each deployable service or module with its responsibility, runtime, deployment target, data ownership, dependencies, and communication protocols.
+Include practical versioned REST endpoints with methods, paths, authentication, request/response contracts, and status codes. Include gRPC contracts only where an internal RPC boundary is justified; otherwise return an empty grpcContracts array. Include scheduled or queue-triggered batch jobs with ownership, schedule, input/output, retry policy, and idempotency strategy.
+Treat each supplied main feature as a canonical domain capability. Preserve its exact name and include every capability in recommendedArchitecture, mainComponents, serviceDetails, REST endpoint purposes or paths, table schema names or purposes, risksTradeoffs, nextSteps, and every Mermaid diagram. Do not invent alternate names for the same capability.
+Return exactly five Mermaid diagrams with kinds context, components, dataFlow, detailedArchitecture, and cloudDeploymentTemplate. Mermaid values contain source only, without Markdown fences.
+Return only the JSON object required by the output schema. Do not inspect or modify files and do not use network access.

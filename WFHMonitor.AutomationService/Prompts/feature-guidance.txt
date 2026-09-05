@@ -1,0 +1,3 @@
+Produce practical implementation guidance for the supplied feature.
+Include the implementation approach, likely files or components, validation checklist, dependencies, risks, and rollback notes. Clearly identify assumptions where context is missing.
+Do not modify files or use network access.

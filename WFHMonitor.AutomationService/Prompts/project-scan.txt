@@ -1,0 +1,4 @@
+Inspect the project metadata and available repository files for high-confidence software defects.
+Focus on reproducible, actionable bugs rather than style preferences or vague suggestions. Return no more than the configured findings limit.
+Every finding must include a short title, concrete description, affected workflow, reproduction steps, impacted module, severity, and any local screenshot evidence paths.
+Do not modify files or use network access. Return only the JSON object required by the output schema.

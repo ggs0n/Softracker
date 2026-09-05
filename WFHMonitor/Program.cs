@@ -1,143 +1,251 @@
 using System.IO.Compression;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Identity;
+using System.Net;
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using WFHMonitor.Data;
-using WFHMonitor.Models;
-using WFHMonitor.Services;
-using WFHMonitor.Services.Interfaces;
+using WFHMonitor.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")), poolSize: 128);
+var proxySettings = GetRequiredSettings<ApiServiceProxySettings>(
+    builder.Configuration,
+    ApiServiceProxySettings.SectionName);
+var assetCachingSettings = GetRequiredSettings<AssetCachingSettings>(
+    builder.Configuration,
+    AssetCachingSettings.SectionName);
+var compressionSettings = GetRequiredSettings<CompressionSettings>(
+    builder.Configuration,
+    CompressionSettings.SectionName);
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+if (!Uri.TryCreate(proxySettings.BaseUrl, UriKind.Absolute, out var apiServiceUri))
+    throw new InvalidOperationException("ApiService:BaseUrl must be an absolute URL.");
+if (proxySettings.BackendPrefixes.Length == 0)
+    throw new InvalidOperationException("ApiService:BackendPrefixes must contain at least one route.");
+if (assetCachingSettings.MaxAgeSeconds < 0)
+    throw new InvalidOperationException("AssetCaching:MaxAgeSeconds cannot be negative.");
+
+var proxyTimeout = GetTimeout(
+    proxySettings.RequestTimeoutSeconds,
+    "ApiService:RequestTimeoutSeconds");
+var brotliLevel = GetCompressionLevel(
+    compressionSettings.BrotliLevel,
+    "ResponseCompression:BrotliLevel");
+var gzipLevel = GetCompressionLevel(
+    compressionSettings.GzipLevel,
+    "ResponseCompression:GzipLevel");
+var assetCacheControl = $"public, max-age={assetCachingSettings.MaxAgeSeconds}";
+
+builder.Services.AddHttpClient("ApiServiceProxy", client =>
 {
-    options.SignIn.RequireConfirmedAccount = false;
+    client.BaseAddress = apiServiceUri;
+    client.Timeout = proxyTimeout;
 })
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
-
-if (builder.Environment.IsDevelopment())
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
-    builder.Services.RemoveAll<IPasswordValidator<ApplicationUser>>();
-    builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, AllowAllPasswordValidator>();
-    builder.Services.RemoveAll<IUserValidator<ApplicationUser>>();
-    builder.Services.AddScoped<IUserValidator<ApplicationUser>, AllowAllUserValidator>();
-}
-
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.LoginPath = "/Auth/Login";
-    options.LogoutPath = "/Auth/Logout";
-    options.AccessDeniedPath = "/Auth/AccessDenied";
+    AllowAutoRedirect = false,
+    AutomaticDecompression = DecompressionMethods.None,
+    UseCookies = false
 });
 
-builder.Services.Configure<GitHubSettings>(
-    builder.Configuration.GetSection("GitHubSettings"));
-builder.Services.Configure<GitHubOAuthSettings>(
-    builder.Configuration.GetSection("GitHubOAuth"));
-builder.Services.Configure<JwtSettings>(
-    builder.Configuration.GetSection("JwtSettings"));
-builder.Services.Configure<ProjectMonitoringSettings>(
-    builder.Configuration.GetSection("ProjectMonitoring"));
-builder.Services.Configure<StripeBillingSettings>(
-    builder.Configuration.GetSection("StripeBilling"));
-builder.Services.Configure<OpenClawSettings>(
-    builder.Configuration.GetSection("OpenClaw"));
-builder.Services.AddHttpClient<IGitHubService, GitHubService>();
-builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
-builder.Services.AddHttpClient<IStripeBillingService, StripeBillingService>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-builder.Services.AddScoped<IUserRegistrationService, UserRegistrationService>();
-builder.Services.AddScoped<IDeveloperSummaryService, DeveloperSummaryService>();
-builder.Services.AddScoped<IBugService, BugService>();
-builder.Services.AddScoped<IOpenClawBugScanService, OpenClawBugScanService>();
-builder.Services.AddSingleton<BugFixQueueService>();
-builder.Services.AddSingleton<IBugFixQueueService>(sp => sp.GetRequiredService<BugFixQueueService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<BugFixQueueService>());
-builder.Services.AddSingleton<FeatureAgentQueueService>();
-builder.Services.AddSingleton<IFeatureAgentQueueService>(sp => sp.GetRequiredService<FeatureAgentQueueService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<FeatureAgentQueueService>());
-builder.Services.AddSingleton<ProjectBugScanQueueService>();
-builder.Services.AddSingleton<IProjectBugScanQueueService>(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ProjectBugScanQueueService>());
-builder.Services.AddSingleton<QaOpenClawQueueService>();
-builder.Services.AddSingleton<IQaOpenClawQueueService>(sp => sp.GetRequiredService<QaOpenClawQueueService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<QaOpenClawQueueService>());
-builder.Services.AddScoped<IUserRoleCacheService, UserRoleCacheService>();
-builder.Services.AddScoped<ITaskBoardService, TaskBoardService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
-builder.Services.AddScoped<IOnboardingService, OnboardingService>();
-builder.Services.AddScoped<IOutlookCalendarSyncService, OutlookCalendarSyncService>();
-builder.Services.AddScoped<IProjectMonitoringService, ProjectMonitoringService>();
-builder.Services.AddHttpClient();
-builder.Services.AddHttpContextAccessor();
-
-builder.Services.AddMemoryCache();
-builder.Services.AddResponseCompression(opts =>
+builder.Services.AddResponseCompression(options =>
 {
-    opts.EnableForHttps = true;
-    opts.Providers.Add<BrotliCompressionProvider>();
-    opts.Providers.Add<GzipCompressionProvider>();
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
 });
-builder.Services.Configure<BrotliCompressionProviderOptions>(opts => opts.Level = CompressionLevel.Fastest);
-builder.Services.Configure<GzipCompressionProviderOptions>(opts => opts.Level = CompressionLevel.SmallestSize);
-
-builder.Services.AddRateLimiter(opts =>
-{
-    opts.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            ctx.User?.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 60,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-    opts.RejectionStatusCode = 429;
-});
-
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>();
-
-builder.Services.AddControllersWithViews();
+builder.Services.Configure<BrotliCompressionProviderOptions>(
+    options => options.Level = brotliLevel);
+builder.Services.Configure<GzipCompressionProviderOptions>(
+    options => options.Level = gzipLevel);
 
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseStaticFiles(new StaticFileOptions
 {
-    OnPrepareResponse = ctx =>
-        ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=604800")
+    OnPrepareResponse = context =>
+    {
+        var response = context.Context.Response;
+        if (context.Context.Request.Path.Value?.EndsWith(
+                "/app/index.html",
+                StringComparison.OrdinalIgnoreCase) == true)
+            response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        else
+            response.Headers.CacheControl = assetCacheControl;
+    }
 });
-app.UseRouting();
-app.UseRateLimiter();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseMiddleware<WFHMonitor.Services.UserActivityMiddleware>();
 
-app.MapHealthChecks("/health");
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
-
-using (var scope = app.Services.CreateScope())
+var proxyMethods = new[]
 {
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
-    await DbInitializer.SeedAsync(scope.ServiceProvider, app.Environment.IsDevelopment());
+    HttpMethods.Get,
+    HttpMethods.Head,
+    HttpMethods.Post,
+    HttpMethods.Put,
+    HttpMethods.Patch,
+    HttpMethods.Delete,
+    HttpMethods.Options
+};
+
+app.MapMethods("/api/{**path}", proxyMethods, ProxyRequestAsync);
+app.MapMethods("/uploads/{**path}", proxyMethods, ProxyRequestAsync);
+
+foreach (var prefix in proxySettings.BackendPrefixes.Distinct(
+             StringComparer.OrdinalIgnoreCase))
+{
+    if (!prefix.StartsWith('/'))
+        throw new InvalidOperationException(
+            $"ApiService:BackendPrefixes entry '{prefix}' must start with '/'.");
+
+    app.MapMethods(prefix, proxyMethods, ProxyRequestAsync);
+    app.MapMethods($"{prefix}/{{**path}}", proxyMethods, ProxyRequestAsync);
 }
 
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    apiService = apiServiceUri.ToString()
+}));
+app.MapGet("/", () => Results.Redirect("/app/"));
+app.MapFallbackToFile(
+    "app/{*path:nonfile}",
+    "app/index.html",
+    new StaticFileOptions
+    {
+        OnPrepareResponse = context =>
+            context.Context.Response.Headers.CacheControl =
+                "no-cache, no-store, must-revalidate"
+    });
+
 app.Run();
+
+static async Task ProxyRequestAsync(
+    HttpContext context,
+    IHttpClientFactory httpClientFactory,
+    ILogger<Program> logger)
+{
+    var client = httpClientFactory.CreateClient("ApiServiceProxy");
+    var target = context.Request.PathBase
+                 + context.Request.Path
+                 + context.Request.QueryString;
+    using var request = new HttpRequestMessage(
+        new HttpMethod(context.Request.Method),
+        target);
+
+    var hasBody = context.Request.ContentLength > 0
+                  || context.Request.Headers.ContainsKey("Transfer-Encoding");
+    if (hasBody)
+        request.Content = new StreamContent(context.Request.Body);
+
+    foreach (var header in context.Request.Headers)
+    {
+        if (IsHopByHopHeader(header.Key)
+            || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)
+            || header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray()))
+            request.Content?.Headers.TryAddWithoutValidation(
+                header.Key,
+                header.Value.ToArray());
+    }
+
+    request.Headers.TryAddWithoutValidation(
+        "X-Forwarded-For",
+        context.Connection.RemoteIpAddress?.ToString());
+    request.Headers.TryAddWithoutValidation(
+        "X-Forwarded-Host",
+        context.Request.Host.Value);
+    request.Headers.TryAddWithoutValidation(
+        "X-Forwarded-Proto",
+        context.Request.Scheme);
+
+    try
+    {
+        using var response = await client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            context.RequestAborted);
+
+        context.Response.StatusCode = (int)response.StatusCode;
+        CopyResponseHeaders(response.Headers, context.Response);
+        CopyResponseHeaders(response.Content.Headers, context.Response);
+        context.Response.Headers.Remove("transfer-encoding");
+
+        if (!HttpMethods.IsHead(context.Request.Method))
+            await response.Content.CopyToAsync(
+                context.Response.Body,
+                context.RequestAborted);
+    }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+    }
+    catch (HttpRequestException exception)
+    {
+        logger.LogError(exception, "API service request failed for {Path}.", target);
+        context.Response.StatusCode = StatusCodes.Status502BadGateway;
+        await context.Response.WriteAsJsonAsync(
+            new
+            {
+                title = "The API service is unavailable.",
+                status = StatusCodes.Status502BadGateway
+            },
+            context.RequestAborted);
+    }
+}
+
+static void CopyResponseHeaders(
+    System.Net.Http.Headers.HttpHeaders source,
+    HttpResponse response)
+{
+    foreach (var header in source)
+    {
+        if (!IsHopByHopHeader(header.Key))
+            response.Headers[header.Key] = header.Value.ToArray();
+    }
+}
+
+static bool IsHopByHopHeader(string name)
+{
+    return name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Proxy-Authenticate", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("TE", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Trailer", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
+           || name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
+}
+
+static T GetRequiredSettings<T>(IConfiguration configuration, string sectionName)
+    where T : class
+{
+    return configuration.GetRequiredSection(sectionName).Get<T>()
+           ?? throw new InvalidOperationException(
+               $"Configuration section '{sectionName}' is invalid.");
+}
+
+static TimeSpan GetTimeout(int timeoutSeconds, string configurationKey)
+{
+    if (timeoutSeconds < 0)
+        throw new InvalidOperationException(
+            $"{configurationKey} cannot be negative.");
+
+    return timeoutSeconds == 0
+        ? Timeout.InfiniteTimeSpan
+        : TimeSpan.FromSeconds(timeoutSeconds);
+}
+
+static CompressionLevel GetCompressionLevel(string value, string configurationKey)
+{
+    if (Enum.TryParse<CompressionLevel>(value, true, out var level))
+        return level;
+
+    throw new InvalidOperationException(
+        $"{configurationKey} is not a valid compression level.");
+}
+
+public partial class Program;

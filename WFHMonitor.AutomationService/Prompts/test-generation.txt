@@ -1,0 +1,4 @@
+Inspect the project context and available repository and generate broad module-level test cases.
+Cover distinct workflows with purpose, preconditions, key steps, and expected outcomes. Do not produce tiny unit-level cases or derive cases only from existing bug titles.
+Use only the allowed category and environment values. Do not modify files or use network access.
+Return only the JSON object required by the output schema.

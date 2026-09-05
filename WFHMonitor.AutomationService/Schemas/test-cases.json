@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["testCases"],
+  "properties": {
+    "testCases": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "module",
+          "category",
+          "environment"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "module": { "type": "string", "minLength": 1 },
+          "category": {
+            "type": "string",
+            "enum": ["Smoke", "Regression", "UAT"]
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["Dev", "Staging", "UAT", "Production"]
+          }
+        }
+      }
+    }
+  }
+}

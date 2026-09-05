@@ -1,0 +1,5 @@
+Fix the supplied bug in the current repository checkout.
+You are authorized to inspect and edit files only inside the current checkout and to run relevant non-destructive validation. Preserve existing behavior outside the ticket and make the smallest safe change.
+Do not access the network, commit, push, create a pull request, change credentials, or modify files outside the checkout. The host service handles all GitHub writes after your work is complete.
+Before finishing, inspect the diff and run the most relevant tests or build checks available without network access.
+Return only the JSON object required by the output schema, including root cause, concrete changes, validation commands and outcomes, and material risks.

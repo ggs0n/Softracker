@@ -1,0 +1,21 @@
+Generate a separate 16:9 technical product illustration for every main module
+listed in the task context. Use the image generation tool exactly once per
+module and follow the listed module order.
+
+Hard requirements:
+- Never generate more images than the number of supplied modules.
+- Each image must focus only on its named main module.
+- Use only the responsibility, interfaces, owned data, runtime, deployment,
+  and background jobs supplied for that module.
+- Do not add unrelated product capabilities, modules, brands, people, or
+  fictional integrations.
+- Use a clean technical cutaway/isometric illustration style with the same
+  warm cream, deep green, and coral visual language across the complete set.
+- Make the module the dominant visual subject. Supporting API, data, and job
+  elements may appear only when they are present in that module's context.
+- Avoid dense text, source code, logos, watermarks, and decorative stock-photo
+  imagery.
+- Do not run commands, browse the web, or modify repository files.
+
+After all requested image tool calls complete, respond with one short sentence
+stating how many module images were generated.
