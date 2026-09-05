@@ -176,6 +176,8 @@ public class CodeReadinessViewModel
     public int SourceFileCount { get; set; }
     public int ModuleCount { get; set; }
     public int DependencyCount { get; set; }
+    public string FrontendLanguages { get; set; } = "Not detected";
+    public string BackendLanguages { get; set; } = "Not detected";
     public int OpenBugCount { get; set; }
     public int FailedTestCount { get; set; }
     public int PendingTestCount { get; set; }
@@ -186,6 +188,8 @@ public class CodeReadinessViewModel
     public List<CodeReadinessSolidCheckViewModel> SolidChecks { get; set; } = [];
     public List<CodeReadinessDesignPatternViewModel> DesignPatterns { get; set; } = [];
     public List<CodeReadinessOwaspViewModel> OwaspAssessments { get; set; } = [];
+    public List<CodeReadinessPracticeViewModel> ValidationAndNullHandling { get; set; } = [];
+    public List<CodeReadinessPracticeViewModel> LoggingAndExceptionHandling { get; set; } = [];
     public List<CodeReadinessModuleViewModel> RelatedModules { get; set; } = [];
 }
 
@@ -221,7 +225,13 @@ public class CodeReadinessSolidCheckViewModel
 {
     public string Principle { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string Status { get; set; } = "Source review required";
+    public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public string? CodeUrl { get; set; }
+    public int Confidence { get; set; }
 }
 
 public class CodeReadinessDesignPatternViewModel
@@ -245,6 +255,18 @@ public class CodeReadinessOwaspViewModel
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public string? CodeUrl { get; set; }
+    public int Confidence { get; set; }
+}
+
+public class CodeReadinessPracticeViewModel
+{
+    public string Status { get; set; } = "Unknown";
+    public string Title { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string Evidence { get; set; } = string.Empty;
     public string Recommendation { get; set; } = string.Empty;

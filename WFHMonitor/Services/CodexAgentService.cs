@@ -878,22 +878,15 @@ public sealed class CodexBugScanService : ICodexBugScanService
                 .Take(50)
                 .Select(NormalizeCodeReadinessFinding)
                 .ToList();
-            result.Solid = result.Solid
-                .Where(check => !string.IsNullOrWhiteSpace(check.Principle))
-                .Take(5)
-                .Select(check => new CodexSolidReview
-                {
-                    Principle = TrimTo(check.Principle.ToUpperInvariant(), 5),
-                    Status = NormalizeSolidStatus(check.Status),
-                    Summary = TrimTo(check.Summary, 500)
-                })
-                .ToList();
+            result.Solid = NormalizeSolidReviews(result.Solid);
             result.DesignPatterns = (result.DesignPatterns ?? [])
                 .Where(pattern => !string.IsNullOrWhiteSpace(pattern.Name))
                 .Take(15)
                 .Select(NormalizeDesignPattern)
                 .ToList();
             result.Owasp = NormalizeOwaspAssessments(result.Owasp);
+            result.ValidationAndNullHandling = NormalizePracticeAssessments(result.ValidationAndNullHandling);
+            result.LoggingAndExceptionHandling = NormalizePracticeAssessments(result.LoggingAndExceptionHandling);
 
             return result;
         }
@@ -1780,7 +1773,10 @@ public sealed class CodexBugScanService : ICodexBugScanService
             Project: {TrimTo(project.Title, 200)} ({TrimTo(project.CrNumber, 30)}). Commit: {TrimTo(commitSha, 64)}.
             Inspect the actual application source comprehensively using repository-wide searches and direct file reads. Do not judge from folder names alone.
             Review SOLID principles (SRP, OCP, LSP, ISP, DIP), architecture boundaries, maintainability, security, automated tests, error handling, configuration, persistence, and incomplete implementation.
+            Assess every SOLID principle exactly once. For SRP inspect mixed responsibilities and change reasons; for OCP inspect extension points versus repeated modification/switch logic; for LSP inspect inheritance and substitutability contract violations; for ISP inspect broad interfaces and unused members; for DIP inspect whether policy depends on abstractions instead of concrete infrastructure. Use Pass only with positive source evidence, Fail only for a directly evidenced violation, Warning for partial application or a material risk, and Unknown when the repository has insufficient applicable evidence. Include a concise conclusion, direct source evidence, a concrete recommendation for every Warning or Fail, the strongest repository-relative file and line, and confidence. Do not invent inheritance or interface problems when the principle is not meaningfully exercised.
             Identify design and architectural code patterns actually implemented, such as MVC, layered architecture, repository, unit of work, service layer, dependency injection, factory, strategy, adapter, observer, mediator, or CQRS. Include a pattern only when direct source evidence exists, mark it Implemented or Partial, and cite up to five repository-relative files. Do not list a framework feature as a pattern without implementation evidence.
+            Assess data validation and null handling at application boundaries and persistence boundaries. Check server-side request/DTO/model validation, validation-result handling, nullable annotations, null guards, unsafe dereferences, parsing, database constraints, and invalid-state prevention. Return concise, distinct assessments with direct evidence; do not treat client-side validation alone as sufficient.
+            Assess logging and exception handling. Check structured logging, useful operational context, global exception handling, try/catch usage at appropriate boundaries, preserved stack traces, background-job failures, empty or swallowed catches, overly broad catches, sensitive-data logging, and whether user-facing errors avoid leaking internals. Do not reward unnecessary try/catch blocks.
             Assess every OWASP Top 10:2025 category exactly once: A01 Broken Access Control, A02 Security Misconfiguration, A03 Software Supply Chain Failures, A04 Cryptographic Failures, A05 Injection, A06 Insecure Design, A07 Authentication Failures, A08 Software or Data Integrity Failures, A09 Security Logging and Alerting Failures, and A10 Mishandling of Exceptional Conditions. Use Pass only when positive source evidence supports it, Fail only for a directly evidenced weakness, Warning for partial controls or material risk, NotApplicable only when clearly irrelevant, and Unknown when source-only review cannot establish the result. Cite a repository-relative file and line for evidence when available and provide a concrete recommendation for every Warning or Fail. Do not claim that runtime configuration, deployed infrastructure, or dependency vulnerability status was tested.
             Ignore .git, node_modules, bin, obj, dist, coverage, vendor, generated files, lock files, minified assets, and every .softracker-readiness-schema-* file.
             Do not edit files, install dependencies, build the application, run tests, execute repository scripts, or access the network.
@@ -1841,9 +1837,14 @@ public sealed class CodexBugScanService : ICodexBugScanService
                 "properties": {
                   "principle": { "type": "string", "enum": ["SRP", "OCP", "LSP", "ISP", "DIP"] },
                   "status": { "type": "string", "enum": ["Pass", "Warning", "Fail", "Unknown"] },
-                  "summary": { "type": "string" }
+                  "summary": { "type": "string" },
+                  "evidence": { "type": "string" },
+                  "recommendation": { "type": "string" },
+                  "file": { "type": "string" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
                 },
-                "required": ["principle", "status", "summary"],
+                "required": ["principle", "status", "summary", "evidence", "recommendation", "file", "line", "confidence"],
                 "additionalProperties": false
               }
             },
@@ -1868,6 +1869,44 @@ public sealed class CodexBugScanService : ICodexBugScanService
                 "additionalProperties": false
               }
             },
+            "validationAndNullHandling": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["Pass", "Warning", "Fail", "Unknown"] },
+                  "title": { "type": "string" },
+                  "summary": { "type": "string" },
+                  "evidence": { "type": "string" },
+                  "recommendation": { "type": "string" },
+                  "file": { "type": "string" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                },
+                "required": ["status", "title", "summary", "evidence", "recommendation", "file", "line", "confidence"],
+                "additionalProperties": false
+              }
+            },
+            "loggingAndExceptionHandling": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["Pass", "Warning", "Fail", "Unknown"] },
+                  "title": { "type": "string" },
+                  "summary": { "type": "string" },
+                  "evidence": { "type": "string" },
+                  "recommendation": { "type": "string" },
+                  "file": { "type": "string" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                },
+                "required": ["status", "title", "summary", "evidence", "recommendation", "file", "line", "confidence"],
+                "additionalProperties": false
+              }
+            },
             "owasp": {
               "type": "array",
               "minItems": 10,
@@ -1889,7 +1928,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
               }
             }
           },
-          "required": ["score", "summary", "analyzedFiles", "categories", "findings", "solid", "designPatterns", "owasp"],
+          "required": ["score", "summary", "analyzedFiles", "categories", "findings", "solid", "designPatterns", "validationAndNullHandling", "loggingAndExceptionHandling", "owasp"],
           "additionalProperties": false
         }
         """;
@@ -1925,6 +1964,42 @@ public sealed class CodexBugScanService : ICodexBugScanService
         "Fail" => "Fail",
         _ => "Unknown"
     };
+
+    private static List<CodexSolidReview> NormalizeSolidReviews(IEnumerable<CodexSolidReview>? reviews)
+    {
+        var principles = new[] { "SRP", "OCP", "LSP", "ISP", "DIP" };
+        var supplied = (reviews ?? [])
+            .Where(review => !string.IsNullOrWhiteSpace(review.Principle))
+            .GroupBy(review => review.Principle.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return principles.Select(principle =>
+        {
+            supplied.TryGetValue(principle, out var review);
+            review ??= new CodexSolidReview
+            {
+                Principle = principle,
+                Status = "Unknown",
+                Summary = "The source scan returned no conclusion for this principle."
+            };
+
+            var file = TrimTo(review.File, 500).Replace('\\', '/').TrimStart('/');
+            if (file.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(file))
+                file = string.Empty;
+
+            return new CodexSolidReview
+            {
+                Principle = principle,
+                Status = NormalizeSolidStatus(review.Status),
+                Summary = TrimTo(review.Summary, 750),
+                Evidence = TrimTo(review.Evidence, 1000),
+                Recommendation = TrimTo(review.Recommendation, 1000),
+                File = file,
+                Line = review.Line is > 0 ? review.Line : null,
+                Confidence = Math.Clamp(review.Confidence, 0, 100)
+            };
+        }).ToList();
+    }
 
     private static CodexDesignPattern NormalizeDesignPattern(CodexDesignPattern pattern)
     {
@@ -2011,6 +2086,40 @@ public sealed class CodexBugScanService : ICodexBugScanService
                 Confidence = Math.Clamp(assessment.Confidence, 0, 100)
             };
         }).ToList();
+    }
+
+    private static List<CodexCodePracticeAssessment> NormalizePracticeAssessments(
+        IEnumerable<CodexCodePracticeAssessment>? assessments)
+    {
+        return (assessments ?? [])
+            .Where(item => !string.IsNullOrWhiteSpace(item.Title))
+            .Take(10)
+            .Select(item =>
+            {
+                var status = item.Status?.Trim() switch
+                {
+                    "Pass" => "Pass",
+                    "Warning" => "Warning",
+                    "Fail" => "Fail",
+                    _ => "Unknown"
+                };
+                var file = TrimTo(item.File, 500).Replace('\\', '/').TrimStart('/');
+                if (file.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(file))
+                    file = string.Empty;
+
+                return new CodexCodePracticeAssessment
+                {
+                    Status = status,
+                    Title = TrimTo(item.Title, 200),
+                    Summary = TrimTo(item.Summary, 750),
+                    Evidence = TrimTo(item.Evidence, 1000),
+                    Recommendation = TrimTo(item.Recommendation, 1000),
+                    File = file,
+                    Line = item.Line is > 0 ? item.Line : null,
+                    Confidence = Math.Clamp(item.Confidence, 0, 100)
+                };
+            })
+            .ToList();
     }
 
     private static CodexCodeReadinessResult FailedCodeReadiness(string error) => new()

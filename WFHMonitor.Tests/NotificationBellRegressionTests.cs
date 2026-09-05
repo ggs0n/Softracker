@@ -30,7 +30,7 @@ public class NotificationBellRegressionTests
         var content = File.ReadAllText(Path.GetFullPath(viewPath));
 
         Assert.Contains("Repository Readiness", content);
-        Assert.Contains("Fix First", content);
+        Assert.Contains("Issue Found", content);
         Assert.Contains("SOLID Review", content);
         Assert.Contains("Architecture Flow", content);
         Assert.Contains("Incomplete Work", content);

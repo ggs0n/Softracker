@@ -2311,6 +2311,7 @@ public class ChangeRequestController : Controller
         var dependencyCount = string.IsNullOrWhiteSpace(project.TechnologyStack)
             ? 0
             : project.TechnologyStack.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+        var (frontendLanguages, backendLanguages) = DetectRepositoryLanguages(files);
         var relatedModules = BuildRelatedModules(project, bugs, testCases, detectedModules, branch);
 
         return new CodeReadinessViewModel
@@ -2333,6 +2334,8 @@ public class ChangeRequestController : Controller
             SourceFileCount = sourceFiles.Count,
             ModuleCount = Math.Max(relatedModules.Count, detectedLayerCount),
             DependencyCount = dependencyCount,
+            FrontendLanguages = frontendLanguages,
+            BackendLanguages = backendLanguages,
             OpenBugCount = openBugs.Count,
             FailedTestCount = failedTests,
             PendingTestCount = pendingTests,
@@ -2348,14 +2351,80 @@ public class ChangeRequestController : Controller
             ],
             SolidChecks =
             [
-                new() { Principle = "SRP", Name = "Single Responsibility", Status = "Source review required" },
-                new() { Principle = "OCP", Name = "Open/Closed", Status = "Source review required" },
-                new() { Principle = "LSP", Name = "Liskov Substitution", Status = "Source review required" },
-                new() { Principle = "ISP", Name = "Interface Segregation", Status = "Source review required" },
-                new() { Principle = "DIP", Name = "Dependency Inversion", Status = detectedLayerCount >= 3 ? "Layer structure detected; source review pending" : "Layer structure needs review" }
+                new() { Principle = "SRP", Name = "Single Responsibility", Status = "Unknown", Summary = "Run Full Codex Scan for a source-backed assessment." },
+                new() { Principle = "OCP", Name = "Open/Closed", Status = "Unknown", Summary = "Run Full Codex Scan for a source-backed assessment." },
+                new() { Principle = "LSP", Name = "Liskov Substitution", Status = "Unknown", Summary = "Run Full Codex Scan for a source-backed assessment." },
+                new() { Principle = "ISP", Name = "Interface Segregation", Status = "Unknown", Summary = "Run Full Codex Scan for a source-backed assessment." },
+                new() { Principle = "DIP", Name = "Dependency Inversion", Status = "Unknown", Summary = "Run Full Codex Scan for a source-backed assessment." }
             ],
             RelatedModules = relatedModules
         };
+    }
+
+    private static (string Frontend, string Backend) DetectRepositoryLanguages(IEnumerable<string> repositoryFiles)
+    {
+        var frontend = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var backend = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var backendPathSignals = new[]
+        {
+            "/backend/", "/server/", "/api/", "/routes/", "/controllers/", "/services/", "/functions/"
+        };
+
+        foreach (var rawPath in repositoryFiles)
+        {
+            var path = $"/{rawPath.Replace('\\', '/').Trim('/')}";
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+
+            switch (extension)
+            {
+                case ".html" or ".htm": frontend.Add("HTML"); break;
+                case ".css": frontend.Add("CSS"); break;
+                case ".scss": frontend.Add("SCSS"); break;
+                case ".sass": frontend.Add("Sass"); break;
+                case ".less": frontend.Add("Less"); break;
+                case ".razor" or ".cshtml": frontend.Add("Razor"); break;
+                case ".vue": frontend.Add("Vue"); break;
+                case ".svelte": frontend.Add("Svelte"); break;
+                case ".dart": frontend.Add("Dart"); break;
+                case ".jsx": frontend.Add("JavaScript"); break;
+                case ".tsx": frontend.Add("TypeScript"); break;
+                case ".js":
+                    if (backendPathSignals.Any(signal => path.Contains(signal, StringComparison.OrdinalIgnoreCase)) ||
+                        Path.GetFileName(path).Equals("server.js", StringComparison.OrdinalIgnoreCase) ||
+                        Path.GetFileName(path).Equals("api.js", StringComparison.OrdinalIgnoreCase))
+                        backend.Add("JavaScript");
+                    else
+                        frontend.Add("JavaScript");
+                    break;
+                case ".ts":
+                    if (backendPathSignals.Any(signal => path.Contains(signal, StringComparison.OrdinalIgnoreCase)) ||
+                        Path.GetFileName(path).Equals("server.ts", StringComparison.OrdinalIgnoreCase) ||
+                        Path.GetFileName(path).Equals("api.ts", StringComparison.OrdinalIgnoreCase))
+                        backend.Add("TypeScript");
+                    else
+                        frontend.Add("TypeScript");
+                    break;
+                case ".cs": backend.Add("C#"); break;
+                case ".fs" or ".fsx": backend.Add("F#"); break;
+                case ".vb": backend.Add("Visual Basic"); break;
+                case ".java": backend.Add("Java"); break;
+                case ".kt" or ".kts": backend.Add("Kotlin"); break;
+                case ".py": backend.Add("Python"); break;
+                case ".go": backend.Add("Go"); break;
+                case ".rb": backend.Add("Ruby"); break;
+                case ".php": backend.Add("PHP"); break;
+                case ".rs": backend.Add("Rust"); break;
+                case ".c": backend.Add("C"); break;
+                case ".cc" or ".cpp" or ".cxx": backend.Add("C++"); break;
+                case ".sql": backend.Add("SQL"); break;
+            }
+        }
+
+        static string Display(HashSet<string> values) => values.Count == 0
+            ? "Not detected"
+            : string.Join(", ", values.OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+
+        return (Display(frontend), Display(backend));
     }
 
     private static CodeReadinessCategoryViewModel BuildReadinessCategory(string name, int score, string detail, string icon) =>
@@ -2624,6 +2693,15 @@ public class ChangeRequestController : Controller
             })
             .ToList();
 
+        model.ValidationAndNullHandling = MapCodePracticeAssessments(
+            result.ValidationAndNullHandling,
+            repositoryUrl,
+            branch);
+        model.LoggingAndExceptionHandling = MapCodePracticeAssessments(
+            result.LoggingAndExceptionHandling,
+            repositoryUrl,
+            branch);
+
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["SRP"] = "Single Responsibility",
@@ -2638,16 +2716,60 @@ public class ChangeRequestController : Controller
         model.SolidChecks = names.Select(entry =>
         {
             checks.TryGetValue(entry.Key, out var check);
-            var status = check is null
-                ? "Unknown - source scan returned no conclusion"
-                : $"{check.Status} - {check.Summary}";
+            var safeFile = check is not null &&
+                           !string.IsNullOrWhiteSpace(check.File) &&
+                           !check.File.Contains("..", StringComparison.Ordinal) &&
+                           !Path.IsPathRooted(check.File);
             return new CodeReadinessSolidCheckViewModel
             {
                 Principle = entry.Key,
                 Name = entry.Value,
-                Status = status
+                Status = check?.Status ?? "Unknown",
+                Summary = check?.Summary ?? "The source scan returned no conclusion for this principle.",
+                Evidence = check?.Evidence ?? string.Empty,
+                Recommendation = check?.Recommendation ?? string.Empty,
+                Location = safeFile
+                    ? check!.Line.HasValue ? $"{check.File}:{check.Line.Value}" : check.File
+                    : null,
+                CodeUrl = safeFile && !string.IsNullOrWhiteSpace(repositoryUrl)
+                    ? BuildGitHubFileUrl(repositoryUrl, branch, check!.File)
+                    : null,
+                Confidence = Math.Clamp(check?.Confidence ?? 0, 0, 100)
             };
         }).ToList();
+    }
+
+    private static List<CodeReadinessPracticeViewModel> MapCodePracticeAssessments(
+        IEnumerable<CodexCodePracticeAssessment>? assessments,
+        string? repositoryUrl,
+        string branch)
+    {
+        return (assessments ?? [])
+            .Select(assessment =>
+            {
+                var safeFile = !string.IsNullOrWhiteSpace(assessment.File) &&
+                               !assessment.File.Contains("..", StringComparison.Ordinal) &&
+                               !Path.IsPathRooted(assessment.File);
+                var location = safeFile
+                    ? assessment.Line.HasValue
+                        ? $"{assessment.File}:{assessment.Line.Value}"
+                        : assessment.File
+                    : null;
+                return new CodeReadinessPracticeViewModel
+                {
+                    Status = assessment.Status,
+                    Title = assessment.Title,
+                    Summary = assessment.Summary,
+                    Evidence = assessment.Evidence,
+                    Recommendation = assessment.Recommendation,
+                    Location = location,
+                    CodeUrl = safeFile && !string.IsNullOrWhiteSpace(repositoryUrl)
+                        ? BuildGitHubFileUrl(repositoryUrl, branch, assessment.File)
+                        : null,
+                    Confidence = Math.Clamp(assessment.Confidence, 0, 100)
+                };
+            })
+            .ToList();
     }
 
     private static ProjectHealthViewModel BuildFallbackProjectHealth(

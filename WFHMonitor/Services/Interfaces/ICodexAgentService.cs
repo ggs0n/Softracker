@@ -66,6 +66,8 @@ public sealed class CodexCodeReadinessResult
     public List<CodexSolidReview> Solid { get; set; } = [];
     public List<CodexDesignPattern> DesignPatterns { get; set; } = [];
     public List<CodexOwaspAssessment> Owasp { get; set; } = [];
+    public List<CodexCodePracticeAssessment> ValidationAndNullHandling { get; set; } = [];
+    public List<CodexCodePracticeAssessment> LoggingAndExceptionHandling { get; set; } = [];
 }
 
 public sealed class CodexCodeReadinessCategory
@@ -93,6 +95,11 @@ public sealed class CodexSolidReview
     public string Principle { get; set; } = string.Empty;
     public string Status { get; set; } = "Unknown";
     public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string File { get; set; } = string.Empty;
+    public int? Line { get; set; }
+    public int Confidence { get; set; }
 }
 
 public sealed class CodexDesignPattern
@@ -110,6 +117,18 @@ public sealed class CodexOwaspAssessment
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = "Unknown";
+    public string Summary { get; set; } = string.Empty;
+    public string Evidence { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public string File { get; set; } = string.Empty;
+    public int? Line { get; set; }
+    public int Confidence { get; set; }
+}
+
+public sealed class CodexCodePracticeAssessment
+{
+    public string Status { get; set; } = "Unknown";
+    public string Title { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string Evidence { get; set; } = string.Empty;
     public string Recommendation { get; set; } = string.Empty;

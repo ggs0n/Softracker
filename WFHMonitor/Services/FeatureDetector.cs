@@ -33,28 +33,22 @@ public static class FeatureDetector
         ("Logging", ["serilog", "nlog", "logging", "logger"])
     };
 
-    private static readonly (string Name, string[] Patterns)[] DomainModulePatterns =
-    {
-        ("Authentication & Registration", ["authentication", "authenticate", "auth", "login", "logout", "register", "signup", "forgotpassword"]),
-        ("Customer", ["customer", "custlogin", "custregister"]),
-        ("Technician", ["technician", "techportal"]),
-        ("Payment", ["payment", "checkout", "billing", "invoice"]),
-        ("TV Repair", ["tvrepair", "repairorder", "orderrepair", "repairjob"]),
-        ("Quotation", ["quotation", "quote", "estimate"]),
-        ("Status Tracking", ["statustracker", "checkstatus", "statushistory", "tracking"]),
-        ("Profile", ["profile", "accountsettings"]),
-        ("Administration", ["admin", "backoffice"]),
-        ("Notifications", ["notification", "alert"]),
-        ("Reports", ["report", "analytics"]),
-        ("Scheduling", ["calendar", "schedule", "appointment"])
-    };
-
     private static readonly HashSet<string> GenericNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "app", "application", "base", "common", "component", "components", "controller", "controllers",
         "data", "default", "error", "footer", "header", "home", "homepage", "index", "main", "model",
         "models", "navbar", "page", "pages", "program", "repository", "request", "response", "service",
-        "services", "shared", "startup", "utility", "utils"
+        "services", "shared", "startup", "utility", "utils", "weather forecast", "values",
+        "sample", "template", "layout", "view imports", "view start", "global usings", "add", "create",
+        "delete", "details", "edit", "list", "new", "privacy", "remove", "update"
+    };
+
+    private static readonly HashSet<string> ModuleBearingDirectories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "area", "areas", "component", "components", "controller", "controllers", "domain", "entities",
+        "entity", "feature", "features", "handler", "handlers", "model", "models", "module", "modules",
+        "page", "pages", "repository", "repositories", "service", "services", "view", "viewmodel",
+        "viewmodels", "views"
     };
 
     private static readonly HashSet<string> CandidateExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -93,6 +87,7 @@ public static class FeatureDetector
 
         void AddEvidence(string moduleName, string path)
         {
+            moduleName = NormalizeModuleName(moduleName);
             if (string.IsNullOrWhiteSpace(moduleName) || GenericNames.Contains(moduleName))
                 return;
 
@@ -116,21 +111,10 @@ public static class FeatureDetector
             if (!CandidateExtensions.Contains(extension) || IsIgnoredPath(path))
                 continue;
 
-            var searchable = NormalizeSearchText(path);
-            var matchedKnownModule = false;
-            foreach (var (moduleName, patterns) in DomainModulePatterns)
-            {
-                if (!patterns.Any(pattern => searchable.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
-                AddEvidence(moduleName, path);
-                matchedKnownModule = true;
-            }
-
-            foreach (var explicitModule in ExtractExplicitModuleDirectories(path))
+            foreach (var explicitModule in ExtractModuleDirectories(path))
                 AddEvidence(HumanizeName(explicitModule), path);
 
-            if (!matchedKnownModule && IsModuleBearingFile(path))
+            if (IsModuleBearingFile(path))
             {
                 var candidate = HumanizeName(Path.GetFileNameWithoutExtension(path));
                 if (IsUsefulDynamicModule(candidate))
@@ -177,38 +161,97 @@ public static class FeatureDetector
         return fileName.EndsWith("Controller", StringComparison.OrdinalIgnoreCase) ||
                fileName.EndsWith("Page", StringComparison.OrdinalIgnoreCase) ||
                fileName.EndsWith("Service", StringComparison.OrdinalIgnoreCase) ||
-               segments.Any(segment => segment.Equals("pages", StringComparison.OrdinalIgnoreCase) ||
-                                       segment.Equals("features", StringComparison.OrdinalIgnoreCase) ||
-                                       segment.Equals("modules", StringComparison.OrdinalIgnoreCase) ||
-                                       segment.Equals("areas", StringComparison.OrdinalIgnoreCase));
+               fileName.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("Handler", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("Endpoint", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("ViewModel", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("Dto", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("Request", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith("Response", StringComparison.OrdinalIgnoreCase) ||
+               segments.Any(ModuleBearingDirectories.Contains);
     }
 
-    private static IEnumerable<string> ExtractExplicitModuleDirectories(string path)
+    private static IEnumerable<string> ExtractModuleDirectories(string path)
     {
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         for (var index = 0; index < segments.Length - 1; index++)
         {
-            if (!segments[index].Equals("features", StringComparison.OrdinalIgnoreCase) &&
-                !segments[index].Equals("modules", StringComparison.OrdinalIgnoreCase) &&
-                !segments[index].Equals("areas", StringComparison.OrdinalIgnoreCase))
-            {
+            if (!ModuleBearingDirectories.Contains(segments[index]))
                 continue;
-            }
 
-            if (index + 1 < segments.Length - 1)
+            if (index + 1 < segments.Length - 1 &&
+                !ModuleBearingDirectories.Contains(segments[index + 1]))
                 yield return segments[index + 1];
         }
     }
 
-    private static string NormalizeSearchText(string value) =>
-        Regex.Replace(value, "[^a-zA-Z0-9]", string.Empty).ToLowerInvariant();
-
     private static string HumanizeName(string value)
     {
-        var name = Regex.Replace(value, "(?<=[a-z0-9])(?=[A-Z])", " ");
+        var extension = Path.GetExtension(value);
+        if (!string.IsNullOrEmpty(extension))
+            value = Path.GetFileNameWithoutExtension(value);
+
+        if (Regex.IsMatch(value, "^I[A-Z][a-z]"))
+            value = value[1..];
+
+        var name = Regex.Replace(value, "(?<=[A-Z])(?=[A-Z][a-z])", " ");
+        name = Regex.Replace(name, "(?<=[a-z0-9])(?=[A-Z])", " ");
         name = Regex.Replace(name, "[-_.]+", " ");
-        name = Regex.Replace(name, "\\b(Controller|Page|Service|Repository|Component|Model|Request|Response|Dto|ViewModel)$", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(
+            name,
+            "\\b(View\\s+Model|Controller|Endpoint|Handler|Page|Service|Repository|Component|Model|Entity|Request|Response|Dto|Command|Query|Validator|Mapper|Worker|Job)$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
         return Regex.Replace(name, "\\s+", " ").Trim();
+    }
+
+    private static string NormalizeModuleName(string value)
+    {
+        var name = HumanizeName(value);
+        name = Regex.Replace(
+            name,
+            "^(Add|Create|Delete|Edit|Get|List|Manage|New|Remove|Update|View)\\s+",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        name = Regex.Replace(
+            name,
+            "\\s+(Accepted|Approved|Completed|Details?|Form|List|Pending|Rejected)$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+            return string.Empty;
+
+        words[^1] = Singularize(words[^1]);
+        return string.Join(' ', words);
+    }
+
+    private static string Singularize(string word)
+    {
+        if (word.Length > 4 && word.EndsWith("ies", StringComparison.OrdinalIgnoreCase))
+            return $"{word[..^3]}y";
+
+        if (word.Length > 4 &&
+            (word.EndsWith("ches", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("shes", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("sses", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("xes", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("zes", StringComparison.OrdinalIgnoreCase)))
+        {
+            return word[..^2];
+        }
+
+        if (word.Length > 3 &&
+            word.EndsWith('s') &&
+            !word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("is", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("us", StringComparison.OrdinalIgnoreCase))
+        {
+            return word[..^1];
+        }
+
+        return word;
     }
 
     private static bool IsUsefulDynamicModule(string candidate)
