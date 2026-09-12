@@ -18,12 +18,16 @@ public sealed class CodexAuthService(
         {
             var result = await RunCapturedAsync(cliPath, ["login", "status"], TimeSpan.FromSeconds(10), cancellationToken);
             var message = FirstUsefulLine(result.StandardOutput, result.StandardError);
+            var authenticationDetail = $"{result.StandardOutput}\n{result.StandardError}";
+            var isChatGptLogin = result.ExitCode == 0 &&
+                authenticationDetail.Contains("ChatGPT", StringComparison.OrdinalIgnoreCase);
             return new(
                 true,
                 result.ExitCode == 0,
                 string.IsNullOrWhiteSpace(message)
                     ? result.ExitCode == 0 ? "Codex is authenticated." : "Codex is not authenticated."
-                    : message);
+                    : message,
+                isChatGptLogin);
         }
         catch (Exception ex)
         {
@@ -39,8 +43,15 @@ public sealed class CodexAuthService(
             return new(false, "Codex CLI is not installed. Install it before connecting ChatGPT.");
 
         var current = await GetStatusAsync(cancellationToken);
+        if (current.IsAuthenticated && current.IsChatGptLogin)
+            return new(true, "Codex is already connected with ChatGPT.");
+
         if (current.IsAuthenticated)
-            return new(true, "Codex is already connected.");
+        {
+            var disconnected = await LogoutAsync(cancellationToken);
+            if (!disconnected)
+                return new(false, "Unable to replace the existing Codex authentication with Sign in with ChatGPT.");
+        }
 
         try
         {

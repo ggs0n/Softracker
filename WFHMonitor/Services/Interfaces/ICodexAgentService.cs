@@ -1,4 +1,5 @@
 using WFHMonitor.Models;
+using WFHMonitor.ViewModels;
 
 namespace WFHMonitor.Services.Interfaces;
 
@@ -52,7 +53,36 @@ public interface ICodexBugScanService
         string commitSha,
         string? scanAgentId = null,
         CancellationToken cancellationToken = default);
+
+    Task<CodexProjectKickStartResult> GenerateProjectKickStartAsync(
+        ProjectKickStartInputViewModel input,
+        string? agentId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<CodexProjectImageGenerationResult> GenerateProjectKickStartImagesAsync(
+        ProjectKickStartBlueprint blueprint,
+        int designId,
+        string? agentId = null,
+        CancellationToken cancellationToken = default);
+
+    string? ResolveProjectKickStartImagePath(int designId, string? fileName);
+
+    Task DeleteProjectKickStartImagesAsync(int designId);
 }
+
+public sealed record CodexProjectKickStartResult(
+    bool Succeeded,
+    string Error,
+    ProjectKickStartBlueprint? Blueprint);
+
+public sealed record CodexProjectImageGenerationResult(
+    bool Succeeded,
+    string Error,
+    IReadOnlyList<CodexGeneratedProjectImage> Images);
+
+public sealed record CodexGeneratedProjectImage(
+    int PageIndex,
+    string FileName);
 
 public sealed class CodexCodeReadinessResult
 {

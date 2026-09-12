@@ -67,6 +67,7 @@
     var isProjectsSectionActive = ctrl == "ChangeRequest" || ctrl == "Bug" || ctrl == "Qa";
     var isMonitorSectionActive = ctrl == "Monitor";
     var isPaymentSectionActive = ctrl == "Payment";
+    var isProjectKickStartActive = ctrl == "ProjectKickStart";
     var isTeamSectionActive = ctrl == "Team" || ctrl == "Agent" || (ctrl == "Admin" && act == "Employees");
     var canShowProjectsGroup = runtimeAccess.CanViewAllProjects || runtimeAccess.CanViewFeatures || runtimeAccess.CanViewBugs || runtimeAccess.CanViewQaTesting;
 
@@ -78,6 +79,12 @@
 
         <div class="sidebar-section-label">Main</div>
         <ul class="sidebar-nav">
+            <li>
+                <a asp-controller="ProjectKickStart" asp-action="Index"
+                   class="@(isProjectKickStartActive ? "active" : "")">
+                    <i class="bi bi-rocket-takeoff"></i> Project KickStart
+                </a>
+            </li>
             @if (User.IsInRole("Admin"))
             {
                 <li>

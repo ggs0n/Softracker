@@ -1,24 +1,9 @@
-# Claude Code
 
 ## Token Usage Reporting
-**MANDATORY**: At the end of every completed task, always display token usage information in the following format:
-
-```
-**Token Usage:**
-- Used: X tokens
-- Limit: 200,000 tokens
-- Remaining: Y tokens
-- Usage: Z%
-```
-
 **Session Management:**
 - At the start of a new conversation/session, acknowledge the token reset and track from 0
-- When continuing from a previous session, note the starting token count
-- Use `/compact` command when approaching 50% token usage to optimize context
-- Monitor token usage throughout the session to avoid hitting limits
 - After completing a task, provide a SHORT plain-text summary (4 bullet points max) in chat only. Do NOT create markdown files, documents, or headings unless I ask.
-- Explanations max 4 sentences unless I ask "why" or "explain"
-- Add files modified with 1 line explanation
+- Explanations max 6 sentences unless I ask "why" or "explain"
 
 ## Rate Limit Management (VS Code)
 **Batching Operations:**
@@ -28,19 +13,10 @@
 
 **Efficiency:**
 - Don't re-read files already in context
-- Cache information from previous operations
-
-
-**Skills**
-- For UI design, refer SkillTree\DesignUI\SKILL.md
-
 
 **No Repetition Rule**
 - Do NOT restate these rules or explain compliance
 - Do NOT repeat my prompt in your answer
-
-**No Narration**
-- Do NOT describe steps or process unless explicitly asked
 
 ## Project-Specific Guidelines
 
@@ -52,6 +28,7 @@
 5. Use dependency injection for all services
 6. Use SOLID principles code
 7. Please produce minimal code changes
+8. Please dont create new code unless important. Reuse existing class
 
 ### Security Requirements
 1. Never bypass authentication or authorization checks
@@ -78,12 +55,6 @@
 8. Always apply index when create new table
 9. Create/Update sql file after every changes that required db script to run
 
-### UI/UX Standards
-1. Use SkillTree\Design\UI\SKILL.md for reference ui
-2. Use Bootstrap Icons consistently
-3. Display success/error messages using TempData
-4. Ensure responsive design works on mobile devices
-5. Add loading indicators for async operations
 
 ### Testing Before Completion
 Before marking any feature as complete:
@@ -94,14 +65,11 @@ Before marking any feature as complete:
 ### Performance Considerations
 1. Use pagination for lists (default 10, max 100 items)
 2. Implement caching for frequently accessed data
-3. Minimize database queries with eager loading
-4. Use response compression (Brotli/Gzip)
 
 ### Git Workflow
 1. Never commit appsettings.*.json files with secrets
 2. Update .gitignore before committing sensitive files
 3. Write clear, descriptive commit messages
-4. Include Co-Authored-By tag when using Claude
 
 ### Documentation
 1. Update README.md ONLY when the user explicitly asks to update documentation
@@ -116,21 +84,19 @@ Before marking any feature as complete:
 4. Never expose internal implementation details
 5. Handle database connection failures gracefully
 
+## Verify and run application changes
+
+- After changing application code, configuration, Razor views, or desktop-host code, do not stop after editing the source.
+- Run the relevant automated tests. For changes affecting WFHMonitor or Code Readiness, run `dotnet test WFHMonitor.Tests/WFHMonitor.Tests.csproj --no-restore`.
+- If tests pass, rebuild the packaged desktop application by running `./publish-desktop.ps1` from the repository root.
+- After publishing, launch `artifacts/SoftrackerDesktop/Softracker.exe` so the user is running the newly built package, unless the user explicitly asks not to launch it.
+- Before republishing, check whether `Softracker.exe` or its packaged `WFHMonitor.exe` is running. Close or replace running packaged processes only when the user's request authorizes running the updated application.
+- Report the test result, publish result, launch result, and exact executable path in the final response.
+- Documentation-only or read-only investigation tasks do not require rebuilding or launching the application.
+
+
 
 ### Database
 # DONT EVER Drop database (DESTRUCTIVE - Only use when explicitly requested!)
 # WARNING: This deletes ALL data permanently
 # dotnet ef database drop --force --project MoneyTracker.Infrastructure --startup-project MoneyTracker.Web
-
-
-## Demo Credentials
-
-**Admin Account:**
-- Email: admin@gmail.com
-- Password: 1234
-
-**Test Users:**
-- adib@gmail.com / 1234
-
-## Reminder
-Always stop running applications before building to avoid file lock errors!

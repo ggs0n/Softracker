@@ -1,0 +1,466 @@
+@model WFHMonitor.ViewModels.ProjectKickStartPageViewModel
+@functions {
+    private static string FixGeneratedText(string? value) => (value ?? string.Empty)
+        .Replace("ΓÇô", "\u2013", StringComparison.Ordinal)
+        .Replace("â€“", "\u2013", StringComparison.Ordinal)
+        .Replace("â€”", "\u2014", StringComparison.Ordinal);
+}
+@{
+    ViewData["Title"] = "Project KickStart";
+}
+
+<style>
+    .pk-shell{max-width:1500px;margin:0 auto}.pk-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:18px}.pk-kicker{display:inline-flex;align-items:center;gap:7px;color:#059669;font-size:.7rem;font-weight:850;text-transform:uppercase;letter-spacing:.08em}.pk-title{font-size:1.55rem;font-weight:850;color:var(--text-primary);margin-top:4px}.pk-subtitle{font-size:.79rem;color:#71717a;margin-top:5px;max-width:700px}.pk-layout{display:grid;grid-template-columns:minmax(310px,390px) minmax(0,1fr);gap:18px;align-items:start}.pk-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}.pk-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:#fafbfc}.pk-card-title{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:850;color:var(--text-primary)}.pk-card-body{padding:16px}.pk-field{display:block;margin-bottom:13px}.pk-field label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;color:#3f3f46;font-size:.72rem;font-weight:750}.pk-field small{color:#a1a1aa;font-weight:500}.pk-input{width:100%;border:1px solid #d4d4d8;border-radius:9px;background:#fff;color:#18181b;padding:10px 11px;font:500 .75rem/1.45 Inter,sans-serif;resize:vertical}.pk-input:focus{outline:3px solid rgba(5,150,105,.12);border-color:#10b981}.pk-validation{display:block;color:#dc2626;font-size:.65rem;margin-top:4px}.pk-actions{display:flex;gap:8px}.pk-primary,.pk-secondary,.pk-icon-btn{border-radius:8px;min-height:38px;font-size:.72rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px}.pk-primary{flex:1;border:0;background:#059669;color:#fff}.pk-primary:hover{background:#047857}.pk-secondary,.pk-icon-btn{border:1px solid #d4d4d8;background:#fff;color:#52525b}.pk-secondary{padding:0 12px}.pk-icon-btn{width:38px}.pk-history{display:grid;gap:8px}.pk-history-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid #e4e4e7;border-radius:9px;background:#fff;overflow:hidden}.pk-history-item.is-active{border-color:#10b981;box-shadow:inset 3px 0 #10b981}.pk-history-link{display:flex;flex-direction:column;gap:3px;min-width:0;padding:10px 12px;text-decoration:none}.pk-history-link strong{color:#27272a;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk-history-link span{color:#71717a;font-size:.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk-delete{border:0;background:transparent;color:#dc2626;padding:10px}.pk-empty-history{padding:14px;border:1px dashed #d4d4d8;border-radius:9px;text-align:center;color:#71717a;font-size:.7rem}.pk-result-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px;border-bottom:1px solid var(--border)}.pk-mode{display:inline-flex;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.6rem;font-weight:850;text-transform:uppercase}.pk-result-title{font-size:1.2rem;font-weight:850;color:#18181b;margin:7px 0 3px}.pk-result-meta{font-size:.68rem;color:#71717a}.pk-tabs{display:flex;gap:4px;padding:9px 12px;border-bottom:1px solid var(--border);background:#fafbfc;overflow-x:auto}.pk-tab{border:0;border-radius:7px;padding:8px 11px;background:transparent;color:#71717a;font-size:.69rem;font-weight:750;white-space:nowrap}.pk-tab.is-active{background:#fff;color:#047857;box-shadow:0 1px 4px rgba(15,23,42,.1)}.pk-tab-panel{display:none;padding:18px}.pk-tab-panel.is-active{display:block}.pk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pk-info{border:1px solid #e4e4e7;border-radius:10px;padding:14px;background:#fff;min-width:0}.pk-info.pk-wide{grid-column:1/-1}.pk-info h3{display:flex;align-items:center;gap:7px;font-size:.76rem;font-weight:850;color:#27272a;margin:0 0 8px}.pk-info p,.pk-info li{font-size:.7rem;line-height:1.5;color:#52525b}.pk-info p{margin:0}.pk-list{padding-left:17px;margin:0;display:grid;gap:6px}.pk-cost{font-size:1.35rem;font-weight:900;color:#059669;margin:3px 0 5px}.pk-cost-table,.pk-schema-table{width:100%;border-collapse:collapse;font-size:.68rem}.pk-cost-table th,.pk-cost-table td,.pk-schema-table th,.pk-schema-table td{padding:9px;border-bottom:1px solid #e4e4e7;text-align:left;vertical-align:top;color:#52525b}.pk-cost-table th,.pk-schema-table th{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;color:#71717a;background:#fafafa}.pk-services{display:grid;gap:10px}.pk-service{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(160px,1fr) minmax(140px,.9fr) minmax(0,1.4fr);gap:10px;align-items:start;padding:11px;border:1px solid #e4e4e7;border-radius:9px;background:#fff}.pk-service strong{font-size:.7rem;color:#27272a}.pk-service span{font-size:.65rem;color:#52525b;line-height:1.4}.pk-flow{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding:6px 2px 14px}.pk-flow-node{min-width:132px;flex:1;border:1px solid #a7f3d0;border-radius:10px;background:#f0fdf4;padding:13px;text-align:center}.pk-flow-node i{display:block;color:#059669;font-size:1.1rem;margin-bottom:6px}.pk-flow-node strong{font-size:.68rem;color:#14532d}.pk-flow-arrow{display:flex;align-items:center;color:#10b981;font-size:1rem}.pk-schema{border:1px solid #e4e4e7;border-radius:10px;overflow:hidden;margin-bottom:12px}.pk-schema-head{padding:12px 14px;background:#fafbfc;border-bottom:1px solid #e4e4e7}.pk-schema-head strong{font:850 .76rem Consolas,monospace;color:#27272a}.pk-schema-head p{margin:3px 0 0;font-size:.65rem;color:#71717a}.pk-key{display:inline-flex;padding:2px 5px;border-radius:4px;background:#fef3c7;color:#92400e;font-size:.55rem;font-weight:850}.pk-notice{margin-top:14px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:.67rem;line-height:1.45}.pk-welcome{min-height:570px;display:grid;place-items:center;padding:28px;text-align:center}.pk-welcome-icon{width:64px;height:64px;margin:auto;display:grid;place-items:center;border-radius:18px;background:#ecfdf5;color:#059669;font-size:1.7rem}.pk-welcome h2{font-size:1.15rem;color:#27272a;margin:14px 0 7px}.pk-welcome p{max-width:520px;color:#71717a;font-size:.76rem;line-height:1.55}.pk-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}.pk-step{padding:13px;border:1px solid #e4e4e7;border-radius:9px;background:#fff}.pk-step strong{display:block;color:#059669;font-size:.8rem}.pk-step span{display:block;margin-top:4px;color:#71717a;font-size:.64rem}.pk-print{border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#52525b;padding:7px 10px;font-size:.68rem;font-weight:750}.pk-alert{margin-bottom:14px;padding:10px 12px;border:1px solid #a7f3d0;border-radius:9px;background:#ecfdf5;color:#065f46;font-size:.7rem}.pk-rel{font-size:.63rem;color:#71717a;padding:9px 13px;background:#fafafa}.pk-rel strong{color:#52525b}
+    .pk-codex-status{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;padding:10px 11px;border:1px solid #a7f3d0;border-radius:9px;background:#ecfdf5;color:#065f46;font-size:.67rem;line-height:1.4}.pk-codex-status.is-offline{border-color:#fde68a;background:#fffbeb;color:#92400e}.pk-codex-status strong{display:block;font-size:.7rem}.pk-connect{display:inline-flex;flex-shrink:0;align-items:center;gap:5px;padding:5px 8px;border:1px solid currentColor;border-radius:6px;color:inherit;text-decoration:none;font-weight:800}.pk-primary{text-decoration:none}.pk-primary[disabled]{opacity:.65;cursor:wait}.pk-generating{display:flex;align-items:center;gap:7px;margin-top:10px;padding:9px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:.67rem;font-weight:700}.pk-generating[hidden]{display:none}.pk-generating-spinner{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pk-spin .8s linear infinite}@@keyframes pk-spin{to{transform:rotate(360deg)}}
+    .pk-capabilities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.pk-capability{border:1px solid #e4e4e7;border-radius:9px;padding:12px;background:#fff}.pk-capability strong{display:block;color:#27272a;font-size:.72rem;margin-bottom:5px}.pk-capability p{margin:0;color:#52525b;font-size:.67rem;line-height:1.45}.pk-acceptance{margin-top:8px!important;padding-top:8px;border-top:1px dashed #d4d4d8;color:#047857!important}.pk-flow-count{display:inline-flex;margin-left:6px;padding:2px 6px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.58rem;font-weight:850}.pk-user-flows{display:grid;gap:12px}.pk-user-flow{border:1px solid #e4e4e7;border-radius:10px;padding:14px;background:#fff;min-width:0}.pk-user-flow-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px}.pk-user-type{display:flex;align-items:center;gap:7px;color:#27272a;font-size:.77rem;font-weight:850}.pk-user-purpose{color:#71717a;font-size:.66rem;line-height:1.4;margin:10px 0 6px}.pk-user-purpose:first-child{margin-top:0}.pk-flow-steps{display:flex;align-items:center;flex-wrap:wrap;gap:7px;overflow:visible;padding:3px 1px 7px}.pk-flow-step{min-width:0;max-width:260px;white-space:normal;overflow-wrap:anywhere;padding:7px 10px;border:1px solid #a7f3d0;border-radius:7px;background:#f0fdf4;color:#065f46;font-size:.65rem;font-weight:700}.pk-flow-step-arrow{flex:0 0 auto;color:#10b981}
+    .pk-visual-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px}.pk-visual-token{padding:10px;border:1px solid #e4e4e7;border-radius:8px;background:#fafafa;min-width:0}.pk-visual-token span{display:block;color:#a1a1aa;font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em}.pk-visual-token strong{display:block;margin-top:4px;color:#3f3f46;font-size:.65rem;line-height:1.35;overflow-wrap:anywhere}.pk-page-samples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.pk-page-sample{overflow:hidden;border:1px solid #e4e4e7;border-radius:11px;background:#fff}.pk-page-preview{position:relative;isolation:isolate;aspect-ratio:16/9;overflow:hidden;padding:16px;background:linear-gradient(145deg,#071b18,#12372f);color:#fff}.pk-page-preview::before{content:"";position:absolute;z-index:-1;inset:auto -14% -42% 30%;height:90%;border-radius:50%;background:radial-gradient(circle,rgba(52,211,153,.38),rgba(16,185,129,0) 68%)}.pk-page-preview::after{content:"";position:absolute;z-index:-1;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:24px 24px}.pk-page-preview.pk-visual-2{background:linear-gradient(145deg,#f7f3ea,#dcefe7);color:#14352c}.pk-page-preview.pk-visual-2::after{opacity:.25}.pk-page-preview.pk-visual-3{background:linear-gradient(145deg,#172033,#0f766e);color:#fff}.pk-page-preview.pk-visual-4{background:linear-gradient(145deg,#fff7ed,#f5d0a9);color:#4a2d18}.pk-page-preview.pk-visual-5{background:linear-gradient(145deg,#18181b,#3f3f46);color:#fff}.pk-preview-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.52rem;font-weight:800;letter-spacing:.04em}.pk-preview-route{max-width:55%;padding:3px 7px;border:1px solid currentColor;border-radius:999px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk-preview-content{position:absolute;left:7%;right:7%;bottom:12%;max-width:74%}.pk-visual-2 .pk-preview-content,.pk-visual-4 .pk-preview-content{left:auto;right:7%;text-align:right}.pk-visual-3 .pk-preview-content{left:14%;right:14%;max-width:none;text-align:center}.pk-preview-kicker{font-size:.52rem;font-weight:850;text-transform:uppercase;letter-spacing:.09em;opacity:.75}.pk-preview-title{font-size:clamp(.9rem,1.7vw,1.45rem);font-weight:900;line-height:1.04;margin:6px 0;letter-spacing:-.035em}.pk-preview-copy{font-size:.56rem;line-height:1.45;max-width:410px;opacity:.82}.pk-preview-cta{display:inline-flex;margin-top:9px;padding:6px 10px;border-radius:999px;background:#34d399;color:#052e24;font-size:.55rem;font-weight:900}.pk-page-detail{padding:13px}.pk-page-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.pk-page-detail h3{margin:0;color:#27272a;font-size:.76rem;font-weight:900}.pk-page-route{color:#059669;font:600 .59rem Consolas,monospace}.pk-page-purpose,.pk-page-direction{margin:7px 0 0;color:#52525b;font-size:.65rem;line-height:1.45}.pk-page-elements{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.pk-page-elements span{padding:3px 7px;border-radius:999px;background:#f4f4f5;color:#52525b;font-size:.56rem;font-weight:700}.pk-image-prompt{margin-top:10px;border-top:1px dashed #d4d4d8;padding-top:10px}.pk-image-prompt summary{cursor:pointer;color:#047857;font-size:.63rem;font-weight:850}.pk-image-prompt p{margin:7px 0;color:#52525b;font-size:.62rem;line-height:1.5}.pk-copy-prompt{border:1px solid #a7f3d0;border-radius:6px;background:#f0fdf4;color:#047857;padding:5px 8px;font-size:.58rem;font-weight:850}
+    .pk-alert.is-error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.pk-image-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;padding:12px 14px;border:1px solid #a7f3d0;border-radius:10px;background:#f0fdf4}.pk-image-toolbar-copy strong{display:block;color:#065f46;font-size:.76rem}.pk-image-toolbar-copy span{display:block;margin-top:3px;color:#047857;font-size:.64rem;line-height:1.4}.pk-image-generate{flex:0 0 auto;border:0;border-radius:8px;min-height:38px;padding:0 14px;background:#059669;color:#fff;font-size:.68rem;font-weight:850}.pk-image-generate[disabled]{cursor:not-allowed;opacity:.5}.pk-generated-page-image{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#f4f4f5}.pk-page-image-empty{display:grid;place-items:center;aspect-ratio:16/9;padding:24px;background:#fafafa;color:#71717a;text-align:center}.pk-page-image-empty i{display:block;margin-bottom:7px;color:#a1a1aa;font-size:1.4rem}.pk-page-image-empty strong{display:block;color:#52525b;font-size:.72rem}.pk-page-image-empty span{display:block;margin-top:4px;font-size:.62rem}
+    @@media(max-width:1100px){.pk-layout{grid-template-columns:1fr}.pk-sidebar{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.pk-sidebar .pk-card{margin:0}.pk-service{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:800px){.pk-page-samples{grid-template-columns:1fr}.pk-visual-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:700px){.pk-sidebar,.pk-grid{grid-template-columns:1fr}.pk-info.pk-wide{grid-column:auto}.pk-service{grid-template-columns:1fr}.pk-steps{grid-template-columns:1fr}.pk-hero{display:block}.pk-layout{display:block}.pk-tabs{position:sticky;top:0;z-index:2}}
+    @@media print{.sidebar,.topbar,.pk-sidebar,.pk-hero{display:none!important}.main-content{margin:0!important}.pk-layout{display:block}.pk-card{border:0}.pk-tabs{display:none}.pk-tab-panel{display:block!important;page-break-inside:auto}.pk-shell{max-width:none}}
+</style>
+
+<div class="pk-shell">
+    <header class="pk-hero">
+        <div>
+            <div class="pk-kicker"><i class="bi bi-rocket-takeoff"></i> System design planner</div>
+            <div class="pk-title">Project KickStart</div>
+            <div class="pk-subtitle">Turn a simple product idea into a practical starting architecture, deployment plan, database schema, cost range and delivery checklist.</div>
+        </div>
+    </header>
+
+    @if (TempData["Success"] is string success)
+    {
+        <div class="pk-alert"><i class="bi bi-check-circle me-1"></i> @success</div>
+    }
+    @if (TempData["Error"] is string error)
+    {
+        <div class="pk-alert is-error"><i class="bi bi-exclamation-triangle me-1"></i> @error</div>
+    }
+
+    <div class="pk-layout">
+        <aside class="pk-sidebar">
+            <section class="pk-card">
+                <div class="pk-card-head"><div class="pk-card-title"><i class="bi bi-sliders2" style="color:#059669"></i> Describe your project</div></div>
+                <div class="pk-card-body">
+                    <div class="pk-codex-status @(!Model.IsCodexConnected ? "is-offline" : "")">
+                        <div>
+                            <strong><i class="bi bi-robot me-1"></i> @(Model.IsCodexConnected ? "Codex AI connected" : "Codex AI connection required")</strong>
+                            <span>@Model.CodexStatusMessage</span>
+                        </div>
+                        @if (!Model.IsCodexConnected)
+                        {
+                            <a asp-controller="CodexAuth" asp-action="Connect" asp-route-returnUrl="/ProjectKickStart" class="pk-connect">Connect</a>
+                        }
+                    </div>
+                    <form asp-action="Generate" method="post">
+                        <div asp-validation-summary="ModelOnly" class="pk-validation"></div>
+                        <div class="pk-field">
+                            <label asp-for="Input.Summary"></label>
+                            <textarea asp-for="Input.Summary" class="pk-input" rows="4" placeholder="Food delivery app for customers, restaurants and riders"></textarea>
+                            <span asp-validation-for="Input.Summary" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-field">
+                            <label asp-for="Input.Technology"></label>
+                            <textarea asp-for="Input.Technology" class="pk-input" rows="3" placeholder="React, ASP.NET Core, SQL Server"></textarea>
+                            <span asp-validation-for="Input.Technology" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-field">
+                            <label asp-for="Input.CloudHostingTarget"><span>Cloud / hosting target</span><small>Optional</small></label>
+                            <textarea asp-for="Input.CloudHostingTarget" class="pk-input" rows="2" placeholder="Azure, AWS, on-premise IIS or undecided"></textarea>
+                        </div>
+                        <div class="pk-field">
+                            <label asp-for="Input.UserCount"></label>
+                            <textarea asp-for="Input.UserCount" class="pk-input" rows="2" placeholder="10,000 monthly users"></textarea>
+                            <span asp-validation-for="Input.UserCount" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-field">
+                            <label asp-for="Input.Features"></label>
+                            <textarea asp-for="Input.Features" class="pk-input" rows="4" placeholder="Registration, booking, payment, tracking, notifications"></textarea>
+                            <span asp-validation-for="Input.Features" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-field">
+                            <label asp-for="Input.UiDirection"><span>Theme / Describe UI</span><small>Optional</small></label>
+                            <textarea asp-for="Input.UiDirection" class="pk-input" rows="3" placeholder="Example: warm minimalist design, cream and forest-green palette, friendly rounded cards"></textarea>
+                            <span asp-validation-for="Input.UiDirection" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-actions">
+                            @if (Model.IsCodexConnected)
+                            {
+                                <button type="submit" class="pk-primary" id="pkGenerate"><i class="bi bi-stars"></i> <span>Generate with Codex AI</span></button>
+                            }
+                            else
+                            {
+                                <a asp-controller="CodexAuth" asp-action="Connect" asp-route-returnUrl="/ProjectKickStart" class="pk-primary" id="pkConnectGenerate"><i class="bi bi-box-arrow-up-right"></i> Connect Codex to Generate</a>
+                            }
+                            <button type="button" class="pk-icon-btn" id="pkSample" title="Use sample"><i class="bi bi-lightning-charge"></i></button>
+                            <button type="button" class="pk-icon-btn" id="pkClear" title="Clear"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        </div>
+                        <div class="pk-generating" id="pkGenerating" hidden><span class="pk-generating-spinner"></span> Codex is designing the architecture. This can take one or two minutes.</div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="pk-card">
+                <div class="pk-card-head">
+                    <div class="pk-card-title"><i class="bi bi-clock-history" style="color:#059669"></i> Saved blueprints</div>
+                    <span style="font-size:.65rem;color:#71717a">@Model.History.Count saved</span>
+                </div>
+                <div class="pk-card-body">
+                    @if (Model.History.Count == 0)
+                    {
+                        <div class="pk-empty-history">Your generated blueprints will appear here.</div>
+                    }
+                    else
+                    {
+                        <div class="pk-history">
+                            @foreach (var design in Model.History)
+                            {
+                                <div class="pk-history-item @(Model.SelectedDesign?.Id == design.Id ? "is-active" : "")">
+                                    <a asp-action="Index" asp-route-id="@design.Id" class="pk-history-link">
+                                        <strong>@design.Title</strong>
+                                        <span>@design.Technology · @design.UserCount</span>
+                                        <span>@design.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                                    </a>
+                                    <form asp-action="Delete" asp-route-id="@design.Id" method="post" onsubmit="return confirm('Delete this blueprint?')">
+                                        <button class="pk-delete" title="Delete blueprint"><i class="bi bi-trash3"></i></button>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        </aside>
+
+        <main>
+            <section class="pk-card">
+                @if (Model.Blueprint is null || Model.SelectedDesign is null)
+                {
+                    <div class="pk-welcome">
+                        <div>
+                            <div class="pk-welcome-icon"><i class="bi bi-diagram-3"></i></div>
+                            <h2>Start with four clear decisions</h2>
+                            <p>Describe the product, technology, expected users and main features. Project KickStart turns them into a structured blueprint you can use before coding.</p>
+                            <div class="pk-steps">
+                                <div class="pk-step"><strong>1</strong><span>Describe the problem and users</span></div>
+                                <div class="pk-step"><strong>2</strong><span>Generate an initial architecture</span></div>
+                                <div class="pk-step"><strong>3</strong><span>Validate, adjust and start delivery</span></div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    var blueprint = Model.Blueprint;
+                    var imageSamples = blueprint.VisualPlan?.PageSamples.Take(2).ToList() ?? [];
+                    <header class="pk-result-head">
+                        <div>
+                            <span class="pk-mode">@blueprint.SourceMode blueprint</span>
+                            <div class="pk-result-title">@blueprint.Title</div>
+                            <div class="pk-result-meta">Created @Model.SelectedDesign.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm") · @Model.SelectedDesign.UserCount</div>
+                        </div>
+                        <button type="button" class="pk-print" onclick="window.print()"><i class="bi bi-printer me-1"></i> Print / PDF</button>
+                    </header>
+                    <nav class="pk-tabs" aria-label="Blueprint sections">
+                        <button type="button" class="pk-tab is-active" data-pk-tab="overview"><i class="bi bi-file-text me-1"></i> Overview</button>
+                        <button type="button" class="pk-tab" data-pk-tab="mvp"><i class="bi bi-bullseye me-1"></i> MVP</button>
+                        <button type="button" class="pk-tab" data-pk-tab="user-flow"><i class="bi bi-people me-1"></i> User Flow</button>
+                        <button type="button" class="pk-tab" data-pk-tab="page-images"><i class="bi bi-images me-1"></i> Image Samples</button>
+                        <button type="button" class="pk-tab" data-pk-tab="architecture"><i class="bi bi-diagram-3 me-1"></i> Architecture</button>
+                        <button type="button" class="pk-tab" data-pk-tab="schema"><i class="bi bi-table me-1"></i> Database Schema</button>
+                        <button type="button" class="pk-tab" data-pk-tab="risks"><i class="bi bi-shield-exclamation me-1"></i> Risks & Plan</button>
+                    </nav>
+
+                    <div class="pk-tab-panel is-active" data-pk-panel="overview">
+                        <div class="pk-grid">
+                            <article class="pk-info pk-wide"><h3><i class="bi bi-compass"></i> Recommended architecture</h3><p>@blueprint.RecommendedArchitecture</p></article>
+                            <article class="pk-info"><h3><i class="bi bi-boxes"></i> Main components</h3><ul class="pk-list">@foreach (var item in blueprint.MainComponents){<li>@item</li>}</ul></article>
+                            <article class="pk-info"><h3><i class="bi bi-arrows-angle-expand"></i> Scaling advice</h3><p>@blueprint.ScalingAdvice</p></article>
+                            <article class="pk-info"><h3><i class="bi bi-currency-dollar"></i> Estimated monthly cost</h3><div class="pk-cost">@FixGeneratedText(blueprint.CostEstimate.MonthlyRange)</div><p>@blueprint.CostEstimate.Summary</p></article>
+                            <article class="pk-info"><h3><i class="bi bi-shield-check"></i> Security baseline</h3><p>@blueprint.SecurityNotes</p></article>
+                            <article class="pk-info pk-wide">
+                                <h3><i class="bi bi-receipt"></i> Cost breakdown</h3>
+                                <div style="overflow-x:auto"><table class="pk-cost-table"><thead><tr><th>Area</th><th>Monthly range</th><th>Includes</th></tr></thead><tbody>@foreach(var item in blueprint.CostEstimate.LineItems){<tr><td><strong>@item.Name</strong></td><td>@FixGeneratedText(item.MonthlyRange)</td><td>@item.Notes</td></tr>}</tbody></table></div>
+                            </article>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(blueprint.Notice)){<div class="pk-notice"><i class="bi bi-info-circle me-1"></i> @blueprint.Notice</div>}
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="mvp">
+                        @if (blueprint.Mvp is null)
+                        {
+                            <div class="pk-notice"><i class="bi bi-info-circle me-1"></i> This older saved blueprint does not contain an MVP plan. Generate a new Codex AI blueprint to add it.</div>
+                        }
+                        else
+                        {
+                            <div class="pk-grid">
+                                <article class="pk-info pk-wide"><h3><i class="bi bi-window-stack"></i> What the MVP system does</h3><p>@blueprint.Mvp.SystemOverview</p></article>
+                                <article class="pk-info"><h3><i class="bi bi-exclamation-diamond"></i> Problem solved</h3><p>@blueprint.Mvp.ProblemSolved</p></article>
+                                <article class="pk-info"><h3><i class="bi bi-gem"></i> Core value</h3><p>@blueprint.Mvp.CoreValue</p></article>
+                                <article class="pk-info pk-wide">
+                                    <h3><i class="bi bi-check2-square"></i> Essential MVP capabilities</h3>
+                                    <div class="pk-capabilities">
+                                        @foreach (var capability in blueprint.Mvp.CoreCapabilities)
+                                        {
+                                            <div class="pk-capability">
+                                                <strong>@capability.Name</strong>
+                                                <p>@capability.Description</p>
+                                                <p class="pk-acceptance"><b>Done when:</b> @capability.AcceptanceOutcome</p>
+                                            </div>
+                                        }
+                                    </div>
+                                </article>
+                                <article class="pk-info"><h3><i class="bi bi-slash-circle"></i> Out of scope for MVP</h3><ul class="pk-list">@foreach(var item in blueprint.Mvp.OutOfScope){<li>@item</li>}</ul></article>
+                                <article class="pk-info"><h3><i class="bi bi-graph-up-arrow"></i> Success criteria</h3><ul class="pk-list">@foreach(var item in blueprint.Mvp.SuccessCriteria){<li>@item</li>}</ul></article>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="user-flow">
+                        @if (blueprint.UserFlows is null || blueprint.UserFlows.Count == 0)
+                        {
+                            <div class="pk-notice"><i class="bi bi-info-circle me-1"></i> This older saved blueprint does not contain role-based user flows. Generate a new Codex AI blueprint to add them.</div>
+                        }
+                        else
+                        {
+                            var groupedUserFlows = blueprint.UserFlows
+                                .GroupBy(flow => flow.UserType.Trim(), StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            <div class="pk-info" style="margin-bottom:12px">
+                                <h3><i class="bi bi-people"></i> Identified user types <span class="pk-flow-count">@groupedUserFlows.Count</span></h3>
+                                <p>Each path shows the simplest successful journey for that user type.</p>
+                            </div>
+                            <div class="pk-user-flows">
+                                @foreach (var userTypeGroup in groupedUserFlows)
+                                {
+                                    <article class="pk-user-flow">
+                                        <div class="pk-user-flow-head">
+                                            <div class="pk-user-type"><i class="bi bi-person-circle" style="color:#059669"></i> @userTypeGroup.Key</div>
+                                        </div>
+                                        @foreach (var flow in userTypeGroup)
+                                        {
+                                            <div class="pk-user-purpose">@flow.Purpose</div>
+                                            <div class="pk-flow-steps">
+                                                @for (var stepIndex = 0; stepIndex < flow.Steps.Count; stepIndex++)
+                                                {
+                                                    <span class="pk-flow-step">@flow.Steps[stepIndex]</span>
+                                                    @if (stepIndex < flow.Steps.Count - 1)
+                                                    {
+                                                        <i class="bi bi-arrow-right pk-flow-step-arrow" aria-hidden="true"></i>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="page-images">
+                        @if (blueprint.VisualPlan is null || imageSamples.Count == 0)
+                        {
+                            <div class="pk-notice"><i class="bi bi-info-circle me-1"></i> This older saved blueprint does not contain page image samples. Generate a new Codex AI blueprint to create up to two.</div>
+                        }
+                        else
+                        {
+                            <div class="pk-info" style="margin-bottom:12px">
+                                <h3><i class="bi bi-images"></i> AI-generated page images <span class="pk-flow-count">@imageSamples.Count / 2</span></h3>
+                                <p>Generate up to two medium-quality 1024 × 576 previews from this blueprint, then expand either page to inspect or copy its source prompt.</p>
+                            </div>
+                            @if (Model.SelectedDesign is not null)
+                            {
+                                <div class="pk-image-toolbar">
+                                    <div class="pk-image-toolbar-copy">
+                                        <strong>Codex built-in image generation</strong>
+                                        <span>No API key is used. This requires Softracker to be connected through Sign in with ChatGPT and uses your included Codex limits.</span>
+                                    </div>
+                                    <form asp-action="GenerateImages" method="post" class="pk-image-generation-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@Model.SelectedDesign.Id" />
+                                        <button type="submit" class="pk-image-generate" id="pkGenerateImages" disabled="@(!Model.IsCodexChatGptLogin)">
+                                            <i class="bi bi-image"></i>
+                                            <span>@(imageSamples.Any(sample => !string.IsNullOrWhiteSpace(sample.ImageFileName)) ? "Regenerate previews" : "Generate with Codex OAuth")</span>
+                                        </button>
+                                    </form>
+                                </div>
+                                @if (!Model.IsCodexChatGptLogin)
+                                {
+                                    <div class="pk-notice" style="margin:0 0 14px">
+                                        <i class="bi bi-shield-lock me-1"></i> Connect with <strong>Sign in with ChatGPT</strong> before generating images. API-key authentication is intentionally rejected.
+                                        @if (User.IsInRole("Admin"))
+                                        {
+                                            <a asp-controller="CodexAuth" asp-action="Connect" asp-route-returnUrl="/ProjectKickStart?id=@Model.SelectedDesign.Id" class="pk-connect" style="margin-left:8px">Connect ChatGPT</a>
+                                        }
+                                    </div>
+                                }
+                            }
+                            <div class="pk-visual-summary">
+                                <div class="pk-visual-token"><span>Theme</span><strong>@blueprint.VisualPlan.Theme</strong></div>
+                                <div class="pk-visual-token"><span>Palette</span><strong>@blueprint.VisualPlan.Palette</strong></div>
+                                <div class="pk-visual-token"><span>Typography</span><strong>@blueprint.VisualPlan.Typography</strong></div>
+                                <div class="pk-visual-token"><span>Hero scale</span><strong>@blueprint.VisualPlan.HeroScale</strong></div>
+                                <div class="pk-visual-token"><span>Concept spine</span><strong>@blueprint.VisualPlan.NarrativeSpine</strong></div>
+                            </div>
+                            <div class="pk-page-samples">
+                                @for (var sampleIndex = 0; sampleIndex < imageSamples.Count; sampleIndex++)
+                                {
+                                    var sample = imageSamples[sampleIndex];
+                                    <article class="pk-page-sample">
+                                        @if (Model.SelectedDesign is not null && !string.IsNullOrWhiteSpace(sample.ImageFileName))
+                                        {
+                                            <img class="pk-generated-page-image"
+                                                 src="@Url.Action("Image", "ProjectKickStart", new { id = Model.SelectedDesign.Id, file = sample.ImageFileName })"
+                                                 alt="AI-generated UI concept for @sample.PageName"
+                                                 loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <div class="pk-page-image-empty">
+                                                <div><i class="bi bi-image"></i><strong>Image not generated yet</strong><span>The blueprint prompt is ready for Codex OAuth image generation.</span></div>
+                                            </div>
+                                        }
+                                        <div class="pk-page-detail">
+                                            <div class="pk-page-detail-head">
+                                                <h3>@(sampleIndex + 1). @sample.PageName</h3>
+                                                <span class="pk-page-route">@sample.Route</span>
+                                            </div>
+                                            <p class="pk-page-purpose">@sample.Purpose</p>
+                                            <p class="pk-page-direction"><strong>@sample.CompositionAnchor</strong> · @sample.BackgroundMode<br />@sample.VisualDirection</p>
+                                            <div class="pk-page-elements">@foreach (var element in sample.KeyElements){<span>@element</span>}</div>
+                                            <details class="pk-image-prompt">
+                                                <summary>View image prompt</summary>
+                                                <p>@sample.ImagePrompt</p>
+                                                <button type="button" class="pk-copy-prompt" data-copy-prompt="@sample.ImagePrompt"><i class="bi bi-copy me-1"></i> Copy prompt</button>
+                                            </details>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="architecture">
+                        <div class="pk-flow" aria-label="Architecture flow">
+                            <div class="pk-flow-node"><i class="bi bi-window"></i><strong>Web Client</strong></div><div class="pk-flow-arrow"><i class="bi bi-arrow-right"></i></div>
+                            <div class="pk-flow-node"><i class="bi bi-person-lock"></i><strong>Authentication</strong></div><div class="pk-flow-arrow"><i class="bi bi-arrow-right"></i></div>
+                            <div class="pk-flow-node"><i class="bi bi-braces"></i><strong>Backend API</strong></div><div class="pk-flow-arrow"><i class="bi bi-arrow-right"></i></div>
+                            <div class="pk-flow-node"><i class="bi bi-boxes"></i><strong>Business Modules</strong></div><div class="pk-flow-arrow"><i class="bi bi-arrow-right"></i></div>
+                            <div class="pk-flow-node"><i class="bi bi-database"></i><strong>Data & Queue</strong></div>
+                        </div>
+                        <div class="pk-services">
+                            @foreach (var service in blueprint.DeploymentServices)
+                            {
+                                <article class="pk-service"><strong>@service.Module</strong><span>@service.RecommendedService</span><span>@service.Runtime</span><span>@service.Reason</span></article>
+                            }
+                        </div>
+                        <div class="pk-grid" style="margin-top:12px">
+                            <article class="pk-info"><h3><i class="bi bi-database"></i> Database & storage</h3><p>@blueprint.DatabaseStorageRecommendation</p></article>
+                            <article class="pk-info"><h3><i class="bi bi-braces-asterisk"></i> API & backend</h3><p>@blueprint.ApiBackendRecommendation</p></article>
+                        </div>
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="schema">
+                        @foreach (var schema in blueprint.TableSchemas)
+                        {
+                            <article class="pk-schema">
+                                <div class="pk-schema-head"><strong>@schema.Name</strong><p>@schema.Purpose</p></div>
+                                <div style="overflow-x:auto"><table class="pk-schema-table"><thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Notes</th></tr></thead><tbody>
+                                    @foreach (var column in schema.Columns)
+                                    {
+                                        <tr><td><code>@column.Name</code></td><td>@column.Type</td><td>@if(column.IsPrimaryKey){<span class="pk-key">PK</span>} @if(column.IsForeignKey){<span class="pk-key">FK</span>}</td><td>@column.Notes</td></tr>
+                                    }
+                                </tbody></table></div>
+                                @if(schema.Relationships.Count > 0){<div class="pk-rel"><strong>Relationships:</strong> @string.Join(" · ", schema.Relationships)</div>}
+                            </article>
+                        }
+                    </div>
+
+                    <div class="pk-tab-panel" data-pk-panel="risks">
+                        <div class="pk-grid">
+                            <article class="pk-info"><h3><i class="bi bi-exclamation-triangle"></i> Risks & trade-offs</h3><ol class="pk-list">@foreach(var item in blueprint.RisksTradeoffs){<li>@item</li>}</ol></article>
+                            <article class="pk-info"><h3><i class="bi bi-list-check"></i> Recommended next steps</h3><ol class="pk-list">@foreach(var item in blueprint.NextSteps){<li>@item</li>}</ol></article>
+                            <article class="pk-info"><h3><i class="bi bi-calculator"></i> Cost assumptions</h3><ul class="pk-list">@foreach(var item in blueprint.CostEstimate.Assumptions){<li>@item</li>}</ul></article>
+                            <article class="pk-info"><h3><i class="bi bi-piggy-bank"></i> Cost optimizations</h3><ul class="pk-list">@foreach(var item in blueprint.CostEstimate.CostOptimizations){<li>@item</li>}</ul></article>
+                        </div>
+                    </div>
+                }
+            </section>
+        </main>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const draftKey = 'softracker.projectKickStart.draft';
+            const tabs = [...document.querySelectorAll('[data-pk-tab]')];
+            const panels = [...document.querySelectorAll('[data-pk-panel]')];
+            tabs.forEach(tab => tab.addEventListener('click', () => {
+                tabs.forEach(item => item.classList.toggle('is-active', item === tab));
+                panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.pkPanel === tab.dataset.pkTab));
+            }));
+            document.querySelectorAll('[data-copy-prompt]').forEach(button => button.addEventListener('click', async () => {
+                const prompt = button.dataset.copyPrompt || '';
+                try {
+                    await navigator.clipboard.writeText(prompt);
+                } catch {
+                    const area = document.createElement('textarea');
+                    area.value = prompt;
+                    area.style.position = 'fixed';
+                    area.style.opacity = '0';
+                    document.body.appendChild(area);
+                    area.select();
+                    document.execCommand('copy');
+                    area.remove();
+                }
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-check2 me-1"></i> Copied';
+                window.setTimeout(() => { button.innerHTML = original; }, 1400);
+            }));
+
+            const values = {
+                'Input_Summary': 'TV repair booking system for customers, technicians and administrators',
+                'Input_Technology': 'React, ASP.NET Core, SQL Server',
+                'Input_CloudHostingTarget': 'Azure',
+                'Input_UserCount': '10,000 monthly users',
+                'Input_Features': 'Registration, customer portal, technician assignment, repair booking, payment, status tracking, notifications',
+                'Input_UiDirection': 'Clean and trustworthy service UI with a warm neutral palette and clear status-focused cards'
+            };
+            const saveDraft = () => {
+                const draft = {};
+                Object.keys(values).forEach(id => { const input = document.getElementById(id); if (input) draft[id] = input.value; });
+                sessionStorage.setItem(draftKey, JSON.stringify(draft));
+            };
+            try {
+                const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
+                if (draft) Object.entries(draft).forEach(([id, value]) => { const input = document.getElementById(id); if (input && !input.value) input.value = value; });
+            } catch { sessionStorage.removeItem(draftKey); }
+
+            document.getElementById('pkConnectGenerate')?.addEventListener('click', saveDraft);
+            document.querySelector('form[action$="/ProjectKickStart/Generate"]')?.addEventListener('submit', () => {
+                saveDraft();
+                const button = document.getElementById('pkGenerate');
+                if (button) {
+                    button.disabled = true;
+                    const label = button.querySelector('span');
+                    if (label) label.textContent = 'Generating with Codex...';
+                }
+                const progress = document.getElementById('pkGenerating');
+                if (progress) progress.hidden = false;
+            });
+            document.querySelector('.pk-image-generation-form')?.addEventListener('submit', () => {
+                const button = document.getElementById('pkGenerateImages');
+                if (!button) return;
+                button.disabled = true;
+                const label = button.querySelector('span');
+                if (label) label.textContent = 'Generating images...';
+            });
+            document.getElementById('pkSample')?.addEventListener('click', () => Object.entries(values).forEach(([id, value]) => { const input = document.getElementById(id); if (input) input.value = value; }));
+            document.getElementById('pkClear')?.addEventListener('click', () => { Object.keys(values).forEach(id => { const input = document.getElementById(id); if (input) input.value = ''; }); sessionStorage.removeItem(draftKey); });
+        })();
+    </script>
+}

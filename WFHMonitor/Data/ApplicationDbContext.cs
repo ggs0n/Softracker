@@ -30,6 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<OrgTeam> OrgTeams => Set<OrgTeam>();
     public DbSet<OrganizationProfile> OrganizationProfiles => Set<OrganizationProfile>();
     public DbSet<TestCase> TestCases => Set<TestCase>();
+    public DbSet<ProjectKickStartDesign> ProjectKickStartDesigns => Set<ProjectKickStartDesign>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -430,6 +431,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(s => s.CodexReasoningEffort)
                 .HasMaxLength(20)
                 .HasDefaultValue(CodexAiDefaults.ReasoningEffort);
+
         });
 
         builder.Entity<UserOnboardingState>(e =>
@@ -504,6 +506,26 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(p => p.CeoUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<ProjectKickStartDesign>(e =>
+        {
+            e.HasIndex(d => new { d.CreatedById, d.CreatedAtUtc });
+            e.Property(d => d.Title).HasMaxLength(180).IsRequired();
+            e.Property(d => d.Summary).IsRequired();
+            e.Property(d => d.Technology).IsRequired();
+            e.Property(d => d.CloudHostingTarget).HasMaxLength(120);
+            e.Property(d => d.UserCount).HasMaxLength(100).IsRequired();
+            e.Property(d => d.Features).IsRequired();
+            e.Property(d => d.UiDirection).HasMaxLength(1000);
+            e.Property(d => d.BlueprintJson).IsRequired();
+            e.Property(d => d.SourceMode).HasMaxLength(40).IsRequired();
+            e.Property(d => d.CreatedById).HasMaxLength(450).IsRequired();
+
+            e.HasOne(d => d.CreatedBy)
+                .WithMany()
+                .HasForeignKey(d => d.CreatedById)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
