@@ -114,13 +114,30 @@ public class ProjectKickStartController : Controller
         _db.ProjectKickStartDesigns.Add(design);
         await _db.SaveChangesAsync(cancellationToken);
 
-        TempData["Success"] = "Project blueprint generated and saved.";
+        if (authStatus.IsChatGptLogin && blueprint.VisualPlan?.PageSamples.Count > 0)
+        {
+            var imageGeneration = await GenerateAndAttachImagesAsync(design, blueprint, 2, cancellationToken);
+            if (imageGeneration.Succeeded)
+            {
+                TempData["Success"] = $"Project blueprint generated and saved with {imageGeneration.Images.Count} page image(s).";
+            }
+            else
+            {
+                TempData["Success"] = "Project blueprint generated and saved.";
+                TempData["Error"] = $"Page image generation did not complete: {imageGeneration.Error}";
+            }
+        }
+        else
+        {
+            TempData["Success"] = "Project blueprint generated and saved. Use the image-sample button after connecting with Sign in with ChatGPT to generate previews.";
+        }
+
         return RedirectToAction(nameof(Index), new { id = design.Id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GenerateImages(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GenerateImages(int id, int count = 2, CancellationToken cancellationToken = default)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var design = await _db.ProjectKickStartDesigns
@@ -142,26 +159,8 @@ public class ProjectKickStartController : Controller
             return RedirectToAction(nameof(Index), new { id });
         }
 
-        var generation = await _codexService.GenerateProjectKickStartImagesAsync(
-            blueprint,
-            design.Id,
-            cancellationToken: cancellationToken);
-
-        if (generation.Images.Count > 0)
-        {
-            var generatedByIndex = generation.Images.ToDictionary(image => image.PageIndex);
-            var updatedSamples = blueprint.VisualPlan.PageSamples
-                .Select((sample, index) => generatedByIndex.TryGetValue(index, out var image)
-                    ? sample with { ImageFileName = image.FileName }
-                    : sample)
-                .ToList();
-            blueprint = blueprint with
-            {
-                VisualPlan = blueprint.VisualPlan with { PageSamples = updatedSamples }
-            };
-            design.BlueprintJson = JsonSerializer.Serialize(blueprint, JsonOptions);
-            await _db.SaveChangesAsync(cancellationToken);
-        }
+        var requestedCount = count >= 5 ? 5 : 2;
+        var generation = await GenerateAndAttachImagesAsync(design, blueprint, requestedCount, cancellationToken);
 
         if (generation.Succeeded)
             TempData["Success"] = $"Generated {generation.Images.Count} real page images using Codex OAuth.";
@@ -169,6 +168,36 @@ public class ProjectKickStartController : Controller
             TempData["Error"] = generation.Error;
 
         return RedirectToAction(nameof(Index), new { id });
+    }
+
+    private async Task<CodexProjectImageGenerationResult> GenerateAndAttachImagesAsync(
+        ProjectKickStartDesign design,
+        ProjectKickStartBlueprint blueprint,
+        int maxImages,
+        CancellationToken cancellationToken)
+    {
+        var generation = await _codexService.GenerateProjectKickStartImagesAsync(
+            blueprint,
+            design.Id,
+            maxImages,
+            cancellationToken: cancellationToken);
+
+        if (generation.Images.Count == 0 || blueprint.VisualPlan is null)
+            return generation;
+
+        var generatedByIndex = generation.Images.ToDictionary(image => image.PageIndex);
+        var updatedSamples = blueprint.VisualPlan.PageSamples
+            .Select((sample, index) => generatedByIndex.TryGetValue(index, out var image)
+                ? sample with { ImageFileName = image.FileName }
+                : sample)
+            .ToList();
+        var updatedBlueprint = blueprint with
+        {
+            VisualPlan = blueprint.VisualPlan with { PageSamples = updatedSamples }
+        };
+        design.BlueprintJson = JsonSerializer.Serialize(updatedBlueprint, JsonOptions);
+        await _db.SaveChangesAsync(cancellationToken);
+        return generation;
     }
 
     [HttpGet]

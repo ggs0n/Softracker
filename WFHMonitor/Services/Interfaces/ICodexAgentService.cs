@@ -62,6 +62,7 @@ public interface ICodexBugScanService
     Task<CodexProjectImageGenerationResult> GenerateProjectKickStartImagesAsync(
         ProjectKickStartBlueprint blueprint,
         int designId,
+        int maxImages = 2,
         string? agentId = null,
         CancellationToken cancellationToken = default);
 

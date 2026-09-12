@@ -521,7 +521,7 @@ public sealed class QaCodexQueueService : BackgroundService, IQaCodexQueueServic
             .ToListAsync(cancellationToken);
 
         var maxSeq = existingNumbers
-            .Select(ParseTestNumberSequence)
+            .Select(QaTestNumberParser.ParseSequence)
             .DefaultIfEmpty(0)
             .Max();
 
@@ -530,15 +530,6 @@ public sealed class QaCodexQueueService : BackgroundService, IQaCodexQueueServic
             numbers.Add($"{prefix}{maxSeq + i:D4}");
 
         return numbers;
-    }
-
-    private static int ParseTestNumberSequence(string? testNumber)
-    {
-        if (string.IsNullOrWhiteSpace(testNumber))
-            return 0;
-
-        var parts = testNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 3 && int.TryParse(parts[2], out var seq) ? seq : 0;
     }
 
     private async Task TryNotifyAsync(string userId, string title, string message, string? linkUrl)

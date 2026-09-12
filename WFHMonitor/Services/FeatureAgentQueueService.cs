@@ -193,7 +193,9 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
         if (feature.Id <= 0)
             return 0;
 
-        var candidates = GetCandidateScreenshotPaths(implementationPlan);
+        var candidates = ScreenshotFileHelper.ExtractCandidatePaths(
+            implementationPlan,
+            _environment.ContentRootPath);
         candidates.AddRange(GetConfiguredScreenshotFiles());
 
         if (candidates.Count == 0)
@@ -234,7 +236,7 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
                 continue;
 
             var ext = Path.GetExtension(originalName);
-            if (!IsSupportedImageExtension(ext))
+            if (!ScreenshotFileHelper.IsSupportedImageExtension(ext))
                 continue;
 
             var storedName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
@@ -269,13 +271,13 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
                 .Select(path => path.Trim()));
         }
 
-        folders.AddRange(GetAutoCodexScreenshotFolders());
+        folders.AddRange(ScreenshotFileHelper.GetAutoCodexScreenshotFolders());
 
         var uniqueFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedFolders = new List<string>();
         foreach (var folder in folders)
         {
-            var resolved = ResolvePath(folder);
+            var resolved = ScreenshotFileHelper.ResolvePath(folder, _environment.ContentRootPath);
             if (!string.IsNullOrWhiteSpace(resolved) && uniqueFolders.Add(resolved))
                 resolvedFolders.Add(resolved);
         }
@@ -299,108 +301,12 @@ public sealed class FeatureAgentQueueService : BackgroundService, IFeatureAgentQ
                     return [];
                 }
             })
-            .Where(path => IsSupportedImageExtension(Path.GetExtension(path)))
+            .Where(path => ScreenshotFileHelper.IsSupportedImageExtension(Path.GetExtension(path)))
             .Select(path => new FileInfo(path))
             .Where(file => file.Exists && file.LastWriteTimeUtc >= minWriteTime)
             .OrderByDescending(file => file.LastWriteTimeUtc)
             .Select(file => file.FullName)
             .ToList();
-    }
-
-    private List<string> GetCandidateScreenshotPaths(string plan)
-    {
-        if (string.IsNullOrWhiteSpace(plan))
-            return [];
-
-        var files = new List<string>();
-
-        // Preferred machine-readable marker from prompt response.
-        var markerPattern = @"SCREENSHOT_PATHS?\s*:\s*(.+)";
-        var markerMatch = Regex.Match(plan, markerPattern, RegexOptions.IgnoreCase);
-        if (markerMatch.Success)
-        {
-            var payload = markerMatch.Groups[1].Value;
-            var tokens = payload
-                .Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            foreach (var token in tokens)
-            {
-                var normalized = token.Trim('"', '\'', '`', '*', '.', ',', ';', ')', ']', '}');
-                if (string.IsNullOrWhiteSpace(normalized))
-                    continue;
-
-                var resolved = ResolvePath(normalized);
-                if (!string.IsNullOrWhiteSpace(resolved))
-                    files.Add(resolved);
-            }
-        }
-
-        // Fallback parser: detect Windows/UNC file paths even when folders contain spaces.
-        var pathPattern = @"(?:[A-Za-z]:\\|\\\\)[^\r\n]*?\.(?:png|jpg|jpeg|webp|gif|bmp)";
-        var matches = Regex.Matches(plan, pathPattern, RegexOptions.IgnoreCase);
-        foreach (Match match in matches)
-        {
-            var raw = match.Value.Trim();
-            var normalized = raw.Trim('"', '\'', '`', '*', '.', ',', ';', ')', ']', '}');
-            var resolved = ResolvePath(normalized);
-            if (!string.IsNullOrWhiteSpace(resolved))
-                files.Add(resolved);
-        }
-
-        return files;
-    }
-
-    private static IEnumerable<string> GetAutoCodexScreenshotFolders()
-    {
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (string.IsNullOrWhiteSpace(userProfile))
-            return [];
-
-        var codexRoot = Path.Combine(userProfile, ".codex");
-        if (!Directory.Exists(codexRoot))
-            return [];
-
-        try
-        {
-            return Directory
-                .EnumerateDirectories(codexRoot, "Fix Screenshot", SearchOption.AllDirectories)
-                .ToList();
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private string ResolvePath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return string.Empty;
-
-        var expanded = Environment.ExpandEnvironmentVariables(path.Trim());
-        if (Path.IsPathRooted(expanded))
-            return expanded;
-
-        try
-        {
-            return Path.GetFullPath(Path.Combine(_environment.ContentRootPath, expanded));
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private static bool IsSupportedImageExtension(string? extension)
-    {
-        if (string.IsNullOrWhiteSpace(extension))
-            return false;
-
-        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ExtractPullRequestUrl(string? text)

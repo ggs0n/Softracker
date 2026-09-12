@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Text.RegularExpressions;
 using WFHMonitor.Data;
 using WFHMonitor.Models;
 using WFHMonitor.Services.Interfaces;
@@ -161,7 +160,7 @@ public class DeveloperSummaryService : IDeveloperSummaryService
 
         if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
             !string.IsNullOrWhiteSpace(project.GitHubRepoUrl) &&
-            TryParseGitHubRepoUrl(project.GitHubRepoUrl!, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+            GitHubRepositoryUrlParser.TryParse(project.GitHubRepoUrl!, out var parsedOwner, out var parsedRepo, out var parsedBranch))
         {
             owner = parsedOwner;
             repo = parsedRepo;
@@ -174,37 +173,4 @@ public class DeveloperSummaryService : IDeveloperSummaryService
                !string.IsNullOrWhiteSpace(branch);
     }
 
-    private static bool TryParseGitHubRepoUrl(
-        string url,
-        out string owner,
-        out string repo,
-        out string? branch)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        branch = null;
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return false;
-        if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var path = uri.AbsolutePath.Trim('/');
-        if (string.IsNullOrWhiteSpace(path))
-            return false;
-
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 2)
-            return false;
-
-        owner = segments[0];
-        repo = Regex.Replace(segments[1], @"\.git$", string.Empty, RegexOptions.IgnoreCase);
-        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
-            return false;
-
-        if (segments.Length >= 4 && string.Equals(segments[2], "tree", StringComparison.OrdinalIgnoreCase))
-            branch = string.Join('/', segments.Skip(3));
-
-        return true;
-    }
 }

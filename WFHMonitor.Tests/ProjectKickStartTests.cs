@@ -16,6 +16,8 @@ public class ProjectKickStartTests
 
         Assert.Contains("_codexAuthService.GetStatusAsync", controller);
         Assert.Contains("GenerateProjectKickStartAsync", controller);
+        Assert.Contains("GenerateAndAttachImagesAsync(design, blueprint", controller);
+        Assert.Contains("Project blueprint generated and saved with", controller);
         Assert.Contains("BuildProjectKickStartPrompt", codexService);
         Assert.Contains("BuildProjectKickStartSchema", codexService);
         Assert.Contains("--output-schema", codexService);
@@ -36,7 +38,7 @@ public class ProjectKickStartTests
         Assert.Contains("> Project KickStart", layout);
         Assert.Contains("Generate with Codex AI", view);
         Assert.Contains("Connect Codex to Generate", view);
-        Assert.Contains("Codex is designing the architecture", view);
+        Assert.Contains("Codex is designing the architecture and generating up to two page images", view);
         Assert.Contains("Database Schema", view);
         Assert.Contains("Risks & Plan", view);
         Assert.Contains("data-pk-tab=\"mvp\"", view);
@@ -65,7 +67,8 @@ public class ProjectKickStartTests
 
         Assert.Contains("$imagegen", codexService);
         Assert.Contains("IMAGEGEN_UNAVAILABLE", codexService);
-        Assert.Contains("Take(2)", codexService);
+        Assert.Contains("Math.Clamp(maxImages, 1, 5)", codexService);
+        Assert.Contains("Take(requestedImageCount)", codexService);
         Assert.Contains("medium-quality preview images", codexService);
         Assert.Contains("1024 x 576 pixels", codexService);
         Assert.Contains("\"workspace-write\"", codexService);
@@ -89,6 +92,9 @@ public class ProjectKickStartTests
         Assert.Contains("GenerateProjectKickStartImagesAsync", controller);
         Assert.Contains("ResolveProjectKickStartImagePath", controller);
         Assert.Contains("Generate with Codex OAuth", view);
+        Assert.Contains("asp-action=\"GenerateImages\"", view);
+        Assert.Contains("Generate 5 Images", view);
+        Assert.Contains("name=\"count\" value=\"5\"", view);
         Assert.Contains("pk-generated-page-image", view);
         Assert.Contains("No API key is used", view);
     }
@@ -110,7 +116,8 @@ public class ProjectKickStartTests
         Assert.Contains("visualPlan", required);
         Assert.Equal(4, root.GetProperty("properties").GetProperty("mvp").GetProperty("properties").GetProperty("coreCapabilities").GetProperty("minItems").GetInt32());
         Assert.Equal(3, root.GetProperty("properties").GetProperty("userFlows").GetProperty("items").GetProperty("properties").GetProperty("steps").GetProperty("minItems").GetInt32());
-        Assert.Equal(2, root.GetProperty("properties").GetProperty("visualPlan").GetProperty("properties").GetProperty("pageSamples").GetProperty("maxItems").GetInt32());
+        Assert.Equal(5, root.GetProperty("properties").GetProperty("visualPlan").GetProperty("properties").GetProperty("pageSamples").GetProperty("minItems").GetInt32());
+        Assert.Equal(5, root.GetProperty("properties").GetProperty("visualPlan").GetProperty("properties").GetProperty("pageSamples").GetProperty("maxItems").GetInt32());
         Assert.Contains("one separate horizontal 16:9 medium-quality preview concept per page", File.ReadAllText(Path.Combine(repositoryRoot, "WFHMonitor", "Services", "CodexAgentService.cs")));
     }
 
