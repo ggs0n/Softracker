@@ -59,7 +59,8 @@ public record ProjectKickStartBlueprint(
     string? Notice,
     ProjectKickStartMvpPlan? Mvp = null,
     IReadOnlyList<ProjectKickStartUserFlow>? UserFlows = null,
-    ProjectKickStartVisualPlan? VisualPlan = null);
+    ProjectKickStartVisualPlan? VisualPlan = null,
+    string? ArchitectureImageFileName = null);
 
 public record ProjectKickStartDeploymentService(string Module, string RecommendedService, string Runtime, string Reason);
 public record ProjectKickStartCostEstimate(string Currency, string MonthlyRange, string Summary, IReadOnlyList<ProjectKickStartCostLineItem> LineItems, IReadOnlyList<string> Assumptions, IReadOnlyList<string> CostOptimizations);

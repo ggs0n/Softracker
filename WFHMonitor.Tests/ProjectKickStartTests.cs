@@ -17,7 +17,7 @@ public class ProjectKickStartTests
         Assert.Contains("_codexAuthService.GetStatusAsync", controller);
         Assert.Contains("GenerateProjectKickStartAsync", controller);
         Assert.Contains("GenerateAndAttachImagesAsync(design, blueprint", controller);
-        Assert.Contains("Project blueprint generated and saved with", controller);
+        Assert.Contains("Project blueprint generated with", controller);
         Assert.Contains("BuildProjectKickStartPrompt", codexService);
         Assert.Contains("BuildProjectKickStartSchema", codexService);
         Assert.Contains("--output-schema", codexService);
@@ -36,6 +36,9 @@ public class ProjectKickStartTests
 
         Assert.Contains("asp-controller=\"ProjectKickStart\"", layout);
         Assert.Contains("> Project KickStart", layout);
+        Assert.Contains("sidebar-codex-usage", layout);
+        Assert.Contains("https://chatgpt.com/codex/settings/usage", layout);
+        Assert.Contains("Check remaining quota", layout);
         Assert.Contains("Generate with Codex AI", view);
         Assert.Contains("Connect Codex to Generate", view);
         Assert.Contains("Codex is designing the architecture and generating up to two page images", view);
@@ -45,6 +48,10 @@ public class ProjectKickStartTests
         Assert.Contains("What the MVP system does", view);
         Assert.Contains("data-pk-tab=\"user-flow\"", view);
         Assert.Contains("Identified user types", view);
+        Assert.Contains("asp-action=\"UpdateUserFlows\"", view);
+        Assert.Contains("Edit user flows manually", view);
+        Assert.Contains("Save user flows", view);
+        Assert.Contains("blueprint with { UserFlows = updatedFlows }", File.ReadAllText(Path.Combine(repositoryRoot, "WFHMonitor", "Controllers", "ProjectKickStartController.cs")));
         Assert.Contains("data-pk-tab=\"page-images\"", view);
         Assert.Contains("AI-generated page images", view);
         Assert.Contains("data-copy-prompt", view);
@@ -54,6 +61,9 @@ public class ProjectKickStartTests
         Assert.Contains("flex-wrap:wrap", view);
         Assert.Contains("groupedUserFlows", view);
         Assert.Contains("FixGeneratedText", view);
+        Assert.Contains("asp-action=\"ExportMarkdown\"", view);
+        Assert.Contains("Download .md", view);
+        Assert.Contains("BuildMarkdown", File.ReadAllText(Path.Combine(repositoryRoot, "WFHMonitor", "Controllers", "ProjectKickStartController.cs")));
     }
 
     [Fact]
@@ -95,6 +105,12 @@ public class ProjectKickStartTests
         Assert.Contains("asp-action=\"GenerateImages\"", view);
         Assert.Contains("Generate 5 Images", view);
         Assert.Contains("name=\"count\" value=\"5\"", view);
+        Assert.Contains("asp-action=\"GenerateArchitectureDiagram\"", view);
+        Assert.Contains("Generate Architecture Diagram", view);
+        Assert.Contains("BuildArchitectureDiagramSample", codexService);
+        Assert.Contains("architectureDiagram: true", controller);
+        Assert.Contains("GenerateAndAttachArchitectureAsync(design, currentBlueprint", controller);
+        Assert.Contains("architectureDiagram ? \"architecture\" : \"page\"", codexService);
         Assert.Contains("pk-generated-page-image", view);
         Assert.Contains("No API key is used", view);
     }

@@ -63,6 +63,7 @@ public interface ICodexBugScanService
         ProjectKickStartBlueprint blueprint,
         int designId,
         int maxImages = 2,
+        bool architectureDiagram = false,
         string? agentId = null,
         CancellationToken cancellationToken = default);
 
