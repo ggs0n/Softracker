@@ -1221,23 +1221,31 @@ public sealed class CodexBugScanService : ICodexBugScanService
         IReadOnlyList<ProjectKickStartPageImageSample> pageSamples,
         bool architectureDiagram)
     {
-        var visualSpecification = JsonSerializer.Serialize(new
+        var pages = pageSamples.Select((sample, index) => new
         {
-            Product = TrimTo(blueprint.Title, 180),
-            blueprint.VisualPlan?.Theme,
-            blueprint.VisualPlan?.Palette,
-            blueprint.VisualPlan?.Typography,
-            blueprint.VisualPlan?.HeroScale,
-            blueprint.VisualPlan?.NarrativeSpine,
-            Pages = pageSamples.Select((sample, index) => new
-            {
-                Number = index + 1,
-                OutputBaseName = architectureDiagram ? $"architecture-{index + 1:00}" : $"page-{index + 1:00}",
-                sample.PageName,
-                sample.Route,
-                sample.ImagePrompt
-            })
+            Number = index + 1,
+            OutputBaseName = architectureDiagram ? $"architecture-{index + 1:00}" : $"page-{index + 1:00}",
+            sample.PageName,
+            sample.Route,
+            sample.ImagePrompt
         });
+        object visualSpecificationData = architectureDiagram
+            ? new
+            {
+                Product = TrimTo(blueprint.Title, 180),
+                Pages = pages
+            }
+            : new
+            {
+                Product = TrimTo(blueprint.Title, 180),
+                blueprint.VisualPlan?.Theme,
+                blueprint.VisualPlan?.Palette,
+                blueprint.VisualPlan?.Typography,
+                blueprint.VisualPlan?.HeroScale,
+                blueprint.VisualPlan?.NarrativeSpine,
+                Pages = pages
+            };
+        var visualSpecification = JsonSerializer.Serialize(visualSpecificationData);
 
         var generationInstruction = architectureDiagram
             ? "Generate exactly one medium-quality horizontal 16:9 system architecture diagram from the complete blueprint."
@@ -1269,6 +1277,8 @@ public sealed class CodexBugScanService : ICodexBugScanService
         var imagePrompt = $"""
             Create one medium-quality horizontal 16:9 system architecture diagram for {blueprint.Title}.
             The diagram must describe this one system end to end and keep all content consistent with the supplied blueprint.
+            Use a professional cloud solution-architecture style on a clean white background: recognizable component icons inside clearly labelled infrastructure boundaries, short black labels, straight directional connector arrows, balanced spacing, and a restrained technical color palette.
+            This is a technical architecture diagram, not a website mockup. Ignore the blueprint's UI theme, palette, typography, hero style, and all other visual-page directions.
             User roles: {string.Join(", ", userTypes)}.
             Business and platform components: {string.Join("; ", blueprint.MainComponents)}.
             Deployment mapping: {string.Join("; ", deployment)}.
@@ -1277,7 +1287,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             Scaling and asynchronous work: {blueprint.ScalingAdvice}.
             Security boundaries: {blueprint.SecurityNotes}.
             Show only components supported by this blueprint, including frontend, API, authentication, business modules, databases, caches, queues, batch/background jobs, storage, external integrations, and observability when applicable.
-            Use clear grouped boundaries, concise labels, and directional arrows. Do not invent unrelated modules, vendor products, or microservices.
+            Use clear grouped boundaries, concise labels, and directional arrows. Use generic technology icons unless a specific cloud or vendor service is explicitly named in the blueprint. Do not invent unrelated modules, vendor products, or microservices.
             """;
         return new(
             "System Architecture",

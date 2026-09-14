@@ -108,6 +108,8 @@ public class ProjectKickStartTests
         Assert.Contains("asp-action=\"GenerateArchitectureDiagram\"", view);
         Assert.Contains("Generate Architecture Diagram", view);
         Assert.Contains("BuildArchitectureDiagramSample", codexService);
+        Assert.Contains("Ignore the blueprint's UI theme, palette, typography", codexService);
+        Assert.Contains("professional cloud solution-architecture style", codexService);
         Assert.Contains("architectureDiagram: true", controller);
         Assert.Contains("GenerateAndAttachArchitectureAsync(design, currentBlueprint", controller);
         Assert.Contains("architectureDiagram ? \"architecture\" : \"page\"", codexService);
