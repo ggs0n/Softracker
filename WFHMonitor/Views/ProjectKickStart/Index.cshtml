@@ -17,6 +17,7 @@
     .pk-alert.is-error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.pk-image-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;padding:12px 14px;border:1px solid #a7f3d0;border-radius:10px;background:#f0fdf4}.pk-image-toolbar-copy strong{display:block;color:#065f46;font-size:.76rem}.pk-image-toolbar-copy span{display:block;margin-top:3px;color:#047857;font-size:.64rem;line-height:1.4}.pk-image-generate{flex:0 0 auto;border:0;border-radius:8px;min-height:38px;padding:0 14px;background:#059669;color:#fff;font-size:.68rem;font-weight:850}.pk-image-generate[disabled]{cursor:not-allowed;opacity:.5}.pk-generated-page-image{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#f4f4f5}.pk-page-image-empty{display:grid;place-items:center;aspect-ratio:16/9;padding:24px;background:#fafafa;color:#71717a;text-align:center}.pk-page-image-empty i{display:block;margin-bottom:7px;color:#a1a1aa;font-size:1.4rem}.pk-page-image-empty strong{display:block;color:#52525b;font-size:.72rem}.pk-page-image-empty span{display:block;margin-top:4px;font-size:.62rem}
     .pk-image-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.pk-image-generate.is-secondary{border:1px solid #059669;background:#fff;color:#047857}
     .pk-flow-editor{margin-bottom:12px;border:1px solid #d4d4d8;border-radius:10px;background:#fafafa}.pk-flow-editor>summary{cursor:pointer;list-style:none;padding:11px 13px;color:#047857;font-size:.7rem;font-weight:850}.pk-flow-editor>summary::-webkit-details-marker{display:none}.pk-flow-editor-form{padding:0 13px 13px}.pk-flow-edit-row{display:grid;grid-template-columns:minmax(120px,.55fr) minmax(180px,1fr) minmax(220px,1.35fr);gap:9px;padding:10px 0;border-top:1px solid #e4e4e7}.pk-flow-edit-row label{display:grid;gap:4px;color:#52525b;font-size:.6rem;font-weight:750}.pk-flow-edit-input{width:100%;border:1px solid #d4d4d8;border-radius:7px;background:#fff;padding:7px 8px;color:#27272a;font:500 .66rem/1.4 Inter,sans-serif;resize:vertical}.pk-flow-edit-actions{display:flex;justify-content:flex-end;margin-top:10px}.pk-flow-save{border:0;border-radius:7px;background:#059669;color:#fff;padding:8px 13px;font-size:.66rem;font-weight:850}
+    .pk-section-editor{margin-bottom:12px;border:1px solid #d4d4d8;border-radius:10px;background:#fafafa}.pk-section-editor>summary{cursor:pointer;padding:11px 13px;color:#047857;font-size:.7rem;font-weight:850}.pk-section-form{padding:0 13px 13px}.pk-section-fields{display:grid;gap:12px}.pk-edit-group{padding:10px;border:1px solid #e4e4e7;border-radius:8px;background:#fff}.pk-edit-group>strong{display:block;margin-bottom:8px;color:#27272a;font-size:.7rem}.pk-edit-field{display:grid;gap:4px;margin-bottom:8px;color:#52525b;font-size:.65rem;font-weight:750}.pk-edit-field textarea,.pk-edit-field input[type=text]{width:100%;border:1px solid #d4d4d8;border-radius:7px;padding:8px;color:#27272a;font:500 .68rem/1.4 Inter,sans-serif}.pk-edit-row{padding:9px;border:1px dashed #d4d4d8;border-radius:8px;margin:8px 0}.pk-edit-row-actions{display:flex;justify-content:flex-end}.pk-edit-add,.pk-edit-remove{border:1px solid #a7f3d0;border-radius:6px;background:#f0fdf4;color:#047857;padding:5px 8px;font-size:.62rem;font-weight:800}.pk-edit-remove{border-color:#fecaca;background:#fef2f2;color:#b91c1c}.pk-editor-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}.pk-editor-actions span{color:#71717a;font-size:.65rem}
     @@media(max-width:1100px){.pk-layout{grid-template-columns:1fr}.pk-sidebar{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.pk-sidebar .pk-card{margin:0}.pk-service{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @@media(max-width:800px){.pk-page-samples{grid-template-columns:1fr}.pk-visual-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @@media(max-width:700px){.pk-sidebar,.pk-grid{grid-template-columns:1fr}.pk-info.pk-wide{grid-column:auto}.pk-service{grid-template-columns:1fr}.pk-steps{grid-template-columns:1fr}.pk-hero{display:block}.pk-layout{display:block}.pk-tabs{position:sticky;top:0;z-index:2}}
@@ -179,6 +180,7 @@
                     </nav>
 
                     <div class="pk-tab-panel is-active" data-pk-panel="overview">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit Overview</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="overview" data-edit-paths="title,recommendedArchitecture,mainComponents,scalingAdvice,securityNotes,costEstimate.currency,costEstimate.monthlyRange,costEstimate.summary,costEstimate.lineItems,notice">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="overview" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Only Overview values will be saved.</span><button type="submit" class="pk-flow-save">Save Overview</button></div></form></details>
                         <div class="pk-grid">
                             <article class="pk-info pk-wide"><h3><i class="bi bi-compass"></i> Recommended architecture</h3><p>@blueprint.RecommendedArchitecture</p></article>
                             <article class="pk-info"><h3><i class="bi bi-boxes"></i> Main components</h3><ul class="pk-list">@foreach (var item in blueprint.MainComponents){<li>@item</li>}</ul></article>
@@ -194,6 +196,7 @@
                     </div>
 
                     <div class="pk-tab-panel" data-pk-panel="mvp">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit MVP</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="mvp" data-edit-paths="mvp">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="mvp" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Only MVP values will be saved.</span><button type="submit" class="pk-flow-save">Save MVP</button></div></form></details>
                         @if (blueprint.Mvp is null)
                         {
                             <div class="pk-notice"><i class="bi bi-info-circle me-1"></i> This older saved blueprint does not contain an MVP plan. Generate a new Codex AI blueprint to add it.</div>
@@ -281,6 +284,7 @@
                     </div>
 
                     <div class="pk-tab-panel" data-pk-panel="page-images">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit Image Samples</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="page-images" data-edit-paths="visualPlan">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="page-images" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Saved images are preserved; regenerate to reflect changed prompts.</span><button type="submit" class="pk-flow-save">Save Image Samples</button></div></form></details>
                         @if (blueprint.VisualPlan is null || imageSamples.Count == 0)
                         {
                             <div class="pk-notice"><i class="bi bi-info-circle me-1"></i> This older saved blueprint does not contain page image samples. Generate a new Codex AI blueprint to create up to two.</div>
@@ -374,6 +378,7 @@
                     </div>
 
                     <div class="pk-tab-panel" data-pk-panel="architecture">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit Architecture</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="architecture" data-edit-paths="deploymentServices,databaseStorageRecommendation,apiBackendRecommendation">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="architecture" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Regenerate the diagram after changing architecture details.</span><button type="submit" class="pk-flow-save">Save Architecture</button></div></form></details>
                         <div class="pk-image-toolbar">
                             <div class="pk-image-toolbar-copy">
                                 <strong>Whole-system architecture diagram</strong>
@@ -415,6 +420,7 @@
                     </div>
 
                     <div class="pk-tab-panel" data-pk-panel="schema">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit Database Schema</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="schema" data-edit-paths="tableSchemas">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="schema" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Only database schema values will be saved.</span><button type="submit" class="pk-flow-save">Save Database Schema</button></div></form></details>
                         @foreach (var schema in blueprint.TableSchemas)
                         {
                             <article class="pk-schema">
@@ -431,6 +437,7 @@
                     </div>
 
                     <div class="pk-tab-panel" data-pk-panel="risks">
+                        <details class="pk-section-editor"><summary><i class="bi bi-pencil-square me-1"></i> Edit Risks & Plan</summary><form asp-action="UpdateBlueprint" method="post" class="pk-section-form" data-edit-section="risks" data-edit-paths="risksTradeoffs,nextSteps,costEstimate.assumptions,costEstimate.costOptimizations">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.SelectedDesign!.Id" /><input type="hidden" name="section" value="risks" /><textarea name="Editor.BlueprintJson" hidden>@Model.Editor.BlueprintJson</textarea><div class="pk-section-fields"></div><div class="pk-editor-actions"><span>Only Risks & Plan values will be saved.</span><button type="submit" class="pk-flow-save">Save Risks & Plan</button></div></form></details>
                         <div class="pk-grid">
                             <article class="pk-info"><h3><i class="bi bi-exclamation-triangle"></i> Risks & trade-offs</h3><ol class="pk-list">@foreach(var item in blueprint.RisksTradeoffs){<li>@item</li>}</ol></article>
                             <article class="pk-info"><h3><i class="bi bi-list-check"></i> Recommended next steps</h3><ol class="pk-list">@foreach(var item in blueprint.NextSteps){<li>@item</li>}</ol></article>
@@ -438,6 +445,7 @@
                             <article class="pk-info"><h3><i class="bi bi-piggy-bank"></i> Cost optimizations</h3><ul class="pk-list">@foreach(var item in blueprint.CostEstimate.CostOptimizations){<li>@item</li>}</ul></article>
                         </div>
                     </div>
+
                 }
             </section>
         </main>
@@ -455,6 +463,102 @@
                 tabs.forEach(item => item.classList.toggle('is-active', item === tab));
                 panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.pkPanel === tab.dataset.pkTab));
             }));
+            document.querySelectorAll('[data-edit-section]').forEach(form => {
+                const output = form.querySelector('textarea[name="Editor.BlueprintJson"]');
+                const fields = form.querySelector('.pk-section-fields');
+                let blueprint;
+                try { blueprint = JSON.parse(output.value); } catch { return; }
+                const arrayTemplates = new Map();
+                const labelFor = key => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, letter => letter.toUpperCase());
+                const getAt = path => path.reduce((value, key) => value?.[key], blueprint);
+                const setAt = (path, value) => {
+                    const parent = getAt(path.slice(0, -1));
+                    if (parent) parent[path.at(-1)] = value;
+                };
+                const blankLike = value => Array.isArray(value) ? [] : typeof value === 'boolean' ? false : typeof value === 'object' && value !== null
+                    ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, blankLike(item)])) : '';
+                const renderValue = (host, path, title, value) => {
+                    if (value === null || value === undefined) return;
+                    if (Array.isArray(value)) {
+                        if (value.length && typeof value[0] === 'object') arrayTemplates.set(path.join('.'), value[0]);
+                        const group = document.createElement('div');
+                        group.className = 'pk-edit-group';
+                        const heading = document.createElement('strong');
+                        heading.textContent = title;
+                        group.append(heading);
+                        if ((!value.length && !arrayTemplates.has(path.join('.'))) || (value.length && typeof value[0] !== 'object')) {
+                            const field = document.createElement('label');
+                            field.className = 'pk-edit-field';
+                            field.textContent = 'One item per line';
+                            const input = document.createElement('textarea');
+                            input.rows = Math.max(3, Math.min(8, value.length + 1));
+                            input.value = value.join('\n');
+                            input.addEventListener('input', () => setAt(path, input.value.split(/\r?\n/).map(item => item.trim()).filter(Boolean)));
+                            field.append(input);
+                            group.append(field);
+                        } else {
+                            value.forEach((item, index) => {
+                                const row = document.createElement('div');
+                                row.className = 'pk-edit-row';
+                                renderValue(row, [...path, index], `${title} ${index + 1}`, item);
+                                const actions = document.createElement('div');
+                                actions.className = 'pk-edit-row-actions';
+                                const remove = document.createElement('button');
+                                remove.type = 'button';
+                                remove.className = 'pk-edit-remove';
+                                remove.textContent = 'Remove';
+                                remove.addEventListener('click', () => { getAt(path).splice(index, 1); render(); });
+                                actions.append(remove);
+                                row.append(actions);
+                                group.append(row);
+                            });
+                            const add = document.createElement('button');
+                            add.type = 'button';
+                            add.className = 'pk-edit-add';
+                            add.textContent = `Add ${title}`;
+                            add.addEventListener('click', () => { getAt(path).push(blankLike(arrayTemplates.get(path.join('.')))); render(); });
+                            group.append(add);
+                        }
+                        host.append(group);
+                        return;
+                    }
+                    if (typeof value === 'object') {
+                        const group = document.createElement('div');
+                        group.className = 'pk-edit-group';
+                        const heading = document.createElement('strong');
+                        heading.textContent = title;
+                        group.append(heading);
+                        Object.entries(value).filter(([key]) => !['imageFileName', 'architectureImageFileName', 'sourceMode'].includes(key))
+                            .forEach(([key, item]) => renderValue(group, [...path, key], labelFor(key), item));
+                        host.append(group);
+                        return;
+                    }
+                    const field = document.createElement('label');
+                    field.className = 'pk-edit-field';
+                    field.textContent = title;
+                    const input = typeof value === 'boolean' ? document.createElement('input') : document.createElement('textarea');
+                    if (typeof value === 'boolean') {
+                        input.type = 'checkbox';
+                        input.checked = value;
+                        input.addEventListener('change', () => setAt(path, input.checked));
+                    } else {
+                        input.rows = value.length > 160 ? 4 : 2;
+                        input.value = value;
+                        input.addEventListener('input', () => setAt(path, input.value));
+                    }
+                    field.append(input);
+                    host.append(field);
+                };
+                const render = () => {
+                    fields.replaceChildren();
+                    form.dataset.editPaths.split(',').forEach(item => {
+                        const path = item.split('.');
+                        renderValue(fields, path, labelFor(path.at(-1)), getAt(path));
+                    });
+                };
+                render();
+                form.addEventListener('submit', () => { output.value = JSON.stringify(blueprint); });
+            });
             document.querySelectorAll('[data-copy-prompt]').forEach(button => button.addEventListener('click', async () => {
                 const prompt = button.dataset.copyPrompt || '';
                 try {

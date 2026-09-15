@@ -40,6 +40,13 @@ public class ProjectKickStartPageViewModel
     public bool IsCodexConnected { get; set; }
     public bool IsCodexChatGptLogin { get; set; }
     public string CodexStatusMessage { get; set; } = string.Empty;
+    public ProjectKickStartBlueprintEditorViewModel Editor { get; set; } = new();
+}
+
+public class ProjectKickStartBlueprintEditorViewModel
+{
+    [Required, StringLength(200000)]
+    public string BlueprintJson { get; set; } = string.Empty;
 }
 
 public record ProjectKickStartBlueprint(

@@ -226,6 +226,99 @@ public class ProjectKickStartController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateBlueprint(
+        int id,
+        string section,
+        [Bind(Prefix = "Editor")] ProjectKickStartBlueprintEditorViewModel editor,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var design = await _db.ProjectKickStartDesigns
+            .FirstOrDefaultAsync(item => item.Id == id && item.CreatedById == userId, cancellationToken);
+        if (design is null)
+            return NotFound();
+
+        if (!ModelState.IsValid)
+        {
+            TempData["Error"] = "The blueprint could not be saved because the editor content is empty or too large.";
+            return RedirectToAction(nameof(Index), new { id });
+        }
+
+        var existingBlueprint = DeserializeBlueprint(design.BlueprintJson);
+        var editedBlueprint = DeserializeBlueprint(editor.BlueprintJson);
+        if (existingBlueprint is null || editedBlueprint is null ||
+            string.IsNullOrWhiteSpace(editedBlueprint.Title) || editedBlueprint.MainComponents is null ||
+            editedBlueprint.DeploymentServices is null || editedBlueprint.CostEstimate is null ||
+            editedBlueprint.TableSchemas is null || editedBlueprint.RisksTradeoffs is null || editedBlueprint.NextSteps is null)
+        {
+            TempData["Error"] = "The blueprint JSON is invalid or is missing a required section. Check the JSON syntax and try again.";
+            return RedirectToAction(nameof(Index), new { id });
+        }
+
+        var existingSamples = existingBlueprint.VisualPlan?.PageSamples ?? [];
+        var editedVisualPlan = editedBlueprint.VisualPlan;
+        if (editedVisualPlan is not null)
+        {
+            var preservedSamples = editedVisualPlan.PageSamples.Select((sample, index) => sample with
+            {
+                ImageFileName = index < existingSamples.Count ? existingSamples[index].ImageFileName : null
+            }).ToList();
+            editedVisualPlan = editedVisualPlan with { PageSamples = preservedSamples };
+        }
+
+        var savedBlueprint = section switch
+        {
+            "overview" => existingBlueprint with
+            {
+                Title = editedBlueprint.Title,
+                RecommendedArchitecture = editedBlueprint.RecommendedArchitecture,
+                MainComponents = editedBlueprint.MainComponents,
+                ScalingAdvice = editedBlueprint.ScalingAdvice,
+                SecurityNotes = editedBlueprint.SecurityNotes,
+                CostEstimate = editedBlueprint.CostEstimate with
+                {
+                    Assumptions = existingBlueprint.CostEstimate.Assumptions,
+                    CostOptimizations = existingBlueprint.CostEstimate.CostOptimizations
+                },
+                Notice = editedBlueprint.Notice
+            },
+            "mvp" => existingBlueprint with { Mvp = editedBlueprint.Mvp },
+            "page-images" => existingBlueprint with { VisualPlan = editedVisualPlan },
+            "architecture" => existingBlueprint with
+            {
+                DeploymentServices = editedBlueprint.DeploymentServices,
+                DatabaseStorageRecommendation = editedBlueprint.DatabaseStorageRecommendation,
+                ApiBackendRecommendation = editedBlueprint.ApiBackendRecommendation
+            },
+            "schema" => existingBlueprint with { TableSchemas = editedBlueprint.TableSchemas },
+            "risks" => existingBlueprint with
+            {
+                RisksTradeoffs = editedBlueprint.RisksTradeoffs,
+                NextSteps = editedBlueprint.NextSteps,
+                CostEstimate = existingBlueprint.CostEstimate with
+                {
+                    Assumptions = editedBlueprint.CostEstimate.Assumptions,
+                    CostOptimizations = editedBlueprint.CostEstimate.CostOptimizations
+                }
+            },
+            _ => null
+        };
+        if (savedBlueprint is null)
+            return BadRequest();
+        savedBlueprint = savedBlueprint with
+        {
+            SourceMode = existingBlueprint.SourceMode,
+            ArchitectureImageFileName = existingBlueprint.ArchitectureImageFileName,
+        };
+        design.Title = savedBlueprint.Title.Trim();
+        design.BlueprintJson = JsonSerializer.Serialize(savedBlueprint, JsonOptions);
+        await _db.SaveChangesAsync(cancellationToken);
+        TempData["Success"] = "Blueprint section updated.";
+        return RedirectToAction(nameof(Index), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> GenerateArchitectureDiagram(int id, CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
@@ -404,6 +497,12 @@ public class ProjectKickStartController : Controller
                 },
             SelectedDesign = selected,
             Blueprint = blueprint,
+            Editor = new ProjectKickStartBlueprintEditorViewModel
+            {
+                BlueprintJson = blueprint is null
+                    ? string.Empty
+                    : JsonSerializer.Serialize(blueprint, new JsonSerializerOptions(JsonOptions) { WriteIndented = true })
+            },
             History = history
         };
     }

@@ -63,6 +63,17 @@ public class ProjectKickStartTests
         Assert.Contains("FixGeneratedText", view);
         Assert.Contains("asp-action=\"ExportMarkdown\"", view);
         Assert.Contains("Download .md", view);
+        Assert.DoesNotContain("data-pk-tab=\"edit-all\"", view);
+        Assert.Contains("asp-action=\"UpdateBlueprint\"", view);
+        Assert.Contains("data-edit-section=\"overview\"", view);
+        Assert.Contains("data-edit-section=\"mvp\"", view);
+        Assert.Contains("data-edit-section=\"page-images\"", view);
+        Assert.Contains("data-edit-section=\"architecture\"", view);
+        Assert.Contains("data-edit-section=\"schema\"", view);
+        Assert.Contains("data-edit-section=\"risks\"", view);
+        Assert.Contains("Save Overview", view);
+        Assert.Contains("Save Architecture", view);
+        Assert.Contains("ArchitectureImageFileName = existingBlueprint.ArchitectureImageFileName", File.ReadAllText(Path.Combine(repositoryRoot, "WFHMonitor", "Controllers", "ProjectKickStartController.cs")));
         Assert.Contains("BuildMarkdown", File.ReadAllText(Path.Combine(repositoryRoot, "WFHMonitor", "Controllers", "ProjectKickStartController.cs")));
     }
 
