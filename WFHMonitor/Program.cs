@@ -12,6 +12,12 @@ using WFHMonitor.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// The packaged desktop host runs without elevation. Console/debug logging keeps
+// startup diagnostics available without requiring permission to write Windows Event Log.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")), poolSize: 128);
 

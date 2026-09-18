@@ -10,7 +10,8 @@ public interface ICodexAuthService
 public sealed record CodexAuthStatus(
     bool IsAvailable,
     bool IsAuthenticated,
-    string Message);
+    string Message,
+    bool IsChatGptLogin = false);
 
 public sealed record CodexLoginStartResult(
     bool Started,

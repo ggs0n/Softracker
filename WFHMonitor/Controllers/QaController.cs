@@ -678,7 +678,7 @@ public class QaController : Controller
 
         var maxSeq = existingNumbers
             .Concat(trackedNumbers)
-            .Select(ParseTestNumberSequence)
+            .Select(QaTestNumberParser.ParseSequence)
             .DefaultIfEmpty(0)
             .Max();
 
@@ -691,14 +691,4 @@ public class QaController : Controller
         return numbers;
     }
 
-    private static int ParseTestNumberSequence(string? testNumber)
-    {
-        if (string.IsNullOrWhiteSpace(testNumber))
-            return 0;
-
-        var parts = testNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 3 && int.TryParse(parts[2], out var seq)
-            ? seq
-            : 0;
-    }
 }

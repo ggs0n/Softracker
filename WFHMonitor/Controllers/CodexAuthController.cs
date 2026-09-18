@@ -32,6 +32,7 @@ public sealed class CodexAuthController(ICodexAuthService codexAuthService) : Co
         {
             available = status.IsAvailable,
             authenticated = status.IsAuthenticated,
+            chatGptLogin = status.IsChatGptLogin,
             message = status.Message
         });
     }

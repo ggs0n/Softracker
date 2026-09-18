@@ -625,7 +625,7 @@ public class ChangeRequestController : Controller
         var branch = cr.GitHubBranch;
         if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
             !string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) &&
-            TryParseGitHubRepoUrl(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+            GitHubRepositoryUrlParser.TryParse(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
         {
             owner = parsedOwner;
             repo = parsedRepo;
@@ -976,7 +976,7 @@ public class ChangeRequestController : Controller
         if (string.IsNullOrWhiteSpace(repoUrl))
             return BadRequest(new { message = "GitHub repository URL is required." });
 
-        if (!TryParseGitHubRepoUrl(repoUrl, out var owner, out var repo, out var branchFromUrl))
+        if (!GitHubRepositoryUrlParser.TryParse(repoUrl, out var owner, out var repo, out var branchFromUrl))
             return BadRequest(new { message = "Invalid GitHub repository URL. Example: https://github.com/owner/repo" });
 
         try
@@ -1176,13 +1176,13 @@ public class ChangeRequestController : Controller
 
         // Delete uploaded image files
         foreach (var img in cr.ArchSpecImages)
-            DeleteImageFile(img.FileName, env);
+            DeleteUploadedFile(img.FileName, env, "archspec");
         foreach (var doc in cr.Documents)
-            DeleteDocumentFile(doc.FileName, env);
+            DeleteUploadedFile(doc.FileName, env, "docs");
         foreach (var feature in cr.Features)
         {
             foreach (var shot in feature.Screenshots)
-                DeleteFeatureScreenshotFile(shot.FileName, env);
+                DeleteUploadedFile(shot.FileName, env, Path.Combine("features", "screenshots"));
         }
 
         _db.ChangeRequests.Remove(cr);
@@ -1252,7 +1252,7 @@ public class ChangeRequestController : Controller
         var img = await _db.ArchSpecImages.FindAsync(imageId);
         if (img == null) return NotFound();
 
-        DeleteImageFile(img.FileName, env);
+        DeleteUploadedFile(img.FileName, env, "archspec");
         _db.ArchSpecImages.Remove(img);
         await _db.SaveChangesAsync();
 
@@ -1322,7 +1322,7 @@ public class ChangeRequestController : Controller
         var doc = await _db.ChangeRequestDocuments.FindAsync(documentId);
         if (doc == null) return NotFound();
 
-        DeleteDocumentFile(doc.FileName, env);
+        DeleteUploadedFile(doc.FileName, env, "docs");
         _db.ChangeRequestDocuments.Remove(doc);
         await _db.SaveChangesAsync();
 
@@ -1343,7 +1343,7 @@ public class ChangeRequestController : Controller
 
         if ((string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo)) &&
             !string.IsNullOrWhiteSpace(cr.GitHubRepoUrl) &&
-            TryParseGitHubRepoUrl(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
+            GitHubRepositoryUrlParser.TryParse(cr.GitHubRepoUrl, out var parsedOwner, out var parsedRepo, out var parsedBranch))
         {
             owner = parsedOwner;
             repo = parsedRepo;
@@ -1633,7 +1633,7 @@ public class ChangeRequestController : Controller
 
         var crId = feature.ChangeRequestId;
         foreach (var shot in feature.Screenshots)
-            DeleteFeatureScreenshotFile(shot.FileName, env);
+            DeleteUploadedFile(shot.FileName, env, Path.Combine("features", "screenshots"));
 
         _db.ProjectFeatures.Remove(feature);
         await _db.SaveChangesAsync();
@@ -1720,7 +1720,7 @@ public class ChangeRequestController : Controller
         if (!CanManageFeatureEvidence(screenshot.ProjectFeature, userId))
             return Forbid();
 
-        DeleteFeatureScreenshotFile(screenshot.FileName, env);
+        DeleteUploadedFile(screenshot.FileName, env, Path.Combine("features", "screenshots"));
         _db.FeatureScreenshots.Remove(screenshot);
         await _db.SaveChangesAsync();
 
@@ -1800,23 +1800,12 @@ public class ChangeRequestController : Controller
         return (AppModuleKeys.AllProjects, true);
     }
 
-    private void DeleteImageFile(string fileName, IWebHostEnvironment environment)
+    private static void DeleteUploadedFile(
+        string fileName,
+        IWebHostEnvironment environment,
+        string relativeDirectory)
     {
-        var path = Path.Combine(environment.WebRootPath, "uploads", "archspec", fileName);
-        if (System.IO.File.Exists(path))
-            System.IO.File.Delete(path);
-    }
-
-    private void DeleteDocumentFile(string fileName, IWebHostEnvironment environment)
-    {
-        var path = Path.Combine(environment.WebRootPath, "uploads", "docs", fileName);
-        if (System.IO.File.Exists(path))
-            System.IO.File.Delete(path);
-    }
-
-    private void DeleteFeatureScreenshotFile(string fileName, IWebHostEnvironment environment)
-    {
-        var path = Path.Combine(environment.WebRootPath, "uploads", "features", "screenshots", fileName);
+        var path = Path.Combine(environment.WebRootPath, "uploads", relativeDirectory, fileName);
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
     }
@@ -2900,7 +2889,7 @@ public class ChangeRequestController : Controller
         if (string.IsNullOrWhiteSpace(model.GitHubRepoUrl))
             return;
 
-        if (!TryParseGitHubRepoUrl(model.GitHubRepoUrl, out var owner, out var repo, out var branchFromUrl))
+        if (!GitHubRepositoryUrlParser.TryParse(model.GitHubRepoUrl, out var owner, out var repo, out var branchFromUrl))
         {
             ModelState.AddModelError(nameof(model.GitHubRepoUrl), "Invalid GitHub repository URL. Example: https://github.com/owner/repo");
             return;
@@ -2928,7 +2917,7 @@ public class ChangeRequestController : Controller
             return !string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo);
         }
 
-        if (!TryParseGitHubRepoUrl(project.GitHubRepoUrl, out owner, out repo, out var parsedBranch))
+        if (!GitHubRepositoryUrlParser.TryParse(project.GitHubRepoUrl, out owner, out repo, out var parsedBranch))
             return false;
 
         if (string.IsNullOrWhiteSpace(branch))
@@ -3290,43 +3279,6 @@ public class ChangeRequestController : Controller
         }
 
         return null;
-    }
-
-    private static bool TryParseGitHubRepoUrl(
-        string url,
-        out string owner,
-        out string repo,
-        out string? branch)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        branch = null;
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return false;
-        if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var path = uri.AbsolutePath.Trim('/');
-        if (string.IsNullOrWhiteSpace(path))
-            return false;
-
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 2)
-            return false;
-
-        owner = segments[0];
-        repo = Regex.Replace(segments[1], @"\.git$", string.Empty, RegexOptions.IgnoreCase);
-        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
-            return false;
-
-        // Supports URLs like /owner/repo/tree/main or /owner/repo/tree/feature/my-branch
-        if (segments.Length >= 4 && string.Equals(segments[2], "tree", StringComparison.OrdinalIgnoreCase))
-        {
-            branch = string.Join('/', segments.Skip(3));
-        }
-
-        return true;
     }
 
 }

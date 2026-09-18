@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WFHMonitor.Data;
 
@@ -11,9 +12,11 @@ using WFHMonitor.Data;
 namespace WFHMonitor.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260912064749_AddProjectKickStartDesign")]
+    partial class AddProjectKickStartDesign
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1156,16 +1159,6 @@ namespace WFHMonitor.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("TargetMobile")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("TargetWeb")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
                     b.Property<string>("Technology")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1174,10 +1167,6 @@ namespace WFHMonitor.Migrations
                         .IsRequired()
                         .HasMaxLength(180)
                         .HasColumnType("nvarchar(180)");
-
-                    b.Property<string>("UiDirection")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("UserCount")
                         .IsRequired()
