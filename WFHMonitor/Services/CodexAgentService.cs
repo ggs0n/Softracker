@@ -2386,6 +2386,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             The user provided these requirements:
             Summary: {TrimTo(input.Summary, 2000)}
             Technology: {TrimTo(input.Technology, 1000)}
+            Target platforms: {input.TargetPlatforms}
             Preferred cloud or hosting: {TrimTo(input.CloudHostingTarget ?? "Not specified; recommend the best practical option.", 120)}
             Expected users: {TrimTo(input.UserCount, 100)}
             Main features: {TrimTo(input.Features, 2000)}
@@ -2398,7 +2399,7 @@ public sealed class CodexBugScanService : ICodexBugScanService
             Return 3 to 8 normalized starter tables derived from the actual business features. Each table needs useful columns, data types, key flags and relationship notes. Avoid JSON catch-all columns when stable domain fields can be named.
             Create a detailed MVP plan for this exact product. Explain what the system does, the problem it solves, its core value, 4 to 10 essential MVP capabilities with a concrete acceptance outcome, what is deliberately out of scope, and measurable success criteria. Keep the MVP small enough to validate the product but complete enough to deliver one end-to-end user outcome.
             Infer every distinct user type or system actor from the requirements, such as customer, administrator, technician, vendor or support operator. Return 2 to 8 user flows. Each flow must have one clear purpose and 3 to 8 short ordered steps suitable for rendering as Step -> Step -> Step. Merge aliases for the same actor and do not invent actors that have no responsibility in the described system.
-            Create an image-generation visual plan for five distinct high-priority user-facing MVP pages or business modules. Follow the supplied theme or UI description when it is provided; otherwise choose the most suitable visual direction for the product. Return one separate horizontal 16:9 medium-quality preview concept per page and provide a complete standalone image prompt containing enough layout, content, styling and interaction detail for an image generator to create a useful frontend reference at approximately 1024 x 576 pixels. The normal workflow generates the first two previews; the user can request all five on demand.
+            Create an image-generation visual plan for five distinct high-priority user-facing MVP pages, screens or business modules appropriate for the selected target platforms. Follow the supplied theme or UI description when it is provided; otherwise choose the most suitable visual direction for the product. Return one separate horizontal 16:9 medium-quality preview concept per page or screen and provide a complete standalone image prompt containing enough layout, content, styling and interaction detail for an image generator to create a useful frontend reference at approximately 1024 x 576 pixels. The normal workflow generates the first two previews; the user can request all five on demand.
             List the most important product-specific risks and the next implementation steps in priority order.
             Set sourceMode to Codex AI and notice to a short validation disclaimer.
             Return only JSON matching the supplied schema, with no markdown or commentary.

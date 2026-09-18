@@ -3,7 +3,7 @@ using WFHMonitor.Models;
 
 namespace WFHMonitor.ViewModels;
 
-public class ProjectKickStartInputViewModel
+public class ProjectKickStartInputViewModel : IValidatableObject
 {
     [Required, StringLength(2000)]
     [Display(Name = "Simple summary of system")]
@@ -12,6 +12,14 @@ public class ProjectKickStartInputViewModel
     [Required, StringLength(1000)]
     [Display(Name = "Technology use")]
     public string Technology { get; set; } = string.Empty;
+
+    public bool TargetWeb { get; set; } = true;
+
+    public bool TargetMobile { get; set; }
+
+    public string TargetPlatforms => TargetWeb && TargetMobile
+        ? "Web and mobile"
+        : TargetMobile ? "Mobile" : "Web";
 
     [StringLength(120)]
     [Display(Name = "Cloud / hosting target")]
@@ -28,6 +36,12 @@ public class ProjectKickStartInputViewModel
     [StringLength(1000)]
     [Display(Name = "Theme / Describe UI")]
     public string? UiDirection { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!TargetWeb && !TargetMobile)
+            yield return new ValidationResult("Choose Web, Mobile, or both.", [nameof(TargetWeb), nameof(TargetMobile)]);
+    }
 }
 
 public class ProjectKickStartPageViewModel

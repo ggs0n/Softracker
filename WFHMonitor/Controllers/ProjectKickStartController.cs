@@ -102,6 +102,8 @@ public class ProjectKickStartController : Controller
             Title = blueprint.Title,
             Summary = input.Summary.Trim(),
             Technology = input.Technology.Trim(),
+            TargetWeb = input.TargetWeb,
+            TargetMobile = input.TargetMobile,
             CloudHostingTarget = string.IsNullOrWhiteSpace(input.CloudHostingTarget) ? null : input.CloudHostingTarget.Trim(),
             UserCount = input.UserCount.Trim(),
             Features = input.Features.Trim(),
@@ -490,6 +492,8 @@ public class ProjectKickStartController : Controller
                 {
                     Summary = selected.Summary,
                     Technology = selected.Technology,
+                    TargetWeb = selected.TargetWeb,
+                    TargetMobile = selected.TargetMobile,
                     CloudHostingTarget = selected.CloudHostingTarget,
                     UserCount = selected.UserCount,
                     Features = selected.Features,
@@ -537,6 +541,7 @@ public class ProjectKickStartController : Controller
             .AppendLine("## Project input").AppendLine()
             .AppendLine($"- Summary: {design.Summary}")
             .AppendLine($"- Technology: {design.Technology}")
+            .AppendLine($"- Target platforms: {(design.TargetWeb && design.TargetMobile ? "Web and mobile" : design.TargetMobile ? "Mobile" : "Web")}")
             .AppendLine($"- Hosting: {design.CloudHostingTarget ?? "Not specified"}")
             .AppendLine($"- Expected users: {design.UserCount}")
             .AppendLine($"- Features: {design.Features}").AppendLine()

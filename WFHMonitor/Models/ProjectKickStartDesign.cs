@@ -13,6 +13,10 @@ public class ProjectKickStartDesign
 
     public string Technology { get; set; } = string.Empty;
 
+    public bool TargetWeb { get; set; } = true;
+
+    public bool TargetMobile { get; set; }
+
     [MaxLength(120)]
     public string? CloudHostingTarget { get; set; }
 

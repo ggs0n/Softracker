@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.ComponentModel.DataAnnotations;
 using WFHMonitor.Services;
 using WFHMonitor.ViewModels;
 
@@ -7,6 +8,28 @@ namespace WFHMonitor.Tests;
 
 public class ProjectKickStartTests
 {
+    [Fact]
+    public void TargetPlatform_RequiresWebMobileOrBoth()
+    {
+        var input = new ProjectKickStartInputViewModel
+        {
+            Summary = "Repair booking",
+            Technology = "ASP.NET Core",
+            UserCount = "100 users",
+            Features = "Booking",
+            TargetWeb = false,
+            TargetMobile = false
+        };
+        var results = new List<ValidationResult>();
+
+        var isValid = Validator.TryValidateObject(input, new ValidationContext(input), results, validateAllProperties: true);
+
+        Assert.False(isValid);
+        Assert.Contains(results, result => result.ErrorMessage == "Choose Web, Mobile, or both.");
+        input.TargetMobile = true;
+        Assert.Equal("Mobile", input.TargetPlatforms);
+    }
+
     [Fact]
     public void Generate_UsesCodexOAuthAndStructuredBlueprintSchema()
     {
@@ -23,6 +46,7 @@ public class ProjectKickStartTests
         Assert.Contains("--output-schema", codexService);
         Assert.Contains("StandardOutputEncoding = Encoding.UTF8", codexService);
         Assert.Contains("Theme or UI description: {uiDirection}", codexService);
+        Assert.Contains("Target platforms: {input.TargetPlatforms}", codexService);
         Assert.Contains("Not specified. Choose the most suitable UI theme", codexService);
         Assert.DoesNotContain("SKILLS/IMAGEDESIGN", codexService, StringComparison.OrdinalIgnoreCase);
     }
@@ -57,6 +81,8 @@ public class ProjectKickStartTests
         Assert.Contains("data-copy-prompt", view);
         Assert.Contains("asp-for=\"Input.UiDirection\"", view);
         Assert.Contains("Theme / Describe UI", view);
+        Assert.Contains("asp-for=\"Input.TargetWeb\"", view);
+        Assert.Contains("asp-for=\"Input.TargetMobile\"", view);
         Assert.Contains("pk-flow-step-arrow", view);
         Assert.Contains("flex-wrap:wrap", view);
         Assert.Contains("groupedUserFlows", view);

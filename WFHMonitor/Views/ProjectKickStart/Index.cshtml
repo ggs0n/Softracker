@@ -10,6 +10,7 @@
 }
 
 <style>
+    .pk-platforms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pk-platform{display:flex!important;justify-content:flex-start!important;gap:8px!important;margin:0!important;padding:10px 11px;border:1px solid #d4d4d8;border-radius:9px;background:#fff;cursor:pointer}.pk-platform:has(input:checked){border-color:#10b981;background:#ecfdf5;color:#047857}.pk-platform input{accent-color:#059669}
     .pk-shell{max-width:1500px;margin:0 auto}.pk-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:18px}.pk-kicker{display:inline-flex;align-items:center;gap:7px;color:#059669;font-size:.7rem;font-weight:850;text-transform:uppercase;letter-spacing:.08em}.pk-title{font-size:1.55rem;font-weight:850;color:var(--text-primary);margin-top:4px}.pk-subtitle{font-size:.79rem;color:#71717a;margin-top:5px;max-width:700px}.pk-layout{display:grid;grid-template-columns:minmax(310px,390px) minmax(0,1fr);gap:18px;align-items:start}.pk-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}.pk-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:#fafbfc}.pk-card-title{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:850;color:var(--text-primary)}.pk-card-body{padding:16px}.pk-field{display:block;margin-bottom:13px}.pk-field label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;color:#3f3f46;font-size:.72rem;font-weight:750}.pk-field small{color:#a1a1aa;font-weight:500}.pk-input{width:100%;border:1px solid #d4d4d8;border-radius:9px;background:#fff;color:#18181b;padding:10px 11px;font:500 .75rem/1.45 Inter,sans-serif;resize:vertical}.pk-input:focus{outline:3px solid rgba(5,150,105,.12);border-color:#10b981}.pk-validation{display:block;color:#dc2626;font-size:.65rem;margin-top:4px}.pk-actions{display:flex;gap:8px}.pk-primary,.pk-secondary,.pk-icon-btn{border-radius:8px;min-height:38px;font-size:.72rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px}.pk-primary{flex:1;border:0;background:#059669;color:#fff}.pk-primary:hover{background:#047857}.pk-secondary,.pk-icon-btn{border:1px solid #d4d4d8;background:#fff;color:#52525b}.pk-secondary{padding:0 12px}.pk-icon-btn{width:38px}.pk-history{display:grid;gap:8px}.pk-history-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid #e4e4e7;border-radius:9px;background:#fff;overflow:hidden}.pk-history-item.is-active{border-color:#10b981;box-shadow:inset 3px 0 #10b981}.pk-history-link{display:flex;flex-direction:column;gap:3px;min-width:0;padding:10px 12px;text-decoration:none}.pk-history-link strong{color:#27272a;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk-history-link span{color:#71717a;font-size:.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pk-delete{border:0;background:transparent;color:#dc2626;padding:10px}.pk-empty-history{padding:14px;border:1px dashed #d4d4d8;border-radius:9px;text-align:center;color:#71717a;font-size:.7rem}.pk-result-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px;border-bottom:1px solid var(--border)}.pk-mode{display:inline-flex;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.6rem;font-weight:850;text-transform:uppercase}.pk-result-title{font-size:1.2rem;font-weight:850;color:#18181b;margin:7px 0 3px}.pk-result-meta{font-size:.68rem;color:#71717a}.pk-tabs{display:flex;gap:4px;padding:9px 12px;border-bottom:1px solid var(--border);background:#fafbfc;overflow-x:auto}.pk-tab{border:0;border-radius:7px;padding:8px 11px;background:transparent;color:#71717a;font-size:.69rem;font-weight:750;white-space:nowrap}.pk-tab.is-active{background:#fff;color:#047857;box-shadow:0 1px 4px rgba(15,23,42,.1)}.pk-tab-panel{display:none;padding:18px}.pk-tab-panel.is-active{display:block}.pk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pk-info{border:1px solid #e4e4e7;border-radius:10px;padding:14px;background:#fff;min-width:0}.pk-info.pk-wide{grid-column:1/-1}.pk-info h3{display:flex;align-items:center;gap:7px;font-size:.76rem;font-weight:850;color:#27272a;margin:0 0 8px}.pk-info p,.pk-info li{font-size:.7rem;line-height:1.5;color:#52525b}.pk-info p{margin:0}.pk-list{padding-left:17px;margin:0;display:grid;gap:6px}.pk-cost{font-size:1.35rem;font-weight:900;color:#059669;margin:3px 0 5px}.pk-cost-table,.pk-schema-table{width:100%;border-collapse:collapse;font-size:.68rem}.pk-cost-table th,.pk-cost-table td,.pk-schema-table th,.pk-schema-table td{padding:9px;border-bottom:1px solid #e4e4e7;text-align:left;vertical-align:top;color:#52525b}.pk-cost-table th,.pk-schema-table th{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;color:#71717a;background:#fafafa}.pk-services{display:grid;gap:10px}.pk-service{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(160px,1fr) minmax(140px,.9fr) minmax(0,1.4fr);gap:10px;align-items:start;padding:11px;border:1px solid #e4e4e7;border-radius:9px;background:#fff}.pk-service strong{font-size:.7rem;color:#27272a}.pk-service span{font-size:.65rem;color:#52525b;line-height:1.4}.pk-flow{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding:6px 2px 14px}.pk-flow-node{min-width:132px;flex:1;border:1px solid #a7f3d0;border-radius:10px;background:#f0fdf4;padding:13px;text-align:center}.pk-flow-node i{display:block;color:#059669;font-size:1.1rem;margin-bottom:6px}.pk-flow-node strong{font-size:.68rem;color:#14532d}.pk-flow-arrow{display:flex;align-items:center;color:#10b981;font-size:1rem}.pk-schema{border:1px solid #e4e4e7;border-radius:10px;overflow:hidden;margin-bottom:12px}.pk-schema-head{padding:12px 14px;background:#fafbfc;border-bottom:1px solid #e4e4e7}.pk-schema-head strong{font:850 .76rem Consolas,monospace;color:#27272a}.pk-schema-head p{margin:3px 0 0;font-size:.65rem;color:#71717a}.pk-key{display:inline-flex;padding:2px 5px;border-radius:4px;background:#fef3c7;color:#92400e;font-size:.55rem;font-weight:850}.pk-notice{margin-top:14px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:.67rem;line-height:1.45}.pk-welcome{min-height:570px;display:grid;place-items:center;padding:28px;text-align:center}.pk-welcome-icon{width:64px;height:64px;margin:auto;display:grid;place-items:center;border-radius:18px;background:#ecfdf5;color:#059669;font-size:1.7rem}.pk-welcome h2{font-size:1.15rem;color:#27272a;margin:14px 0 7px}.pk-welcome p{max-width:520px;color:#71717a;font-size:.76rem;line-height:1.55}.pk-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}.pk-step{padding:13px;border:1px solid #e4e4e7;border-radius:9px;background:#fff}.pk-step strong{display:block;color:#059669;font-size:.8rem}.pk-step span{display:block;margin-top:4px;color:#71717a;font-size:.64rem}.pk-print{border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#52525b;padding:7px 10px;font-size:.68rem;font-weight:750}.pk-alert{margin-bottom:14px;padding:10px 12px;border:1px solid #a7f3d0;border-radius:9px;background:#ecfdf5;color:#065f46;font-size:.7rem}.pk-rel{font-size:.63rem;color:#71717a;padding:9px 13px;background:#fafafa}.pk-rel strong{color:#52525b}
     .pk-codex-status{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;padding:10px 11px;border:1px solid #a7f3d0;border-radius:9px;background:#ecfdf5;color:#065f46;font-size:.67rem;line-height:1.4}.pk-codex-status.is-offline{border-color:#fde68a;background:#fffbeb;color:#92400e}.pk-codex-status strong{display:block;font-size:.7rem}.pk-connect{display:inline-flex;flex-shrink:0;align-items:center;gap:5px;padding:5px 8px;border:1px solid currentColor;border-radius:6px;color:inherit;text-decoration:none;font-weight:800}.pk-primary{text-decoration:none}.pk-primary[disabled]{opacity:.65;cursor:wait}.pk-generating{display:flex;align-items:center;gap:7px;margin-top:10px;padding:9px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:.67rem;font-weight:700}.pk-generating[hidden]{display:none}.pk-generating-spinner{width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pk-spin .8s linear infinite}@@keyframes pk-spin{to{transform:rotate(360deg)}}
     .pk-capabilities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.pk-capability{border:1px solid #e4e4e7;border-radius:9px;padding:12px;background:#fff}.pk-capability strong{display:block;color:#27272a;font-size:.72rem;margin-bottom:5px}.pk-capability p{margin:0;color:#52525b;font-size:.67rem;line-height:1.45}.pk-acceptance{margin-top:8px!important;padding-top:8px;border-top:1px dashed #d4d4d8;color:#047857!important}.pk-flow-count{display:inline-flex;margin-left:6px;padding:2px 6px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.58rem;font-weight:850}.pk-user-flows{display:grid;gap:12px}.pk-user-flow{border:1px solid #e4e4e7;border-radius:10px;padding:14px;background:#fff;min-width:0}.pk-user-flow-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px}.pk-user-type{display:flex;align-items:center;gap:7px;color:#27272a;font-size:.77rem;font-weight:850}.pk-user-purpose{color:#71717a;font-size:.66rem;line-height:1.4;margin:10px 0 6px}.pk-user-purpose:first-child{margin-top:0}.pk-flow-steps{display:flex;align-items:center;flex-wrap:wrap;gap:7px;overflow:visible;padding:3px 1px 7px}.pk-flow-step{min-width:0;max-width:260px;white-space:normal;overflow-wrap:anywhere;padding:7px 10px;border:1px solid #a7f3d0;border-radius:7px;background:#f0fdf4;color:#065f46;font-size:.65rem;font-weight:700}.pk-flow-step-arrow{flex:0 0 auto;color:#10b981}
@@ -70,6 +71,14 @@
                             <span asp-validation-for="Input.Technology" class="pk-validation"></span>
                         </div>
                         <div class="pk-field">
+                            <label><span>Target platform</span><small>Select one or both</small></label>
+                            <div class="pk-platforms">
+                                <label class="pk-platform"><input asp-for="Input.TargetWeb" type="checkbox" /> <i class="bi bi-window"></i> Web</label>
+                                <label class="pk-platform"><input asp-for="Input.TargetMobile" type="checkbox" /> <i class="bi bi-phone"></i> Mobile</label>
+                            </div>
+                            <span asp-validation-for="Input.TargetWeb" class="pk-validation"></span>
+                        </div>
+                        <div class="pk-field">
                             <label asp-for="Input.CloudHostingTarget"><span>Cloud / hosting target</span><small>Optional</small></label>
                             <textarea asp-for="Input.CloudHostingTarget" class="pk-input" rows="2" placeholder="Azure, AWS, on-premise IIS or undecided"></textarea>
                         </div>
@@ -123,7 +132,7 @@
                                 <div class="pk-history-item @(Model.SelectedDesign?.Id == design.Id ? "is-active" : "")">
                                     <a asp-action="Index" asp-route-id="@design.Id" class="pk-history-link">
                                         <strong>@design.Title</strong>
-                                        <span>@design.Technology · @design.UserCount</span>
+                                        <span>@design.Technology · @(design.TargetWeb && design.TargetMobile ? "Web + Mobile" : design.TargetMobile ? "Mobile" : "Web") · @design.UserCount</span>
                                         <span>@design.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
                                     </a>
                                     <form asp-action="Delete" asp-route-id="@design.Id" method="post" onsubmit="return confirm('Delete this blueprint?')">
@@ -144,8 +153,8 @@
                     <div class="pk-welcome">
                         <div>
                             <div class="pk-welcome-icon"><i class="bi bi-diagram-3"></i></div>
-                            <h2>Start with four clear decisions</h2>
-                            <p>Describe the product, technology, expected users and main features. Project KickStart turns them into a structured blueprint you can use before coding.</p>
+                            <h2>Start with five clear decisions</h2>
+                            <p>Describe the product, technology, target platforms, expected users and main features. Project KickStart turns them into a structured blueprint you can use before coding.</p>
                             <div class="pk-steps">
                                 <div class="pk-step"><strong>1</strong><span>Describe the problem and users</span></div>
                                 <div class="pk-step"><strong>2</strong><span>Generate an initial architecture</span></div>
@@ -162,7 +171,7 @@
                         <div>
                             <span class="pk-mode">@blueprint.SourceMode blueprint</span>
                             <div class="pk-result-title">@blueprint.Title</div>
-                            <div class="pk-result-meta">Created @Model.SelectedDesign.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm") · @Model.SelectedDesign.UserCount</div>
+                            <div class="pk-result-meta">Created @Model.SelectedDesign.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm") · @(Model.SelectedDesign.TargetWeb && Model.SelectedDesign.TargetMobile ? "Web + Mobile" : Model.SelectedDesign.TargetMobile ? "Mobile" : "Web") · @Model.SelectedDesign.UserCount</div>
                         </div>
                         <div class="d-flex gap-2">
                             <a asp-action="ExportMarkdown" asp-route-id="@Model.SelectedDesign.Id" class="pk-print text-decoration-none"><i class="bi bi-filetype-md me-1"></i> Download .md</a>
@@ -586,14 +595,21 @@
                 'Input_Features': 'Registration, customer portal, technician assignment, repair booking, payment, status tracking, notifications',
                 'Input_UiDirection': 'Clean and trustworthy service UI with a warm neutral palette and clear status-focused cards'
             };
+            const platformValues = { 'Input_TargetWeb': true, 'Input_TargetMobile': true };
             const saveDraft = () => {
                 const draft = {};
                 Object.keys(values).forEach(id => { const input = document.getElementById(id); if (input) draft[id] = input.value; });
+                Object.keys(platformValues).forEach(id => { const input = document.getElementById(id); if (input) draft[id] = input.checked; });
                 sessionStorage.setItem(draftKey, JSON.stringify(draft));
             };
             try {
                 const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
-                if (draft) Object.entries(draft).forEach(([id, value]) => { const input = document.getElementById(id); if (input && !input.value) input.value = value; });
+                if (draft) Object.entries(draft).forEach(([id, value]) => {
+                    const input = document.getElementById(id);
+                    if (!input) return;
+                    if (input.type === 'checkbox') input.checked = value;
+                    else if (!input.value) input.value = value;
+                });
             } catch { sessionStorage.removeItem(draftKey); }
 
             document.getElementById('pkConnectGenerate')?.addEventListener('click', saveDraft);
@@ -613,8 +629,15 @@
                 const label = form.querySelector('button span');
                 if (label) label.textContent = 'Generating images...';
             }));
-            document.getElementById('pkSample')?.addEventListener('click', () => Object.entries(values).forEach(([id, value]) => { const input = document.getElementById(id); if (input) input.value = value; }));
-            document.getElementById('pkClear')?.addEventListener('click', () => { Object.keys(values).forEach(id => { const input = document.getElementById(id); if (input) input.value = ''; }); sessionStorage.removeItem(draftKey); });
+            document.getElementById('pkSample')?.addEventListener('click', () => {
+                Object.entries(values).forEach(([id, value]) => { const input = document.getElementById(id); if (input) input.value = value; });
+                Object.entries(platformValues).forEach(([id, value]) => { const input = document.getElementById(id); if (input) input.checked = value; });
+            });
+            document.getElementById('pkClear')?.addEventListener('click', () => {
+                Object.keys(values).forEach(id => { const input = document.getElementById(id); if (input) input.value = ''; });
+                Object.keys(platformValues).forEach(id => { const input = document.getElementById(id); if (input) input.checked = id === 'Input_TargetWeb'; });
+                sessionStorage.removeItem(draftKey);
+            });
         })();
     </script>
 }

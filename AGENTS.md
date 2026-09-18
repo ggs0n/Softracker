@@ -1,7 +1,6 @@
 
 ## Token Usage Reporting
 **Session Management:**
-- At the start of a new conversation/session, acknowledge the token reset and track from 0
 - After completing a task, provide a SHORT plain-text summary (4 bullet points max) in chat only. Do NOT create markdown files, documents, or headings unless I ask.
 - Explanations max 6 sentences unless I ask "why" or "explain"
 

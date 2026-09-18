@@ -514,6 +514,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.Property(d => d.Title).HasMaxLength(180).IsRequired();
             e.Property(d => d.Summary).IsRequired();
             e.Property(d => d.Technology).IsRequired();
+            e.Property(d => d.TargetWeb).HasDefaultValue(true);
+            e.Property(d => d.TargetMobile).HasDefaultValue(false);
             e.Property(d => d.CloudHostingTarget).HasMaxLength(120);
             e.Property(d => d.UserCount).HasMaxLength(100).IsRequired();
             e.Property(d => d.Features).IsRequired();
